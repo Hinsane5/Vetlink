@@ -38,7 +38,7 @@ export class VetDirectoryService {
         visitRegions: profile.vet?.visitRegions ?? [], experienceYears: profile.vet?.experienceYears ?? 0,
         rates: services.flatMap((service) => {
           const rate = rates.filter((item) => item.payload.serviceType === service && Number.isSafeInteger(item.payload.amount) && Number(item.payload.amount) >= 0 && Date.parse(String(item.payload.effectiveAt)) <= clock)
-            .sort((a, b) => Date.parse(String(b.payload.effectiveAt)) - Date.parse(String(a.payload.effectiveAt)) || b.updatedAt.localeCompare(a.updatedAt))[0];
+            .sort((a, b) => Date.parse(String(b.payload.effectiveAt)) - Date.parse(String(a.payload.effectiveAt)) || Number(b.payload.configurationVersion ?? 0) - Number(a.payload.configurationVersion ?? 0) || b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id))[0];
           return rate ? [{ service, amount: Number(rate.payload.amount) }] : [];
         }),
         reviews: publicReviews.filter((review) => review.payload.vetId === user.id).map((review) => ({

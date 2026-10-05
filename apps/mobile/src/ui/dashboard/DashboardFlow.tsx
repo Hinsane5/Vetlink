@@ -20,6 +20,7 @@ import { Icon, type IconName } from '../components/Icon';
 import { StatusBadge, type StatusTone } from '../components/StatusBadge';
 import { LivestockFlow, type LivestockRoute } from '../livestock/LivestockFlow';
 import { PatientFlow } from '../patients/PatientFlow';
+import { VetScheduleFlow } from '../availability/VetScheduleFlow';
 import { ConsultationFlow } from '../consultations/ConsultationFlow';
 import { BookingFlow } from '../booking/BookingFlow';
 import { VetDirectoryFlow } from '../directory/VetDirectoryFlow';
@@ -32,6 +33,7 @@ type DashboardRoute =
   | { type: 'patients'; patientId?: string }
   | { type: 'doctors'; vetId?: string }
   | { type: 'booking'; vetId: string }
+  | { type: 'schedule' }
   | LivestockRoute;
 
 type Props = {
@@ -138,7 +140,9 @@ export function DashboardFlow({ store, session, onOpenProfile, onSwitchRole, onL
 
   return (
     <View style={styles.fullScreen}>
-      {route.type === 'list' || (route.type === 'detail' && route.kind === 'consultation') ? (
+      {route.type === 'schedule' ? (
+        <VetScheduleFlow store={store} session={session} onExit={() => { setRoute({ type: 'home' }); void reload(); }} />
+      ) : route.type === 'list' || (route.type === 'detail' && route.kind === 'consultation') ? (
         <ConsultationFlow key={route.type === 'detail' ? route.id : route.kind} store={store} session={session} initialId={route.type === 'detail' ? route.id : undefined} initialTab={route.type === 'list' && route.kind === 'appointments' ? 'appointments' : 'requests'} onExit={() => { setRoute({ type: 'home' }); void reload(); }} onOpenAnimal={(id) => setRoute(role === 'vet' ? { type: 'patients', patientId: id } : { type: 'livestock', screen: 'detail', livestockId: id })} />
       ) : route.type === 'booking' ? (
         <BookingFlow store={store} userId={session.userId} vetId={route.vetId} onBack={() => setRoute({ type: 'doctors', vetId: route.vetId })} onComplete={(id) => { void reload(); openContext('consultation', id); }} />
@@ -191,7 +195,7 @@ export function DashboardFlow({ store, session, onOpenProfile, onSwitchRole, onL
         ) : null}
       </ScrollView>
       )}
-      {route.type !== 'booking' && route.type !== 'list' && !(route.type === 'detail' && route.kind === 'consultation') && !(route.type === 'patients' && route.patientId) && !(route.type === 'livestock' && route.screen !== 'list') && !(route.type === 'doctors' && route.vetId) ? (
+      {route.type !== 'booking' && route.type !== 'schedule' && route.type !== 'list' && !(route.type === 'detail' && route.kind === 'consultation') && !(route.type === 'patients' && route.patientId) && !(route.type === 'livestock' && route.screen !== 'list') && !(route.type === 'doctors' && route.vetId) ? (
         <BottomNavigation role={role} route={route} onSelect={(next) => setRoute(next)} onOpenProfile={onOpenProfile} />
       ) : null}
       <AccountMenu
@@ -478,7 +482,7 @@ function BottomNavigation({ role, route, onSelect, onOpenProfile }: {
   onSelect: (route: DashboardRoute) => void;
   onOpenProfile: () => void;
 }) {
-  const active = route.type === 'home' ? 'home' : route.type === 'patients' ? 'patients' : route.type === 'livestock' ? 'livestock' : route.type === 'doctors' || route.type === 'booking' ? 'consultations' : route.type === 'detail' ? 'home' : route.kind;
+  const active = route.type === 'home' ? 'home' : route.type === 'schedule' ? 'appointments' : route.type === 'patients' ? 'patients' : route.type === 'livestock' ? 'livestock' : route.type === 'doctors' || route.type === 'booking' ? 'consultations' : route.type === 'detail' ? 'home' : route.kind;
   const tabs: { key: string; label: string; icon: IconName; route?: DashboardRoute; action?: () => void; disabled?: boolean }[] = role === 'farmer'
     ? [
       { key: 'home', label: 'Beranda', icon: 'house', route: { type: 'home' } },
@@ -489,7 +493,7 @@ function BottomNavigation({ role, route, onSelect, onOpenProfile }: {
     ]
     : [
       { key: 'home', label: 'Beranda', icon: 'house', route: { type: 'home' } },
-      { key: 'appointments', label: 'Jadwal', icon: 'calendar-days', route: { type: 'list', kind: 'appointments' } },
+      { key: 'appointments', label: 'Jadwal', icon: 'calendar-days', route: { type: 'schedule' } },
       { key: 'consultations', label: 'Konsultasi', icon: 'message-square', route: { type: 'list', kind: 'consultations' } },
       { key: 'patients', label: 'Pasien', icon: 'notebook-tabs', route: { type: 'patients' } },
       { key: 'profile', label: 'Profil', icon: 'user-round', action: onOpenProfile },

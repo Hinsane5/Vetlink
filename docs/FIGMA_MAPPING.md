@@ -262,3 +262,27 @@ Respons berkode `INVALID_ARGUMENT`; pesan menunjukkan izin file utama dan kuota 
 Sesuai izin pengguna, FE-10 dirancang mandiri memakai tokens Inter/cream/brown/gold, radius masing-masing peran, Lucide arrow-left, kartu, tombol minimal 44 dp dan scrolling. Tab Permintaan/Jadwal/Riwayat mencakup seluruh data scoped, termasuk booking awaiting_payment hanya untuk Peternak. Form alasan dan waktu baru, konfirmasi nyata, draft/back tiga pilihan, respons usulan, alasan pembatalan/penolakan dan timeline status ditambahkan sesuai fungsi PRD. Jadwal lama tidak berubah sampai Peternak menyetujui; pembayaran/refund tidak diberi tombol untuk melompati status. Foto dapat dibuka dengan pemeriksaan akses ulang; video dilabeli berkas dengan playback belum tersedia.
 
 Ini implementasi mandiri, bukan klaim pixel-match. [Screenshot Xiaomi](reference/android/fe10-ui-startup-metro.png) hanya menunjukkan layar Pilih Peran/inset shell; gear Tools adalah Expo development client. Daftar/detail/form/modal FE-10, viewport 390 × 844, ukuran kecil, font besar dan pembandingan visual belum diuji akibat penolakan input MIUI.
+
+## Implementasi FE-11: ketersediaan dan kalender
+
+Skill wajib `figma-design-to-code` dibaca sebelum meminta context/screenshot. Mapping prototype lokal menunjuk Schedule `46:10`, Availability `46:11`, overlay pemilihan hari `82:7031`, dan overlay jam `82:6982`; subtree itu relevan untuk jadwal serta pengaturan Dokter. Pada file utama `f1WBeG5S1OGXlPXyVEHjuW`, `get_design_context` Schedule `46:10` gagal dengan pesan persis:
+
+```text
+Looks like you don't have edit access to this file. The file owner can share it with you and make you an editor.Figma Debug UUID: 2da64378-dd40-4685-bb7c-d04df8e54fde
+```
+
+`get_screenshot` untuk node yang sama mengembalikan:
+
+```text
+Looks like you don't have edit access to this file. The file owner can share it with you and make you an editor.Figma Debug UUID: bf44300a-96ad-43a0-bc8e-80c803173e45
+```
+
+Context dan screenshot Availability `46:11` pada file utama juga gagal dengan pesan izin edit yang sama, masing-masing Debug UUID `49b21eb7-0d87-4ca9-be3c-3ed63f36db13` dan `da6f16a3-02e5-4e6a-af49-6b7364b897fb`. Untuk link terbaru pengguna, context dan screenshot diminta dari root node nyata `93:7181`; keduanya mengembalikan error Starter yang persis:
+
+```text
+You've reached the Figma MCP tool call limit on the Starter plan. Upgrade your plan for more tool calls: https://www.figma.com/files/team/1688904264667270127/all-projects?upgrade=mcp_rate_limit_paywall
+```
+
+Tool MCP berjalan dan membalas permintaan; file utama melaporkan izin edit, sedangkan link terbaru melaporkan kuota. Ini bukan bukti kegagalan autentikasi dan berbeda dari `-32001: Unknown tool` pada sesi lama. Context/screenshot desain terbaru tidak berhasil diperoleh. Screenshot referensi lokal [vet-availability.png](reference/figma/screenshots/vet-availability.png) ditinjau untuk hierarki isi, tetapi cache tersebut tidak menggantikan pemeriksaan ulang Figma terkini.
+
+Sesuai arahan fallback pengguna, UI dibangun dari tokens lokal dan aturan produk: editor layanan/jam/tarif/durasi, timezone, blok, draft/back dialog, dan kalender harian/mingguan. Kalender menampilkan data scoped dan navigasi mengikuti timezone; persetujuan/availability off tidak menghapus appointment. Selisih fungsi dari prototype belum dibandingkan pada context terkini. Android screenshot produk, 390 × 844, layar kecil, font besar, dan pixel-match belum tersedia; startup Xiaomi hanya mencapai Pilih/Ganti Peran karena MIUI menolak tap `INJECT_EVENTS`.

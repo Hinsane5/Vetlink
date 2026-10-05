@@ -1,6 +1,6 @@
 # Strategi pengujian VetLink
 
-Status QA per 6 Oktober 2026: bukti FE-00/02 sebelumnya tetap berlaku. Tahap aktif memakai frontend tanpa autentikasi/backend jaringan; Pilih Peran membuka persona lokal. UI FE-06/07/08 tersedia dan FE-09 menambahkan booking/draft/media/review hingga awaiting_payment. FE-10 menambahkan UI respons layanan/proposal dan histori. Typecheck, lint dan 61 tes domain/service lulus. Export Android FE-10 lulus melalui Metro; Gradle debug build terakhir FE-09 lulus; APK terpasang pada Xiaomi. Rincian dicatat pada bagian terbaru di bawah; bukti startup tidak berarti form sudah diuji. MIUI menolak input ADB, sehingga form/picker/keyboard/dialog/back/scroll, draft cold restart perangkat, viewport kecil/font besar dan pembandingan visual 390 × 844 belum terbukti. Figma Booking/Requests terhalang izin file utama dan kuota Starter pada link terbaru.
+Status QA per 6 Oktober 2026: bukti FE-00/02 sebelumnya tetap berlaku. Tahap aktif memakai frontend tanpa autentikasi/backend jaringan; Pilih Peran membuka persona lokal. UI FE-06–11 kini tersedia, termasuk booking, respons layanan, editor availability dan kalender. `npm run check` terbaru lulus typecheck, lint dan 70 tes domain/service; export Android lulus pada 746 modul. APK development terpasang pada Xiaomi dan startup mencapai Pilih/Ganti Peran; screenshot itu tidak membuktikan layar produk/flow sudah diuji. MIUI menolak tap ADB, sehingga form, filter, picker, kalender, keyboard/dialog/back/scroll, cold restart draft perangkat, viewport kecil/font besar dan pembandingan visual 390 × 844 belum terbukti. Figma FE-11 node file utama terhalang izin edit; link terbaru terhalang kuota Starter.
 
 ## Level pengujian
 
@@ -342,4 +342,37 @@ Penerimaan UI FE-10 **Belum diuji/terblokir**: tabs/search/status/ID, membuka de
 | FE-09 | UI booking tersedia; form/media/review/draft Android dan dependensi FE-11/19 belum diterima |
 | FE-10 | UI dan 12 tes baru tersedia; QA interaksi/visual Android serta integrasi pembayaran FE-19 belum diterima |
 
-FE-01/03–10 tetap **Sedang dikerjakan**. Tidak menaikkan status fase berdasarkan screenshot startup. Untuk review manual: Dokter → Konsultasi → request VL-V-106 → terima/tolak/usulkan; Peternak → Konsultasi saya → layanan yang sama → respons usulan. Waktu fixture 7 Oktober 2026 11:00–12:00 Asia/Jakarta sengaja tidak digeser otomatis; setelah lewat, permintaan tidak dapat diterima, sesuai guard stale.
+FE-01/03–11 tetap **Sedang dikerjakan**. Tidak menaikkan status fase berdasarkan screenshot startup. Untuk review manual: Dokter → Konsultasi → request VL-V-106 → terima/tolak/usulkan; Peternak → Konsultasi saya → layanan yang sama → respons usulan. Waktu fixture 7 Oktober 2026 11:00–12:00 Asia/Jakarta sengaja tidak digeser otomatis; setelah lewat, permintaan tidak dapat diterima, sesuai guard stale.
+
+## Hasil pemeriksaan FE-11 — 6 Oktober 2026
+
+FE-11 menambahkan AvailabilityService/SQLite dan halaman Dokter **Jadwal → Atur ketersediaan**. Perubahan masih lokal dan tidak di-commit; FE-10 sudah di-commit sebagai `8dd97a0` sesuai instruksi sebelumnya. Tidak di-push. Frontend tetap tanpa autentikasi dan backend jaringan, serta simulator tidak dibuka.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm run check` dari `apps/mobile` | Lulus: TypeScript typecheck, lint, 70 tes domain/service (9 baru untuk FE-11) |
+| `npx expo export --platform android --output-dir /private/tmp/vetlink-fe11-export-final` | Lulus: 746 modul; Hermes Android bundle 2,4 MB. Ini export JS, bukan APK baru atau bukti interaksi |
+| Native build | Gradle tidak dijalankan untuk FE-11 karena hanya TypeScript/JavaScript dan tidak ada dependency/config native yang berubah. APK development yang ada memakai Metro port 8102 |
+| Xiaomi fisik | ADB melihat `WOGYXS4THUQ8H6UO`, model `2311DRK48G`. Aktivitas aplikasi terbuka dan [screenshot startup](reference/android/fe11-startup-metro.png) menunjukkan Pilih/Ganti Peran; ini hanya membuktikan startup/inset layar awal |
+| Interaksi layar | Satu tap biasa pada pemilih peran gagal dengan error persis `java.lang.SecurityException: Injecting input events requires the caller (or the source of the instrumentation, if any) to have the INJECT_EVENTS permission.` Layar FE-11 belum dibuka melalui perangkat. Tidak mengubah izin atau pengaturan keamanan MIUI |
+| Figma | Skill `figma-design-to-code` sudah dibaca sebelum pemanggilan. Context/screenshot Schedule `46:10` dan Availability `46:11` file utama gagal izin edit; context/screenshot root nyata terbaru `93:7181` gagal kuota Starter. Tool membalas, jadi bukan `-32001: Unknown tool`; tidak ada bukti error autentikasi. Error dan UUID persis ada di [Figma mapping](FIGMA_MAPPING.md) |
+
+Tes FE-11 membuktikan: konfigurasi timezone/tarif/jam terbaca dan save unchanged tidak menulis; perubahan availability/rate/block transaksional serta tarif booking lama tidak berubah; guard verified dijalankan saat simpan; penerimaan off tidak menghapus janji; blok menghilangkan slot terkait dan pembatalannya memulihkan slot; blok konflik booking/follow-up ditolak; optimistic token/draft menolak perubahan stale; kegagalan transaksi dapat retry; kalender harian/mingguan menggunakan hari lokal dan menampilkan appointment/follow-up assigned tanpa menampilkan hold pembayaran Dokter.
+
+Penerimaan UI FE-11 **Belum diuji/terblokir**: navigasi tab Jadwal, buka/tutup editor, switch penerimaan, edit zona waktu/jam/layanan/durasi/tarif/blok, validasi inline, simpan/buang/resume draft pada cold restart Android, konflik dialog/back, interaksi kalender hari/minggu dan tanggal, buka detail dari agenda, keyboard/scroll, serta ukuran layar 390 × 844/lebih kecil/font besar. Screenshot referensi lokal [vet-availability.png](reference/figma/screenshots/vet-availability.png) sudah ditinjau sebagai cache desain lama, namun context/screenshot Figma terbaru tidak didapat dan pixel-match belum diuji. Test service dan screenshot startup tidak dihitung sebagai kelulusan flow.
+
+| Fase | Status QA terbaru |
+| --- | --- |
+| FE-00/02 | Bukti bootstrap, cold restart, integritas dan idempotensi terdahulu tetap berlaku; tidak diulang tanpa perubahan terkait |
+| FE-01 | Interaksi komponen dasar pernah diperiksa; perbandingan layar Figma Android, 390 × 844, layar kecil dan font besar masih tertunda |
+| FE-03 | Alur daftar/masuk/reset/logout tidak aktif mengikuti arahan frontend; penerimaan sesi/auth ditunda |
+| FE-04 | Form profil/farm/alamat, picker, penyimpanan lewat UI, status verifikasi dan guard layar belum diuji |
+| FE-05 | UI dashboard kedua peran tersedia; data/service dites, tetapi tombol/tujuan, empty state dan availability di layar belum diuji |
+| FE-06 | UI list/detail/form tersedia; search/filter, foto/edit/validasi, back dan akses ternak lain belum diuji di Android |
+| FE-07 | UI riwayat Peternak/pasien Dokter tersedia; filter, form laporan, detail dan viewer belum diuji di Android |
+| FE-08 | UI direktori/profil/filter/jadwal tersedia; pencarian/filter, slot, detail dan visual belum diuji di Android |
+| FE-09 | UI booking/draft/media/review tersedia; form/picker/draft/cold restart dan konfirmasi payment belum diuji di UI Android; payment flow FE-19 belum ada |
+| FE-10 | UI request/detail/decision/proposal/history tersedia; interaksi lintas peran dan visual belum diuji di Android |
+| FE-11 | UI editor availability/kalender tersedia; seluruh interaksi layar dan visual belum diuji di Android |
+
+FE-01 dan FE-03–11 tetap **Sedang dikerjakan**; status backlog mencerminkan bahwa acceptance Android/visual belum lengkap. Pengujian fase lain tidak diulang kecuali check regression yang berjalan bersama suite domain.

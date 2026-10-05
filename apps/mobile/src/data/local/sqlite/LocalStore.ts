@@ -11,6 +11,7 @@ import { LivestockService } from '../../../application/LivestockService';
 import { HealthRecordService } from '../../../application/HealthRecordService';
 import { PatientService } from '../../../application/PatientService';
 import { FrontendPreviewService } from '../../../application/FrontendPreviewService';
+import { AvailabilityService } from '../../../application/AvailabilityService';
 import { ConsultationService } from '../../../application/ConsultationService';
 import { BookingService } from '../../../application/BookingService';
 import { SqliteBookingRepository } from './SqliteBookingRepository';
@@ -33,6 +34,7 @@ export interface LocalStore {
   vetDirectory: VetDirectoryService;
   booking: BookingService;
   consultations: ConsultationService;
+  availability: AvailabilityService;
   authStore: ExpoSecureAuthStore;
   schemaVersion: number;
   fixtureSeedVersion: string | null;
@@ -82,6 +84,7 @@ async function createLocalStore(): Promise<LocalStore> {
   const vetDirectory = new VetDirectoryService(repositories, profiles);
   const booking = new BookingService(new SqliteBookingRepository(database), attachmentMedia, new ExpoIdFactory());
   const consultations = new ConsultationService(new SqliteBookingRepository(database), attachmentMedia, new ExpoIdFactory());
+  const availability = new AvailabilityService(new SqliteBookingRepository(database), attachmentMedia, new ExpoIdFactory());
   const counts = await repositories.countAll();
 
   if (__DEV__) {
@@ -91,5 +94,5 @@ async function createLocalStore(): Promise<LocalStore> {
     );
   }
 
-  return { database, repositories, events, auth, profiles, dashboard, livestock, healthRecords, patients, preview, vetDirectory, booking, consultations, authStore, schemaVersion, fixtureSeedVersion, seedResult };
+  return { database, repositories, events, auth, profiles, dashboard, livestock, healthRecords, patients, preview, vetDirectory, booking, consultations, availability, authStore, schemaVersion, fixtureSeedVersion, seedResult };
 }

@@ -1,6 +1,6 @@
 # Teknologi dan bahan diskusi
 
-Status per 5 Oktober 2026: FE-00/02 selesai; FE-01/03–08 sedang dikerjakan. Runtime aktif memakai persona lokal tanpa autentikasi/backend jaringan, dengan UI ternak, riwayat/pasien, dan direktori dokter. Typecheck/lint, 40 tes, export Android, dan build native terbaru lulus; APK FE-08 terpasang di Xiaomi. QA sentuh tertahan izin MIUI; visual Figma FE-08 tertahan izin file utama dan kuota MCP Starter.
+Status per 6 Oktober 2026: FE-00/02 selesai; FE-01/03–11 sedang dikerjakan. Runtime aktif memakai persona lokal tanpa autentikasi/backend jaringan, dengan UI ternak, riwayat/pasien, direktori, booking, konsultasi, dan jadwal dokter. Typecheck/lint, 70 tes, serta export Android 746 modul lulus. APK development yang terpasang dipakai lewat Metro; Gradle debug build terakhir FE-09. Tap UI Xiaomi terhalang izin input MIUI; konteks/screenshot Figma FE-11 tidak tersedia karena izin file utama dan kuota Starter.
 
 ## Keputusan mobile
 
@@ -159,3 +159,9 @@ Tidak ada dependency atau kode Kotlin aplikasi baru. Photo/video memakai `expo-i
 FE-10 memakai ConsultationService/ConsultationFlow, domain projection, dan adapter SQLite yang sudah ada; tanpa package/config native baru. Shared transaction queue menghindari nested exclusive transaction. Status, Proposal, Visit dan ConsultationAction disimpan atomik; audit append-only dan versi/operationKey menjaga retry. Draft usulan merupakan data domain lokal. UI menggunakan Inter/Lucide/tokens, native Modal, ScrollView/TextInput, safe area shell/viewer/dialog back serta keyboard avoidance shell.
 
 Pemeriksaan TypeScript/lint dan 61 tes SQLite/domain lulus; export Android 743 modul/2,3 MB lulus. Iterasi FE-10 memakai APK development FE-09 dan Metro offline 8102, tidak menjalankan Gradle assembleDebug baru. Build native hanya diulang saat dependency/config native berubah; cache Gradle dipertahankan. Ini bukan APK mandiri FE-10 untuk dibagikan. QA Android dan keterbatasan MIUI/Figma dicatat di Testing.
+
+## Realisasi FE-11: ketersediaan dan kalender
+
+`AvailabilityService` memakai adapter SQLite dan transaksi bersama booking/konsultasi. Ia membaca profil/verification, availability, rate history, blok aktif, draft serta commitment dari repository; optimistic token menolak stale write. Save unchanged tidak menulis ulang. Perubahan membuat snapshot tarif dengan effectiveAt/configurationVersion, menjaga fee snapshot booking lama, menyimpan/cancel blok sebagai history, dan mencegah blok baru menimpa booking/tindak lanjut. Dokter harus verified untuk mengaktifkan penerimaan. Kalender merangkum layanan assigned dan follow-up terkait, tidak menampilkan hold pembayaran ke Dokter, dan membuka detail dengan ID ber-scope FE-10.
+
+`VetScheduleFlow` menambah editor layanan, jam, zona waktu Indonesia, durasi, tarif rupiah, blok waktu, draft/back actions, serta agenda harian/mingguan. Perubahan hanya TypeScript/JavaScript; tidak ada dependency atau konfigurasi native baru. `npm run check` lulus typecheck/lint/70 tes; `npx expo export --platform android` lulus pada 746 modul/2,4 MB. APK development dan Metro dipakai kembali; Gradle tidak dijalankan untuk FE-11. Xiaomi mencapai layar Pilih/Ganti Peran, tetapi MIUI menolak tap input. Hasil runtime/visual dan error Figma yang tepat tercatat di Testing dan Figma mapping.

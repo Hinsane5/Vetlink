@@ -7,6 +7,7 @@ export const entityKinds = [
   'vetProfile',
   'verificationSubmission',
   'availability',
+  'availabilityDraft',
   'blockedTime',
   'serviceRate',
   'livestock',

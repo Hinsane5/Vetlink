@@ -49,7 +49,7 @@ export function projectDirectorySlots(
   let date: string;
   try { date = zonedParts(now, timezone).date; } catch { return empty; }
   const occupied = commitments.filter((item) => {
-    if (item.kind === 'blockedTime') return true;
+    if (item.kind === 'blockedTime') return item.payload.status !== 'cancelled';
     if (item.kind === 'followUp') return item.payload.status === 'scheduled';
     return ['awaiting_payment', 'requested', 'scheduled', 'reschedule_pending', 'in_progress'].includes(String(item.payload.status));
   });
