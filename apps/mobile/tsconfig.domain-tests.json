@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "strict": true,
+    "skipLibCheck": true,
+    "rootDir": ".",
+    "outDir": ".test-build",
+    "types": []
+  },
+  "include": [
+    "src/domain/**/*.ts",
+    "src/testing/fixtures.ts",
+    "src/application/publishLocalEvent.ts",
+    "src/application/LocalAuthService.ts",
+    "src/application/ProfileService.ts",
+    "src/application/DashboardService.ts",
+    "src/application/LivestockService.ts",
+    "src/application/ports/EventStore.ts",
+    "src/application/ports/AuthRepository.ts",
+    "src/application/ports/ProfileRepository.ts",
+    "src/domain/auth.ts",
+    "src/domain/dashboard.ts",
+    "src/domain/livestock.ts"
+  ]
+}

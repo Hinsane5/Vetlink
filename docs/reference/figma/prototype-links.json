@@ -1,0 +1,764 @@
+{
+  "capturedAt": "2026-10-05",
+  "scope": "Selected screens only; at most 9 navigation actions per screen; omits variable actions",
+  "screens": [
+    {
+      "id": "46:2",
+      "name": "Dokter · roles",
+      "links": [
+        {
+          "label": "Action / Masuk sebagai Peternak → external:12:1833",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "NAVIGATE",
+          "to": "12:1833",
+          "toName": "Dashboard"
+        },
+        {
+          "label": "Action / Masuk sebagai Dokter Hewan → dashboard",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "80:3428",
+          "toName": "Screen=dashboard, State=default"
+        }
+      ]
+    },
+    {
+      "id": "46:7",
+      "name": "Dokter · dashboard",
+      "links": [
+        {
+          "label": "Action / ♧ → notifications",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "82:7652",
+          "toName": "Screen=notifications, State=default"
+        },
+        {
+          "label": "Vet / Availability → dashboard/off",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "80:3498",
+          "toName": "Screen=dashboard, State=off"
+        },
+        {
+          "label": "Action / Lihat Permintaan → requests",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "80:3772",
+          "toName": "Screen=requests, State=default"
+        },
+        {
+          "label": "Action / Jadwal → schedule",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "80:3887",
+          "toName": "Screen=schedule, State=default"
+        },
+        {
+          "label": "Frame → visit",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "80:4213",
+          "toName": "Screen=visit, State=default"
+        },
+        {
+          "label": "Frame → followup",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "81:8378",
+          "toName": "Screen=followup, State=default"
+        },
+        {
+          "label": "Action / Lihat Pendapatan → earnings",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "82:6376",
+          "toName": "Screen=earnings, State=default"
+        },
+        {
+          "label": "Tab / Jadwal → schedule",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "80:3887",
+          "toName": "Screen=schedule, State=default"
+        },
+        {
+          "label": "Tab / Konsultasi → history",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "81:8766",
+          "toName": "Screen=history, State=default"
+        }
+      ]
+    },
+    {
+      "id": "46:9",
+      "name": "Dokter · request",
+      "links": [
+        {
+          "label": "Action / ‹ → requests",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "80:3772",
+          "toName": "Screen=requests, State=default"
+        },
+        {
+          "label": "Frame → request/photo",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "80:5185",
+          "toName": "Screen=request/photo, State=overlay"
+        },
+        {
+          "label": "Frame → patient",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "80:4726",
+          "toName": "Screen=patient, State=default"
+        },
+        {
+          "label": "Action / Terima Permintaan → request/accept",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "80:4912",
+          "toName": "Screen=request/accept, State=overlay"
+        },
+        {
+          "label": "Action / Ajukan Jadwal Lain → request/reschedule",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "80:5075",
+          "toName": "Screen=request/reschedule, State=overlay"
+        },
+        {
+          "label": "Action / Tolak Permintaan → request/reject",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "80:4966",
+          "toName": "Screen=request/reject, State=overlay"
+        }
+      ]
+    },
+    {
+      "id": "46:13",
+      "name": "Dokter · appointment",
+      "links": [
+        {
+          "label": "Action / ‹ → schedule",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "80:3887",
+          "toName": "Screen=schedule, State=default"
+        },
+        {
+          "label": "Frame → patient",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "80:4726",
+          "toName": "Screen=patient, State=default"
+        },
+        {
+          "label": "Action / Mulai Konsultasi → chat",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "80:4374",
+          "toName": "Screen=chat, State=default"
+        },
+        {
+          "label": "Action / Catatan Pemeriksaan → chat",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "80:4374",
+          "toName": "Screen=chat, State=default"
+        },
+        {
+          "label": "Action / Selesaikan Konsultasi → appointment/blocked",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "80:5238",
+          "toName": "Screen=appointment/blocked, State=overlay"
+        }
+      ]
+    },
+    {
+      "id": "46:14",
+      "name": "Dokter · visit",
+      "links": [
+        {
+          "label": "Action / ‹ → schedule",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "80:3887",
+          "toName": "Screen=schedule, State=default"
+        },
+        {
+          "label": "Action / Lihat Lokasi → location",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "80:4355",
+          "toName": "Screen=location, State=default"
+        },
+        {
+          "label": "Action / Berangkat ke Lokasi → visit/travel",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "80:4248",
+          "toName": "Screen=visit, State=travel"
+        }
+      ]
+    },
+    {
+      "id": "46:19",
+      "name": "Dokter · note",
+      "links": [
+        {
+          "label": "Action / ‹ → chat",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "80:4374",
+          "toName": "Screen=chat, State=default"
+        },
+        {
+          "label": "Field / Temuan pemeriksaan * → note/1",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "81:3171",
+          "toName": "Screen=note, State=1"
+        },
+        {
+          "label": "Field / Penilaian dokter * → note/2",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "81:3324",
+          "toName": "Screen=note, State=2"
+        },
+        {
+          "label": "Field / Tindakan * → note/4",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "81:3630",
+          "toName": "Screen=note, State=4"
+        },
+        {
+          "label": "Field / Instruksi perawatan * → note/8",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "81:4242",
+          "toName": "Screen=note, State=8"
+        },
+        {
+          "label": "Field / Rencana tindak lanjut → note/followTime",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "81:5538",
+          "toName": "Screen=note/followTime, State=overlay"
+        },
+        {
+          "label": "Action / Simpan Draft → note/draft0",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "81:3101",
+          "toName": "Screen=note/draft0, State=overlay"
+        },
+        {
+          "label": "Action / Tinjau Ringkasan → note/error0",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "81:3137",
+          "toName": "Screen=note/error0, State=overlay"
+        },
+        {
+          "label": "Action / Batal → chat",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "80:4374",
+          "toName": "Screen=chat, State=default"
+        }
+      ]
+    },
+    {
+      "id": "46:20",
+      "name": "Dokter · review",
+      "links": [
+        {
+          "label": "Action / ‹ → note/15",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "81:5313",
+          "toName": "Screen=note, State=15"
+        },
+        {
+          "label": "Action / Edit Catatan → note/15",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "81:5313",
+          "toName": "Screen=note, State=15"
+        },
+        {
+          "label": "Action / Finalisasi Catatan → review/confirm",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "81:5465",
+          "toName": "Screen=review/confirm, State=overlay"
+        }
+      ]
+    },
+    {
+      "id": "46:21",
+      "name": "Dokter · final",
+      "links": [
+        {
+          "label": "Action / ‹ → appointment/final",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "80:4169",
+          "toName": "Screen=appointment, State=final"
+        },
+        {
+          "label": "Action / Buat Rekomendasi → recommendations",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "81:8086",
+          "toName": "Screen=recommendations, State=default"
+        },
+        {
+          "label": "Action / Jadwalkan Tindak Lanjut → afterFinal/followup",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "94:6955",
+          "toName": "Screen=afterFinal/followup, State=default"
+        },
+        {
+          "label": "Action / Kembali ke Layanan → appointment/final",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "80:4169",
+          "toName": "Screen=appointment, State=final"
+        }
+      ]
+    },
+    {
+      "id": "46:22",
+      "name": "Dokter · recommendations",
+      "links": [
+        {
+          "label": "Action / ‹ → final",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "81:5506",
+          "toName": "Screen=final, State=default"
+        },
+        {
+          "label": "Action / Edit → recommendations/edit",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "81:8214",
+          "toName": "Screen=recommendations/edit, State=overlay"
+        },
+        {
+          "label": "Action / Hapus → recommendations/delete",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "81:8255",
+          "toName": "Screen=recommendations/delete, State=overlay"
+        },
+        {
+          "label": "Action / Tambah Item → products",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "81:8354",
+          "toName": "Screen=products, State=default"
+        },
+        {
+          "label": "Action / Tinjau Rekomendasi → recommendations/review",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "81:8291",
+          "toName": "Screen=recommendations/review, State=overlay"
+        },
+        {
+          "label": "Action / Tindak Lanjut → afterFinal/followup",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "94:6955",
+          "toName": "Screen=afterFinal/followup, State=default"
+        }
+      ]
+    },
+    {
+      "id": "46:24",
+      "name": "Dokter · followup",
+      "links": [
+        {
+          "label": "Action / ‹ → recommendations/sent",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "81:8146",
+          "toName": "Screen=recommendations, State=sent"
+        },
+        {
+          "label": "Field / Tanggal dan jam → followup/time",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "81:8521",
+          "toName": "Screen=followup/time, State=overlay"
+        },
+        {
+          "label": "Action / Simpan Tindak Lanjut → followup/saved",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "81:8425",
+          "toName": "Screen=followup, State=saved"
+        },
+        {
+          "label": "Frame → followup/reminder",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "81:8568",
+          "toName": "Screen=followup/reminder, State=overlay"
+        },
+        {
+          "label": "Frame → followup/reminderSent",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "81:8614",
+          "toName": "Screen=followup/reminderSent, State=overlay"
+        },
+        {
+          "label": "Frame → progress",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "81:8712",
+          "toName": "Screen=progress, State=default"
+        },
+        {
+          "label": "Action / Kembali ke Layanan → appointment/final",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "80:4169",
+          "toName": "Screen=appointment, State=final"
+        },
+        {
+          "label": "Action / Selesaikan Konsultasi → appointment/blocked",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "80:5238",
+          "toName": "Screen=appointment/blocked, State=overlay"
+        }
+      ]
+    },
+    {
+      "id": "46:11",
+      "name": "Dokter · availability",
+      "links": [
+        {
+          "label": "Action / ‹ → profile",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "82:7213",
+          "toName": "Screen=profile, State=default"
+        },
+        {
+          "label": "Action / Sen–Jum → availability/weekdays",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "82:7031",
+          "toName": "Screen=availability/weekdays, State=overlay"
+        },
+        {
+          "label": "Field / Mulai – Selesai → availability/hours",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "82:6982",
+          "toName": "Screen=availability/hours, State=overlay"
+        },
+        {
+          "label": "Field / Durasi konsultasi → availability/duration",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "82:7075",
+          "toName": "Screen=availability/duration, State=overlay"
+        },
+        {
+          "label": "Field / Durasi kunjungan → availability/duration",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "82:7075",
+          "toName": "Screen=availability/duration, State=overlay"
+        },
+        {
+          "label": "Field / Konsultasi chat → availability/rate",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "82:7119",
+          "toName": "Screen=availability/rate, State=overlay"
+        },
+        {
+          "label": "Field / Kunjungan → availability/rate",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "82:7119",
+          "toName": "Screen=availability/rate, State=overlay"
+        },
+        {
+          "label": "Frame → availability/block",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "82:7163",
+          "toName": "Screen=availability/block, State=overlay"
+        },
+        {
+          "label": "Action / Simpan Ketersediaan → availability/savedOriginal",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "96:7197",
+          "toName": "Screen=availability/savedOriginal, State=default"
+        }
+      ]
+    },
+    {
+      "id": "46:30",
+      "name": "Dokter · withdraw",
+      "links": [
+        {
+          "label": "Action / ‹ → earnings",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "82:6376",
+          "toName": "Screen=earnings, State=default"
+        },
+        {
+          "label": "Field / Jumlah pencairan * → withdraw/amount",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "82:6689",
+          "toName": "Screen=withdraw/amount, State=overlay"
+        },
+        {
+          "label": "Action / Tinjau Pencairan → withdrawReview",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "82:6581",
+          "toName": "Screen=withdrawReview, State=default"
+        }
+      ]
+    },
+    {
+      "id": "46:31",
+      "name": "Dokter · withdrawReview",
+      "links": [
+        {
+          "label": "Action / ‹ → withdraw",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "82:6535",
+          "toName": "Screen=withdraw, State=default"
+        },
+        {
+          "label": "Action / Konfirmasi → withdrawReview/confirm",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "82:6720",
+          "toName": "Screen=withdrawReview/confirm, State=overlay"
+        },
+        {
+          "label": "Action / Ubah Jumlah → withdraw",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "82:6535",
+          "toName": "Screen=withdraw, State=default"
+        }
+      ]
+    },
+    {
+      "id": "46:32",
+      "name": "Dokter · withdrawSubmitted",
+      "links": [
+        {
+          "label": "Action / ‹ → earnings/zero",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "82:6417",
+          "toName": "Screen=earnings, State=zero"
+        },
+        {
+          "label": "Action / Lihat Pendapatan → earnings/zero",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "CHANGE_TO",
+          "to": "82:6417",
+          "toName": "Screen=earnings, State=zero"
+        }
+      ]
+    },
+    {
+      "id": "12:2280",
+      "name": "Booking",
+      "links": [
+        {
+          "label": "Icon / ‹",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "NAVIGATE",
+          "to": "12:2245",
+          "toName": "Doctor Profile"
+        },
+        {
+          "label": "Button / Unggah foto atau video",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "NAVIGATE",
+          "to": "12:2394",
+          "toName": "Attachment Sheet"
+        },
+        {
+          "label": "Button / Lanjutkan pembayaran",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "NAVIGATE",
+          "to": "12:2325",
+          "toName": "Payment Consult"
+        }
+      ]
+    },
+    {
+      "id": "12:2325",
+      "name": "Payment Consult",
+      "links": [
+        {
+          "label": "Icon / ‹",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "NAVIGATE",
+          "to": "12:2280",
+          "toName": "Booking"
+        },
+        {
+          "label": "Card / Transfer bank",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "NAVIGATE",
+          "to": "12:2353",
+          "toName": "Chat"
+        },
+        {
+          "label": "Card / E-wallet",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "NAVIGATE",
+          "to": "12:2353",
+          "toName": "Chat"
+        },
+        {
+          "label": "Card / Bayar nanti",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "NAVIGATE",
+          "to": "12:2353",
+          "toName": "Chat"
+        },
+        {
+          "label": "Button / Bayar Rp50.000",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "NAVIGATE",
+          "to": "12:2353",
+          "toName": "Chat"
+        }
+      ]
+    },
+    {
+      "id": "12:2862",
+      "name": "Checkout",
+      "links": [
+        {
+          "label": "Icon / ‹",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "NAVIGATE",
+          "to": "12:2796",
+          "toName": "Cart"
+        },
+        {
+          "label": "Button / Checkout",
+          "trigger": "ON_CLICK",
+          "type": "NODE",
+          "navigation": "NAVIGATE",
+          "to": "12:2889",
+          "toName": "Payment Order"
+        }
+      ]
+    }
+  ]
+}

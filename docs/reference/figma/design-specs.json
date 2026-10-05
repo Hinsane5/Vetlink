@@ -1,0 +1,556 @@
+{
+  "capturedAt": "2026-10-05",
+  "scope": "Selected reusable components, primary tabs and non-prototype variables",
+  "specs": [
+    {
+      "id": "12:1666",
+      "name": "Button / Primary",
+      "type": "COMPONENT",
+      "variants": [
+        {
+          "id": "12:1667",
+          "name": "Text / Label",
+          "width": 37,
+          "height": 19
+        }
+      ],
+      "width": 220,
+      "height": 52
+    },
+    {
+      "id": "12:1668",
+      "name": "Button / Secondary",
+      "type": "COMPONENT",
+      "variants": [
+        {
+          "id": "12:1669",
+          "name": "Text / Label",
+          "width": 37,
+          "height": 19
+        }
+      ],
+      "width": 220,
+      "height": 52
+    },
+    {
+      "id": "12:1670",
+      "name": "Button / Disabled",
+      "type": "COMPONENT",
+      "variants": [
+        {
+          "id": "12:1671",
+          "name": "Text / Label",
+          "width": 37,
+          "height": 19
+        }
+      ],
+      "width": 220,
+      "height": 52
+    },
+    {
+      "id": "75:2492",
+      "name": "Vet / Button",
+      "type": "COMPONENT_SET",
+      "variants": [
+        {
+          "id": "75:2480",
+          "name": "State=Primary",
+          "width": 350,
+          "height": 48,
+          "radius": 12
+        },
+        {
+          "id": "75:2482",
+          "name": "State=Secondary",
+          "width": 350,
+          "height": 48,
+          "radius": 12
+        },
+        {
+          "id": "75:2484",
+          "name": "State=Pressed",
+          "width": 350,
+          "height": 48,
+          "radius": 12
+        },
+        {
+          "id": "75:2486",
+          "name": "State=Disabled",
+          "width": 350,
+          "height": 48,
+          "radius": 12
+        },
+        {
+          "id": "75:2488",
+          "name": "State=Loading",
+          "width": 350,
+          "height": 48,
+          "radius": 12
+        },
+        {
+          "id": "75:2490",
+          "name": "State=Selected",
+          "width": 350,
+          "height": 48,
+          "radius": 12
+        }
+      ],
+      "width": 2244,
+      "height": 88
+    },
+    {
+      "id": "75:2509",
+      "name": "Vet / Field",
+      "type": "COMPONENT_SET",
+      "variants": [
+        {
+          "id": "75:2493",
+          "name": "State=Default",
+          "width": 350,
+          "height": 104,
+          "radius": 0
+        },
+        {
+          "id": "75:2497",
+          "name": "State=Focused",
+          "width": 350,
+          "height": 104,
+          "radius": 0
+        },
+        {
+          "id": "75:2501",
+          "name": "State=Error",
+          "width": 350,
+          "height": 104,
+          "radius": 0
+        },
+        {
+          "id": "75:2505",
+          "name": "State=Readonly",
+          "width": 350,
+          "height": 104,
+          "radius": 0
+        }
+      ],
+      "width": 1496,
+      "height": 144
+    },
+    {
+      "id": "75:2590",
+      "name": "Vet / Navigation",
+      "type": "COMPONENT_SET",
+      "variants": [
+        {
+          "id": "75:2510",
+          "name": "Active=Beranda",
+          "width": 390,
+          "height": 80,
+          "radius": 0
+        },
+        {
+          "id": "75:2526",
+          "name": "Active=Jadwal",
+          "width": 390,
+          "height": 80,
+          "radius": 0
+        },
+        {
+          "id": "75:2542",
+          "name": "Active=Konsultasi",
+          "width": 390,
+          "height": 80,
+          "radius": 0
+        },
+        {
+          "id": "75:2558",
+          "name": "Active=Pasien",
+          "width": 390,
+          "height": 80,
+          "radius": 0
+        },
+        {
+          "id": "75:2574",
+          "name": "Active=Profil",
+          "width": 390,
+          "height": 80,
+          "radius": 0
+        }
+      ],
+      "width": 2070,
+      "height": 120
+    },
+    {
+      "id": "75:2614",
+      "name": "Vet / Status",
+      "type": "COMPONENT_SET",
+      "variants": [
+        {
+          "id": "75:2606",
+          "name": "State=Default",
+          "width": 180,
+          "height": 32,
+          "radius": 16
+        },
+        {
+          "id": "75:2608",
+          "name": "State=Pending",
+          "width": 180,
+          "height": 32,
+          "radius": 16
+        },
+        {
+          "id": "75:2610",
+          "name": "State=Success",
+          "width": 180,
+          "height": 32,
+          "radius": 16
+        },
+        {
+          "id": "75:2612",
+          "name": "State=Error",
+          "width": 180,
+          "height": 32,
+          "radius": 16
+        }
+      ],
+      "width": 816,
+      "height": 72
+    }
+  ],
+  "nav": [
+    {
+      "screenId": "12:1833",
+      "id": "12:1838",
+      "name": "Nav / Beranda",
+      "destinations": []
+    },
+    {
+      "screenId": "12:1833",
+      "id": "12:1841",
+      "name": "Nav / Ternak",
+      "destinations": [
+        {
+          "id": "12:1889",
+          "name": "Livestock List",
+          "navigation": "NAVIGATE"
+        }
+      ]
+    },
+    {
+      "screenId": "12:1833",
+      "id": "12:1844",
+      "name": "Nav / Konsultasi",
+      "destinations": [
+        {
+          "id": "12:2161",
+          "name": "Doctor List",
+          "navigation": "NAVIGATE"
+        }
+      ]
+    },
+    {
+      "screenId": "12:1833",
+      "id": "12:1847",
+      "name": "Nav / Pesanan",
+      "destinations": [
+        {
+          "id": "12:2925",
+          "name": "Orders",
+          "navigation": "NAVIGATE"
+        }
+      ]
+    },
+    {
+      "screenId": "12:1833",
+      "id": "12:1850",
+      "name": "Nav / Profil",
+      "destinations": [
+        {
+          "id": "12:3066",
+          "name": "Profile",
+          "navigation": "NAVIGATE"
+        }
+      ]
+    },
+    {
+      "screenId": "46:7",
+      "id": "I99:7251;80:3436;75:2511",
+      "name": "Tab / Beranda",
+      "destinations": []
+    },
+    {
+      "screenId": "46:7",
+      "id": "I99:7251;80:3436;75:2514",
+      "name": "Tab / Jadwal → schedule",
+      "destinations": [
+        {
+          "id": "80:3887",
+          "name": "Screen=schedule, State=default",
+          "navigation": "CHANGE_TO"
+        }
+      ]
+    },
+    {
+      "screenId": "46:7",
+      "id": "I99:7251;80:3436;75:2517",
+      "name": "Tab / Konsultasi → history",
+      "destinations": [
+        {
+          "id": "81:8766",
+          "name": "Screen=history, State=default",
+          "navigation": "CHANGE_TO"
+        }
+      ]
+    },
+    {
+      "screenId": "46:7",
+      "id": "I99:7251;80:3436;75:2520",
+      "name": "Tab / Pasien → patients",
+      "destinations": [
+        {
+          "id": "80:4594",
+          "name": "Screen=patients, State=default",
+          "navigation": "CHANGE_TO"
+        }
+      ]
+    },
+    {
+      "screenId": "46:7",
+      "id": "I99:7251;80:3436;75:2523",
+      "name": "Tab / Profil → profile",
+      "destinations": [
+        {
+          "id": "82:7213",
+          "name": "Screen=profile, State=default",
+          "navigation": "CHANGE_TO"
+        }
+      ]
+    }
+  ],
+  "variables": [
+    {
+      "id": "VariableID:2:6",
+      "name": "cream",
+      "type": "COLOR",
+      "values": {
+        "2:0": {
+          "r": 0.9647058844566345,
+          "g": 0.929411768913269,
+          "b": 0.8078431487083435,
+          "a": 1
+        }
+      }
+    },
+    {
+      "id": "VariableID:2:7",
+      "name": "color/cream",
+      "type": "COLOR",
+      "values": {
+        "2:1": {
+          "type": "VARIABLE_ALIAS",
+          "id": "VariableID:2:6"
+        }
+      }
+    },
+    {
+      "id": "VariableID:2:8",
+      "name": "brown",
+      "type": "COLOR",
+      "values": {
+        "2:0": {
+          "r": 0.3607843220233917,
+          "g": 0.18431372940540314,
+          "b": 0.15294118225574493,
+          "a": 1
+        }
+      }
+    },
+    {
+      "id": "VariableID:2:9",
+      "name": "color/brown",
+      "type": "COLOR",
+      "values": {
+        "2:1": {
+          "type": "VARIABLE_ALIAS",
+          "id": "VariableID:2:8"
+        }
+      }
+    },
+    {
+      "id": "VariableID:2:10",
+      "name": "dark",
+      "type": "COLOR",
+      "values": {
+        "2:0": {
+          "r": 0.22745098173618317,
+          "g": 0.09019608050584793,
+          "b": 0.05098039284348488,
+          "a": 1
+        }
+      }
+    },
+    {
+      "id": "VariableID:2:11",
+      "name": "color/dark",
+      "type": "COLOR",
+      "values": {
+        "2:1": {
+          "type": "VARIABLE_ALIAS",
+          "id": "VariableID:2:10"
+        }
+      }
+    },
+    {
+      "id": "VariableID:2:12",
+      "name": "gold",
+      "type": "COLOR",
+      "values": {
+        "2:0": {
+          "r": 0.8588235378265381,
+          "g": 0.6549019813537598,
+          "b": 0.35686275362968445,
+          "a": 1
+        }
+      }
+    },
+    {
+      "id": "VariableID:2:13",
+      "name": "color/gold",
+      "type": "COLOR",
+      "values": {
+        "2:1": {
+          "type": "VARIABLE_ALIAS",
+          "id": "VariableID:2:12"
+        }
+      }
+    },
+    {
+      "id": "VariableID:2:14",
+      "name": "orange",
+      "type": "COLOR",
+      "values": {
+        "2:0": {
+          "r": 0.7647058963775635,
+          "g": 0.5333333611488342,
+          "b": 0.239215686917305,
+          "a": 1
+        }
+      }
+    },
+    {
+      "id": "VariableID:2:15",
+      "name": "color/orange",
+      "type": "COLOR",
+      "values": {
+        "2:1": {
+          "type": "VARIABLE_ALIAS",
+          "id": "VariableID:2:14"
+        }
+      }
+    },
+    {
+      "id": "VariableID:2:16",
+      "name": "white",
+      "type": "COLOR",
+      "values": {
+        "2:0": {
+          "r": 1,
+          "g": 1,
+          "b": 1,
+          "a": 1
+        }
+      }
+    },
+    {
+      "id": "VariableID:2:17",
+      "name": "color/white",
+      "type": "COLOR",
+      "values": {
+        "2:1": {
+          "type": "VARIABLE_ALIAS",
+          "id": "VariableID:2:16"
+        }
+      }
+    },
+    {
+      "id": "VariableID:2:18",
+      "name": "space/4",
+      "type": "FLOAT",
+      "values": {
+        "2:1": 4
+      }
+    },
+    {
+      "id": "VariableID:2:19",
+      "name": "space/8",
+      "type": "FLOAT",
+      "values": {
+        "2:1": 8
+      }
+    },
+    {
+      "id": "VariableID:2:20",
+      "name": "space/12",
+      "type": "FLOAT",
+      "values": {
+        "2:1": 12
+      }
+    },
+    {
+      "id": "VariableID:2:21",
+      "name": "space/16",
+      "type": "FLOAT",
+      "values": {
+        "2:1": 16
+      }
+    },
+    {
+      "id": "VariableID:2:22",
+      "name": "space/20",
+      "type": "FLOAT",
+      "values": {
+        "2:1": 20
+      }
+    },
+    {
+      "id": "VariableID:2:23",
+      "name": "space/24",
+      "type": "FLOAT",
+      "values": {
+        "2:1": 24
+      }
+    },
+    {
+      "id": "VariableID:2:24",
+      "name": "space/32",
+      "type": "FLOAT",
+      "values": {
+        "2:1": 32
+      }
+    },
+    {
+      "id": "VariableID:2:25",
+      "name": "space/48",
+      "type": "FLOAT",
+      "values": {
+        "2:1": 48
+      }
+    },
+    {
+      "id": "VariableID:2:26",
+      "name": "radius/12",
+      "type": "FLOAT",
+      "values": {
+        "2:1": 12
+      }
+    },
+    {
+      "id": "VariableID:2:27",
+      "name": "radius/16",
+      "type": "FLOAT",
+      "values": {
+        "2:1": 16
+      }
+    }
+  ]
+}
