@@ -187,6 +187,111 @@ test('FE10 turning availability off keeps assigned requests actionable and pendi
     assert.equal(snapshot.acceptingNewRequests, false);
   } finally { s.db.close(); }
 });
+
+function visitCommand(detail, action) {
+  return {
+    consultationId: detail.record.id,
+    consultationVersion: detail.record.version,
+    visitVersion: detail.visit.version,
+    operationKey: `visit:${detail.record.id}:${detail.visit.version}:${action}`,
+    action,
+  };
+}
+async function acceptVisitRequest(s) {
+  const request = await s.repo.findById('consultation', ids.visitRequest);
+  await s.service.act(ids.vetZero, 'vet', cmd(request, 'accept'));
+  return s.service.detail(ids.vetZero, 'vet', request.id);
+}
+
+test('FE13 visit progresses in order; farmer sees the same timestamps and audit history', async () => {
+  const s = await setup(); try {
+    let detail = await acceptVisitRequest(s);
+    assert.equal(detail.visit.payload.stage, 'scheduled');
+    await change(s, 'address', ids.budiAddress, { address: 'Alamat peternak yang diperbarui sesudah booking' });
+    detail = await s.service.detail(ids.vetZero, 'vet', ids.visitRequest);
+    assert.equal(detail.record.payload.visitAddressSnapshot, 'Kandang Budi, Bogor');
+    const first = visitCommand(detail, 'depart');
+    await Promise.all([s.service.advanceVisit(ids.vetZero, 'vet', first), s.fresh().advanceVisit(ids.vetZero, 'vet', first)]);
+    detail = await s.service.detail(ids.budi, 'farmer', ids.visitRequest);
+    assert.equal(detail.record.payload.status, 'in_progress');
+    assert.equal(detail.visit.payload.stage, 'en_route');
+    assert.equal(detail.visit.payload.departureAt, now().toISOString());
+    assert.equal(detail.history.length, 2);
+    assert.equal(detail.history[1].payload.action, 'depart');
+    await assert.rejects(s.service.advanceVisit(ids.vetZero, 'vet', visitCommand(detail, 'start_examination')), { code: 'INVALID_STATE' });
+
+    detail = await s.service.detail(ids.vetZero, 'vet', ids.visitRequest);
+    await s.service.advanceVisit(ids.vetZero, 'vet', visitCommand(detail, 'arrive'));
+    detail = await s.service.detail(ids.budi, 'farmer', ids.visitRequest);
+    assert.equal(detail.visit.payload.stage, 'arrived');
+    assert.equal(detail.visit.payload.arrivalAt, now().toISOString());
+    detail = await s.service.detail(ids.vetZero, 'vet', ids.visitRequest);
+    await s.service.advanceVisit(ids.vetZero, 'vet', visitCommand(detail, 'start_examination'));
+    detail = await s.fresh().detail(ids.budi, 'farmer', ids.visitRequest);
+    assert.equal(detail.visit.payload.stage, 'examining');
+    assert.equal(detail.visit.payload.examinationStartedAt, now().toISOString());
+    assert.equal(detail.record.payload.status, 'in_progress');
+    assert.equal(detail.history.length, 4);
+  } finally { s.db.close(); }
+});
+
+test('FE13 visit actions enforce assignment, verification, payment and a saved address snapshot', async () => {
+  const s = await setup(); try {
+    const detail = await acceptVisitRequest(s);
+    const command = visitCommand(detail, 'depart');
+    await assert.rejects(s.service.advanceVisit(ids.budi, 'farmer', command), { code: 'FORBIDDEN' });
+    await assert.rejects(s.service.advanceVisit(ids.rani, 'vet', command), { code: 'FORBIDDEN' });
+    await change(s, 'vetProfile', ids.yudaProfile, { verificationStatus: 'pending' });
+    await assert.rejects(s.service.advanceVisit(ids.vetZero, 'vet', command), { code: 'FORBIDDEN' });
+    assert.equal((await s.repo.findById('visit', detail.visit.id)).payload.stage, 'scheduled');
+  } finally { s.db.close(); }
+  for (const scenario of ['payment', 'address']) {
+    const s = await setup(); try {
+      const detail = await acceptVisitRequest(s);
+      if (scenario === 'payment') await change(s, 'payment', ids.visitRequestPayment, { status: 'pending' });
+      else await change(s, 'consultation', ids.visitRequest, { visitAddressSnapshot: '' });
+      await assert.rejects(s.service.advanceVisit(ids.vetZero, 'vet', visitCommand(detail, 'depart')), { code: 'INVALID_STATE' });
+      assert.equal((await s.repo.listByRelated('visit', ids.visitRequest, 'consultation'))[0].payload.stage, 'scheduled');
+    } finally { s.db.close(); }
+  }
+});
+
+test('FE13 cannot depart while the farmer has an unanswered schedule proposal', async () => {
+  const s = await setup(); try {
+    const detail = await s.service.detail(ids.vetZero, 'vet', ids.visit);
+    assert.ok(detail.proposal?.payload.status === 'pending');
+    await assert.rejects(s.service.advanceVisit(ids.vetZero, 'vet', visitCommand(detail, 'depart')), { code: 'INVALID_STATE' });
+    assert.equal((await s.repo.findById('visit', ids.visitStage)).payload.stage, 'scheduled');
+    assert.equal((await s.repo.findById('consultation', ids.visit)).payload.status, 'scheduled');
+  } finally { s.db.close(); }
+});
+
+test('FE13 visit stage write and consultation audit roll back together and can retry', async () => {
+  const s = await setup(); try {
+    const detail = await acceptVisitRequest(s);
+    const command = visitCommand(detail, 'depart');
+    const before = s.db.snapshot();
+    s.db.failKind = 'consultationAction';
+    await assert.rejects(s.service.advanceVisit(ids.vetZero, 'vet', command), /storage failure/);
+    assert.deepEqual(s.db.snapshot(), before);
+    s.db.failKind = null;
+    await s.service.advanceVisit(ids.vetZero, 'vet', command);
+    await assert.rejects(s.service.advanceVisit(ids.vetZero, 'vet', { ...command, action: 'arrive' }), { code: 'IDEMPOTENCY_CONFLICT' });
+    const updated = await s.service.detail(ids.budi, 'farmer', ids.visitRequest);
+    assert.equal(updated.visit.payload.stage, 'en_route');
+    assert.equal(updated.history.filter(item => item.payload.operationKey === command.operationKey).length, 1);
+  } finally { s.db.close(); }
+});
+
+test('FE13 visit action rejects stale appointment or visit versions', async () => {
+  const s = await setup(); try {
+    const detail = await acceptVisitRequest(s);
+    const stale = visitCommand(detail, 'depart');
+    await change(s, 'visit', detail.visit.id, { notes: 'Perubahan serentak' });
+    await assert.rejects(s.service.advanceVisit(ids.vetZero, 'vet', stale), { code: 'VERSION_CONFLICT' });
+    assert.equal((await s.repo.findById('consultation', ids.visitRequest)).payload.status, 'scheduled');
+  } finally { s.db.close(); }
+});
 test('FE10 media requires submitted booking context and cannot leak foreign or unsafe files', async () => {
   const s = await setup(); try {
     const r = await s.repo.findById('consultation', ids.visitRequest);

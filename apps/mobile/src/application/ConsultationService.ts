@@ -4,8 +4,9 @@ import type { IdFactory } from './ports/AuthRepository';
 import type { AccountRole } from '../domain/auth';
 import type { DomainEntity, EntityKind } from '../domain/entities';
 import { DomainError } from '../domain/errors';
+import { assertVisitTransition, type VisitStage } from '../domain/policies';
 import { projectDirectorySlots } from '../domain/directory';
-import type { ConsultationCommand, ConsultationDetail, ProposalInput } from '../domain/consultations';
+import type { ConsultationCommand, ConsultationDetail, ProposalInput, VisitAction, VisitCommand } from '../domain/consultations';
 import { ProfileService } from './ProfileService';
 import { VetDirectoryService } from './VetDirectoryService';
 
@@ -168,6 +169,51 @@ export class ConsultationService {
     });
   }
 
+  async advanceVisit(userId: string, role: AccountRole, command: VisitCommand): Promise<void> {
+    await this.storage.transaction(async (unit) => {
+      const record = await this.access(unit, userId, role, command.consultationId);
+      if (role !== 'vet' || record.payload.type !== 'visit') throw new DomainError('FORBIDDEN', 'Hanya dokter yang ditugaskan dapat memperbarui kunjungan.');
+      if ((await this.profile(unit, userId, 'vet')).verificationStatus !== 'verified') throw new DomainError('FORBIDDEN', 'Dokter harus terverifikasi sebelum memulai kunjungan.');
+      if (!await this.paid(unit, record)) throw new DomainError('INVALID_STATE', 'Pembayaran kunjungan belum berhasil.');
+      const address = typeof record.payload.visitAddressSnapshot === 'string' ? record.payload.visitAddressSnapshot.trim() : '';
+      if (!address) throw new DomainError('INVALID_STATE', 'Alamat kunjungan belum tersimpan pada booking.');
+      if (!command.operationKey.trim() || command.operationKey.length > 200) throw new DomainError('VALIDATION_FAILED', 'Identitas tindakan tidak valid.');
+
+      const visits = await unit.repository.listByRelated('visit', record.id, 'consultation');
+      if (visits.length !== 1 || visits[0].ownerId !== userId || visits[0].payload.consultationId !== record.id) throw new DomainError('FORBIDDEN', 'Data kunjungan tidak terkait dengan dokter layanan.');
+      const visit = visits[0];
+      const fingerprint = JSON.stringify(command);
+      const prior = (await unit.repository.listByKind('consultationAction')).find((item) => item.payload.operationKey === command.operationKey);
+      if (prior) {
+        if (prior.ownerId !== userId || prior.contextId !== record.id || prior.payload.fingerprint !== fingerprint || prior.payload.role !== role) throw new DomainError('IDEMPOTENCY_CONFLICT', 'Tindakan ini sudah digunakan untuk perubahan lain.');
+        return;
+      }
+      if (record.version !== command.consultationVersion || visit.version !== command.visitVersion) throw new DomainError('VERSION_CONFLICT', 'Progres kunjungan sudah berubah. Muat ulang sebelum melanjutkan.');
+      if ((await unit.repository.listByRelated('scheduleProposal', record.id, 'consultation')).some((item) => item.payload.status === 'pending')) throw new DomainError('INVALID_STATE', 'Tunggu respons Peternak pada usulan jadwal sebelum memulai kunjungan.');
+      const fromStage = String(visit.payload.stage) as VisitStage;
+      const nextStage = nextVisitStage(command.action);
+      const currentStatus = String(record.payload.status);
+      if ((fromStage === 'scheduled' && currentStatus !== 'scheduled') || (fromStage !== 'scheduled' && currentStatus !== 'in_progress')) throw new DomainError('INVALID_STATE', 'Status layanan tidak cocok dengan tahap kunjungan.');
+      if (!['scheduled', 'in_progress'].includes(currentStatus)) throw new DomainError('INVALID_STATE', 'Kunjungan ini tidak dapat dilanjutkan.');
+      assertVisitTransition({ current: fromStage, next: nextStage, clinicalNoteFinal: false, userConfirmedCompletion: false });
+
+      const timestamp = this.now().toISOString();
+      const visitChanges: Record<string, unknown> = { stage: nextStage };
+      if (command.action === 'depart') visitChanges.departureAt = timestamp;
+      if (command.action === 'arrive') visitChanges.arrivalAt = timestamp;
+      if (command.action === 'start_examination') visitChanges.examinationStartedAt = timestamp;
+      await unit.repository.update(this.updated(visit, visitChanges), visit.version);
+      const nextStatus = command.action === 'depart' ? 'in_progress' : currentStatus;
+      await unit.repository.update(this.updated(record, { status: nextStatus }), record.version);
+      const audit = this.entity('consultationAction', userId, record.id, {
+        operationKey: command.operationKey, fingerprint, role, action: command.action,
+        fromStatus: currentStatus, toStatus: nextStatus, fromStage, toStage: nextStage,
+        reason: '', startsAt: record.payload.startsAt, endsAt: record.payload.endsAt,
+      });
+      await unit.repository.create(audit, [{ sourceId: audit.id, targetId: record.id, relationship: 'consultation' }]);
+    });
+  }
+
   private async access(unit: BookingUnit, userId: string, role: AccountRole, id: string): Promise<DomainEntity> {
     await this.profile(unit, userId, role);
     const record = await unit.repository.findById('consultation', id);
@@ -210,6 +256,14 @@ export class ConsultationService {
   }
   private updated(record: DomainEntity, changes: Record<string, unknown>): DomainEntity { return { ...record, version: record.version + 1, updatedAt: this.now().toISOString(), payload: { ...record.payload, ...changes } }; }
   private entity(kind: EntityKind, ownerId: string, contextId: string, payload: Record<string, unknown>): DomainEntity { const timestamp = this.now().toISOString(); return { id: this.ids.create(), kind, ownerId, contextId, payload, version: 1, createdAt: timestamp, updatedAt: timestamp }; }
+}
+
+function nextVisitStage(action: VisitAction): VisitStage {
+  switch (action) {
+    case 'depart': return 'en_route';
+    case 'arrive': return 'arrived';
+    case 'start_examination': return 'examining';
+  }
 }
 
 function validTimezone(value: unknown): string {

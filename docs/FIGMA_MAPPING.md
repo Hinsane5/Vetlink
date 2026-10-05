@@ -300,3 +300,15 @@ You've reached the Figma MCP tool call limit on the Starter plan. Upgrade your p
 `ChatFlow` memakai header peserta/status, kartu konteks konsultasi, pesan kronologis, attachment tiles, modal viewer foto, composer multiline, tombol lampiran/kirim berukuran minimal 44 dp, safe area, keyboard avoidance, scroll ke pesan terbaru, dan konfirmasi saat keluar dengan teks/media belum dikirim. `ChatBubble` mempertahankan metadata delivery dan aksi retry. Lucide menggantikan glyph prototype demi satu keluarga ikon. Status accepted/pembayaran dan scope participant menentukan kapan tombol chat terlihat; konsultasi selesai/dibatalkan menjadi riwayat read-only.
 
 Selisih/cakupan yang belum tercapai: foto memiliki viewer penuh, sedangkan video hanya membuka panel informasi nama/ukuran karena playback native belum terpasang. Tidak ada konteks desain terbaru untuk dibandingkan; ini bukan klaim pixel-match. ADB Android tidak dapat memulai daemon pada sesi ini, jadi screenshot UI Chat, perbandingan 390 × 844, viewport kecil/font besar, keyboard, scroll, retry dan Back Android **belum diuji**. Export bundle hanya membuktikan Metro berhasil membangun JS.
+
+## Implementasi FE-13: progres kunjungan
+
+Mapping prototype lokal yang sudah ada menunjuk Dokter Visit `46:14` dan Location `46:15`; Peternak belum memiliki frame kunjungan khusus, sehingga detail layanan `12:2545` dan pola progress bersama menjadi rujukan struktural. Pada sesi implementasi FE-13, skill `figma-design-to-code` dibaca sebelum meminta context/screenshot node visit `46:14`. Kedua pemanggilan pada file sumber `f1WBeG5S1OGXlPXyVEHjuW` gagal dan memberi pesan izin yang sama:
+
+```text
+Looks like you don't have edit access to this file. The file owner can share it with you and make you an editor. For more details on rate limits and access, refer to https://developers.figma.com/docs/figma-mcp-server/rate-limits-access/
+```
+
+Context UUID: `5881ac21-3b97-4ea6-910f-4bfa0445f7c2`; screenshot UUID: `c0aba36a-3e26-44af-9ae0-0d44f07d3b07`. `figma_whoami` menunjukkan Starter / seat View (identitas akun tidak disalin ke dokumentasi). Error MCP ini spesifik izin file dan tidak sama dengan error kuota Starter yang tercatat pada percobaan sebelumnya untuk file/link lain; tool tersedia dan tidak mengembalikan `-32001: Unknown tool`. Setelah pengguna mengarahkan agar Figma tidak dicoba lagi selama limit MCP, tidak ada panggilan selanjutnya.
+
+UI dibuat mandiri dari token dan komponen FE-01 serta detail consultation: alamat dari snapshot booking, tautan opsional `geo:` ke aplikasi peta, Visit timeline, konfirmasi tiap transisi Dokter, dan progres baca-saja Peternak. Peta hanya mencari alamat; tidak memakai GPS. Belum ada screenshot visit lokal. Implementasi ini bukan pixel-match; target 390 × 844, ukuran kecil, font besar dan interaksi Android belum diverifikasi.

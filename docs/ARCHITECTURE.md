@@ -88,6 +88,8 @@ Port event menyimpan event, effect, notification, dan health projection dalam sa
 
 FE-12 `ChatService` membaca/menulis Message dan Attachment lewat repository bersama dalam transaction queue SQLite. Kedua persona melihat percakapan dari data yang sama pada satu instalasi; participant, payment/status, pemilik file, relasi attachment, MIME dan URI diperiksa di service. Adapter lokal mengembalikan delivery `sent` tanpa jaringan; pending/failed dapat diuji dan retry memperbarui pesan yang sama memakai `clientMessageId`. Tidak ada realtime/sinkronisasi antar perangkat atau playback video. Jika backend diperkenalkan, adapter API menjadi otoritas write untuk modul yang dipindahkan; cache lokal tidak boleh mengubah status finansial atau final note secara independen.
 
+FE-13 `ConsultationService.advanceVisit` menjaga transition visit pada transaction queue SQLite yang sama. Dokter harus assigned, verified, dan memiliki payment succeeded yang cocok; alamat snapshot wajib tersedia; stage serta versi Visit dan Consultation diperiksa sebelum write. Perjalanan memperbarui timestamp dan status Consultation ke `in_progress` saat berangkat bersama audit action secara atomik dan idempotent. Peternak membaca proyeksi yang sama. Tombol peta meneruskan alamat snapshot ke aplikasi eksternal melalui `geo:`; tidak ada izin GPS atau lokasi aktual. Completion menunggu use case FE-14 yang memeriksa catatan klinis final dan konfirmasi eksplisit.
+
 ## Use case yang memerlukan transaksi
 
 | Aksi | Pemeriksaan | Perubahan atomik |
