@@ -1,6 +1,6 @@
 # Model data dan aturan status
 
-Status: kontrak domain untuk mobile lokal lalu backend; envelope SQLite/aturan dasar FE-02, autentikasi FE-03, profil FE-04, proyeksi dashboard FE-05, serta lapisan awal FE-06 tersedia. ID menggunakan string stabil (UUID atau ekuivalen); kode tampilan seperti `VL-001` bukan primary key. Timestamp disimpan UTC, ditampilkan menggunakan timezone lokasi layanan (fixture `Asia/Jakarta`). Rupiah disimpan integer nonnegatif, bukan string `Rp...` atau float.
+Status: kontrak domain untuk mobile lokal lalu backend; envelope SQLite/aturan dasar FE-02, autentikasi historis FE-03, profil FE-04, dashboard FE-05, ternak/riwayat/pasien FE-06/07, direktori/jadwal baca FE-08, serta draft/quote/booking menunggu pembayaran FE-09 tersedia. ID menggunakan string stabil (UUID atau ekuivalen); kode tampilan seperti `VL-001` bukan primary key. Timestamp disimpan UTC, ditampilkan menggunakan timezone lokasi layanan (fixture `Asia/Jakarta`). Rupiah disimpan integer nonnegatif, bukan string `Rp...` atau float.
 
 Entitas memiliki `id`, `createdAt`, `updatedAt`; entitas mutable memiliki `version` untuk konflik edit. Snapshot final/transaksi tidak dapat ditulis ulang. Nullable field dinyatakan pada implementasi schema, bukan diisi string kosong untuk relasi yang tidak ada.
 
@@ -16,15 +16,16 @@ Entitas memiliki `id`, `createdAt`, `updatedAt`; entitas mutable memiliki `versi
 | VetProfile | userId, nama profesi, nomor profesi fiktif, pengalaman, bidang layanan[], species[], lokasi praktik, wilayah kunjungan[], verificationStatus |
 | VerificationSubmission | vetId, documentAttachmentIds[], status, reviewerReason, submittedAt, reviewedAt |
 | ProfileDraft | userId, role, form snapshot, optional photo/document attachment IDs, status(draft/applied/submitted) |
-| Availability | vetId, acceptingNewRequests, weekday rules(start/end/timezone), chatDurationMinutes, visitDurationMinutes |
+| BookingDraft | ownerId, vetId, input(service/animalId/selectedDay/startsAt/endsAt/complaint/visitAddress/attachmentIds), status(draft/discarded/submitted), consultationId setelah submit, version |
+| Availability | vetId, acceptingNewRequests, services[], timezone, weekdayRules[{weekday:0–6,start:HH:mm,end:HH:mm}], chatDurationMinutes, visitDurationMinutes |
 | BlockedTime | vetId, startsAt, endsAt, reason |
 | ServiceRate | vetId, serviceType(chat/visit), amount, currency=IDR, effectiveAt |
 | Livestock | farmerId, farmId, displayCode unik per farm, name, species, breed, sex, birthDate atau estimatedAgeMonths, weightKg, photoAttachmentIds[], healthSummary |
-| HealthEvent | animalId, kind(examination/disease/vaccine/medication/care), occurredAt, description, actorId, clinicalNoteId/reminderId optional, provenance |
+| HealthEvent | animalId, kind(examination/disease/vaccine/medication/care), occurredAt, description, actorId, clinicalNoteId/reminderId/attachment[] optional, provenance(farmer_report/clinical_note/reminder), sourceKey unik untuk proyeksi dan laporan idempotent |
 | Consultation | displayCode, farmerId, vetId, animalId, type, complaint, attachmentIds[], startsAt/endsAt, status, paymentId, feeSnapshot, commissionSnapshot, visitAddressSnapshot optional, completionAt |
 | ScheduleProposal | consultationId, proposedByVetId, startsAt/endsAt, reason, status, respondedAt |
 | Visit | consultationId unik, stage, departureAt, arrivalAt, examinationStartedAt, completedAt |
-| ClinicalNote | consultationId unik, animalId, vetId, complaint, findings, assessment, actions, careInstructions, optional followUpPlan, status, finalizedAt, finalizedBy, version |
+| ClinicalNote | consultationId unik, animalId, vetId, complaint, findings, assessment, actions, careInstructions, optional followUpPlan/attachment[], status, finalizedAt, finalizedBy, version; final hanya baca |
 | Recommendation | consultationId, vetId, status(draft/sent), sentAt, version |
 | RecommendationItem | recommendationId, productId optional, titleSnapshot, instructions, note; tanpa dosis nyata pada fixture |
 | FollowUp | consultationId, animalId, vetId, startsAt/endsAt, kind(recheck), status, reason, followUpConsultationId optional; layanan baru memiliki parentConsultationId |
@@ -56,7 +57,7 @@ Pada adapter FE-03, AuthService menyimpan verifier kata sandi bersalt di `expo-s
 
 FE-04 menambahkan `ProfileDraft` sebagai entity fleksibel pada envelope SQLite v2; tidak diperlukan perubahan tabel. `ProfileService` memvalidasi form, sedangkan `SqliteProfileRepository` menyimpan user/profile/farm/alamat/submission melalui exclusive transaction dan optimistic version. Lampiran dimiliki user, menyimpan metadata serta URI lokal, dan file disalin ke direktori dokumen privat aplikasi; isi file tidak disimpan base64 atau dikirim jaringan. Picker membatasi dokumen verifikasi ke PDF/gambar. `uploadStatus=local` berarti hanya tersimpan pada perangkat.
 
-Payload JSON memberi bentuk fleksibel bagi entitas yang belum memiliki layar/use case; validasi wajib tetap berada pada domain/use case. Kolom relasional inti, foreign key, constraint unik, dan `validateFixtureGraph` menjaga owner, konteks, jenis relasi serta idempotency. Seed fiktif `fe02-v1` hanya ditulis jika database belum berisi entitas, sehingga instalasi yang sudah mempunyai data tidak tertimpa saat startup.
+Payload JSON memberi bentuk fleksibel bagi entitas yang belum memiliki layar/use case; validasi wajib tetap berada pada domain/use case. Kolom relasional inti, foreign key, constraint unik, dan `validateFixtureGraph` menjaga owner, konteks, jenis relasi serta idempotency. Seed penuh fiktif `fe02-v1` hanya ditulis jika database belum berisi entitas. FE-08 menambah ekstensi sekali dengan marker `fixture_directory_version=fe08-v1` untuk instalasi seed tersebut: menambah field yang belum ada pada lima record profil/availability fixture, dan satu Review atas konsultasi completed bila belum punya ulasan. Field yang sudah ada, termasuk array kosong, tidak diganti. Perubahan dan marker dikomit dalam satu transaksi; kegagalan rollback dan retry tidak menambah ulasan atau versi lagi. Database non-fixture tidak diperluas. Jumlah default menjadi 62 entitas/82 relasi; bukti lama 61/79 tetap merepresentasikan run FE-02–07.
 
 ## Siklus konsultasi
 
@@ -91,6 +92,8 @@ Satu konsultasi memiliki satu catatan final pada baseline. Perubahan setelah fin
 ## Jadwal dan tindak lanjut
 
 Waktu mulai < waktu selesai; slot harus berada dalam jam layanan, tidak overlap janji atau blocked time. End eksklusif memungkinkan slot berikut mulai tepat saat sebelumnya selesai. Perubahan jam/available tidak membatalkan janji yang sudah diterima. Proposal jadwal tidak mengganti jadwal aktif sebelum disetujui; ulangi cek konflik ketika persetujuan disimpan.
+
+FE-08 memproyeksikan slot baca untuk 7 tanggal lokal mulai hari ini. `weekday=0` berarti Minggu dan `6` Sabtu; start/end memakai HH:mm pada `Availability.timezone`. Durasi integer 5–240 menit dipakai untuk menghasilkan slot di dalam interval, tanpa menulis Slot baru. Dokter harus verified, accepting, menawarkan layanan tersebut pada profil/availability, dan punya tarif aktif. Slot yang lewat atau overlap dengan konsultasi `awaiting_payment/requested/scheduled/in_progress`, BlockedTime, atau FollowUp `scheduled` disisihkan. Aturan kosong/invalid menghasilkan empty state. Jadwal dan formulir availability FE-11 belum dibuat; frontend FE-08 membaca data fixture/jadwal tersimpan. FE-09 memvalidasi ulang dalam transaksi sebelum membuat booking; tampilan slot tidak mereservasi jadwal dan belum menentukan kebijakan expiry hold produksi.
 
 FollowUp.status: `scheduled/completed/cancelled` untuk pemeriksaan ulang. Reminder.careStatus: `scheduled/done`; deliveryStatus: `pending/sent/failed`. ProgressReport memiliki submittedAt/viewedAt. Pengingat terkirim tidak berarti vaksin/obat sudah dilakukan; laporan dibaca tidak berarti layanan selesai.
 
@@ -131,4 +134,15 @@ Relasi fixture harus valid. Seed FE-02 yang terpasang berisi Budi/Sari, tiga dok
 
 FE-05 tidak menambah jenis entitas dashboard: `DashboardService` dan selector merupakan proyeksi query owner/assignment atas `Livestock`, `Consultation`, `Reminder`, `Availability`, dan `LedgerEntry`. Status jadwal tidak ditulis ulang saat availability berubah. Detail selalu dimuat ulang dengan ID konsultasi/pengingat dan diperiksa terhadap owner serta relasi assignment sebelum ditampilkan.
 
-FE-06 memakai entitas `Livestock` dan `Attachment` yang sama. `LivestockService` memeriksa owner dan relasi farmer/farm sebelum membaca atau mengubah ternak; `displayCode` dinormalisasi huruf besar dan unik per farm. Nama, species yang tercatat pada profil farm, ras, sex, estimasi umur bulan (0–1200), dan berat positif divalidasi sebelum commit. `selectLivestock` menggabungkan pencarian kode/nama/species/ras dengan filter species dan sex. Foto disalin ke direktori privat aplikasi; attachment `accessContext=livestock` dan relasi `photo` dikomit atomik bersama ternak. Service awal menyimpan `estimatedAgeMonths`; dukungan tanggal lahir menunggu inspeksi field Figma. UI belum dikerjakan karena konteks visual terbaru dibatasi kuota Starter.
+FE-06 memakai entitas `Livestock` dan `Attachment` yang sama. `LivestockService` memeriksa owner dan relasi farmer/farm sebelum membaca atau mengubah ternak; `displayCode` dinormalisasi huruf besar dan unik per farm. Nama, species yang tercatat pada profil farm, ras, sex, estimasi umur bulan (0–1200), dan berat positif divalidasi sebelum commit. `selectLivestock` menggabungkan pencarian kode/nama/species/ras dengan filter species dan sex. Foto disalin ke direktori privat aplikasi; attachment `accessContext=livestock` dan relasi `photo` dikomit atomik bersama ternak. UI `LivestockFlow` memakai service untuk daftar, filter species/sex, detail berdasarkan ID, tambah/edit, dan pemilihan foto. Service awal menyimpan `estimatedAgeMonths`; dukungan tanggal lahir menunggu inspeksi field Figma. QA interaksi layar dan pixel-match masih tertunda; rincian keterbatasan Figma ada di [Figma mapping](FIGMA_MAPPING.md).
+
+FE-07 memakai `animalId` dari detail ternak/pasien untuk membaca riwayat. `FarmerHealthFlow` menampilkan pemeriksaan, penyakit, vaksin, obat, dan perawatan dari `HealthRecordService`; hanya catatan klinis final yang tampak. Laporan yang ditulis Peternak menjadi `HealthEvent` dengan `sourceKey`/`operationKey` stabil agar retry tidak menggandakan catatan dan tidak mengubah `ClinicalNote` Dokter. Viewer lampiran kedua peran memeriksa lagi scope owner/assignment sebelum membuka URI. Mode frontend saat ini memilih persona fixture lokal tanpa autentikasi; pembatasan service tetap berlaku pada ID persona tersebut, tetapi mode ini tidak memberikan kontrol akses produksi.
+
+
+## Penerapan booking FE-09
+
+`bookingDraft` memakai envelope SQLite schema 2; tidak ada reset seed atau migrasi tabel baru. Draft parsial dimiliki Peternak dan terkait dokter; save memakai expected version. Simpan draft, impor lampiran, atau Tinjau biaya menyimpan input. Menutup aplikasi sebelum menyimpan perubahan teks tidak menjamin input sementara bertahan. Buang draft menandai discarded dan membersihkan file terkait; draft submitted tidak dapat diedit/dibuang.
+
+Review biaya adalah hasil baca tervalidasi dengan draftId/version, input ternormalisasi dan total integer rupiah. Submit memeriksa ulang kondisi terkini serta kecocokan versi/input/tarif pada satu exclusive transaction, kemudian membuat Consultation `awaiting_payment`, Quote, relasi farmer/veterinarian/animal/attachment, dan menandai draft submitted. Quote menyimpan satu baris tarif layanan serta total; shippingAmount=0 karena bukan pengiriman produk. Komisi snapshot 10% mengikuti fixture fiktif DEC-13, bukan kebijakan produksi. `paymentId=null`; tidak membuat Payment, Visit, Message, ledger atau event pembayaran. Retry draft yang sama mengembalikan consultationId yang tersimpan. Slot awaiting_payment diperlakukan terisi sampai waktu berlalu/status berubah; masa hold/expiry produksi masih DEC-17 yang terbuka.
+
+Attachment image/video dipilih pengguna, disalin privat ke document storage dan metadata dimiliki akun dengan contextId draft. Submit hanya menerima lampiran dari draft itu. MIME/kind diperiksa; belum menetapkan batas ukuran/jumlah media bisnis. Kegagalan transaksi impor membersihkan file baru dan rollback metadata. Penghapusan file bersifat best effort dengan kanal diagnostik; tidak ada upload/backend jaringan atau ACL produksi.

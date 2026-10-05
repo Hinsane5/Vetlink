@@ -147,6 +147,7 @@ export class DashboardService {
       kind,
       id: item.id,
       title: item.displayCode,
+      feeAmount: Number.isSafeInteger(consultation.payload.feeSnapshot) && Number(consultation.payload.feeSnapshot) >= 0 ? Number(consultation.payload.feeSnapshot) : undefined,
       status: item.status,
       statusLabel: consultationStatusLabel(item.status),
       dateLabel: item.startsAt,

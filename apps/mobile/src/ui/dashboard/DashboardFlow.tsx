@@ -18,19 +18,27 @@ import { Button } from '../components/Button';
 import { EmptyState, ErrorState, InlineFeedback, LoadingState } from '../components/Feedback';
 import { Icon, type IconName } from '../components/Icon';
 import { StatusBadge, type StatusTone } from '../components/StatusBadge';
+import { LivestockFlow, type LivestockRoute } from '../livestock/LivestockFlow';
+import { PatientFlow } from '../patients/PatientFlow';
+import { BookingFlow } from '../booking/BookingFlow';
+import { VetDirectoryFlow } from '../directory/VetDirectoryFlow';
 import { colors, fonts, layout, radii, roleTokens, spacing, typeScale } from '../theme/tokens';
 
 type DashboardRoute =
   | { type: 'home' }
   | { type: 'list'; kind: 'consultations' | 'appointments' }
-  | { type: 'detail'; kind: 'consultation' | 'reminder'; id: string };
+  | { type: 'detail'; kind: 'consultation' | 'reminder'; id: string }
+  | { type: 'patients'; patientId?: string }
+  | { type: 'doctors'; vetId?: string }
+  | { type: 'booking'; vetId: string }
+  | LivestockRoute;
 
 type Props = {
   store: LocalStore;
   session: SessionSnapshot;
   onOpenProfile: () => void;
   onSwitchRole: () => void;
-  onLogout: () => void;
+  onLogout?: () => void;
 };
 
 export function DashboardFlow({ store, session, onOpenProfile, onSwitchRole, onLogout }: Props) {
@@ -81,6 +89,15 @@ export function DashboardFlow({ store, session, onOpenProfile, onSwitchRole, onL
         setMenuVisible(false);
         return true;
       }
+      if (route.type === 'patients') {
+        setRoute(route.patientId ? { type: 'patients' } : { type: 'home' });
+        return true;
+      }
+      if (route.type === 'doctors') {
+        setRoute(route.vetId ? { type: 'doctors' } : { type: 'home' });
+        return true;
+      }
+      if (route.type === 'livestock' || route.type === 'booking') return false;
       if (route.type !== 'home') {
         setRoute({ type: 'home' });
         return true;
@@ -121,6 +138,20 @@ export function DashboardFlow({ store, session, onOpenProfile, onSwitchRole, onL
   const listItems = route.type === 'list' ? getListItems(snapshot, route.kind) : [];
   return (
     <View style={styles.fullScreen}>
+      {route.type === 'booking' ? (
+        <BookingFlow store={store} userId={session.userId} vetId={route.vetId} onBack={() => setRoute({ type: 'doctors', vetId: route.vetId })} onComplete={(id) => { void reload(); openContext('consultation', id); }} />
+      ) : route.type === 'livestock' ? (
+        <LivestockFlow
+          store={store}
+          session={session}
+          route={route}
+          onNavigate={setRoute}
+          onExit={() => setRoute({ type: 'home' })}
+          onOpenProfile={onOpenProfile}
+        />
+      ) : route.type === 'doctors' ? (
+        <VetDirectoryFlow store={store} onBook={(vetId) => setRoute({ type: 'booking', vetId })} vetId={route.vetId} onOpenVet={(vetId) => setRoute({ type: 'doctors', vetId })} onBack={() => setRoute(route.vetId ? { type: 'doctors' } : { type: 'home' })} />
+      ) : (
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
@@ -129,7 +160,7 @@ export function DashboardFlow({ store, session, onOpenProfile, onSwitchRole, onL
       >
         {route.type === 'home' ? (
           snapshot.role === 'farmer'
-            ? <FarmerDashboard snapshot={snapshot} error={error} onOpenProfile={onOpenProfile} onOpenList={(kind) => setRoute({ type: 'list', kind })} onOpenContext={openContext} />
+            ? <FarmerDashboard snapshot={snapshot} error={error} onOpenMenu={() => setMenuVisible(true)} onOpenList={(kind) => setRoute({ type: 'list', kind })} onAddLivestock={() => setRoute({ type: 'livestock', screen: 'form', mode: 'create', returnTo: 'list' })} onOpenContext={openContext} />
             : <VetDashboard snapshot={snapshot} error={error} availabilityBusy={availabilityBusy} onAvailability={(value) => void changeAvailability(value)} onOpenList={(kind) => setRoute({ type: 'list', kind })} onOpenContext={openContext} onOpenMenu={() => setMenuVisible(true)} />
         ) : null}
         {route.type === 'list' ? (
@@ -157,25 +188,38 @@ export function DashboardFlow({ store, session, onOpenProfile, onSwitchRole, onL
             }}
           />
         ) : null}
+        {route.type === 'patients' ? (
+          <PatientFlow
+            store={store}
+            session={session}
+            patientId={route.patientId}
+            onOpenPatient={(animalId) => setRoute({ type: 'patients', patientId: animalId })}
+            onBackToList={() => setRoute({ type: 'patients' })}
+          />
+        ) : null}
       </ScrollView>
-      <BottomNavigation role={role} route={route} onSelect={(next) => setRoute(next)} onOpenProfile={onOpenProfile} />
+      )}
+      {route.type !== 'booking' && !(route.type === 'patients' && route.patientId) && !(route.type === 'livestock' && route.screen !== 'list') && !(route.type === 'doctors' && route.vetId) ? (
+        <BottomNavigation role={role} route={route} onSelect={(next) => setRoute(next)} onOpenProfile={onOpenProfile} />
+      ) : null}
       <AccountMenu
         visible={menuVisible}
         role={role}
         onClose={() => setMenuVisible(false)}
         onProfile={() => { setMenuVisible(false); onOpenProfile(); }}
         onSwitchRole={() => { setMenuVisible(false); onSwitchRole(); }}
-        onLogout={() => { setMenuVisible(false); onLogout(); }}
+        onLogout={onLogout ? () => { setMenuVisible(false); onLogout(); } : undefined}
       />
     </View>
   );
 }
 
-function FarmerDashboard({ snapshot, error, onOpenProfile, onOpenList, onOpenContext }: {
+function FarmerDashboard({ snapshot, error, onOpenMenu, onOpenList, onAddLivestock, onOpenContext }: {
   snapshot: FarmerDashboardSnapshot;
   error: string;
-  onOpenProfile: () => void;
+  onOpenMenu: () => void;
   onOpenList: (kind: 'consultations') => void;
+  onAddLivestock: () => void;
   onOpenContext: (kind: 'consultation' | 'reminder', id: string) => void;
 }) {
   const reminder = snapshot.nextReminder;
@@ -189,7 +233,7 @@ function FarmerDashboard({ snapshot, error, onOpenProfile, onOpenList, onOpenCon
             {snapshot.farmLocation ? ` · ${snapshot.farmLocation}` : ''}
           </Text>
         </View>
-        <RoundAction label="Buka profil peternak" icon="user-round" onPress={onOpenProfile} />
+        <RoundAction label="Buka menu akun" icon="user-round" onPress={onOpenMenu} />
       </View>
 
       {error ? <InlineFeedback message={error} tone="error" /> : null}
@@ -201,7 +245,7 @@ function FarmerDashboard({ snapshot, error, onOpenProfile, onOpenList, onOpenCon
       </View>
 
       <View style={styles.actionRow}>
-        <Button label="Profil peternakan" role="farmer" variant="accent" onPress={onOpenProfile} style={styles.actionButton} />
+        <Button label="Tambah ternak" role="farmer" variant="accent" onPress={onAddLivestock} style={styles.actionButton} />
         <Button label="Konsultasi saya" role="farmer" onPress={() => onOpenList('consultations')} style={styles.actionButton} />
       </View>
 
@@ -425,6 +469,8 @@ function DashboardDetail({ role, detail, loading, error, onBack, onRetry }: {
           <DetailLine label="Ternak" value={detail.animalName} />
           {detail.dateLabel ? <DetailLine label={detail.kind === 'reminder' ? 'Jatuh tempo' : 'Waktu layanan'} value={formatDateTime(detail.dateLabel)} /> : null}
           <DetailLine label={detail.kind === 'reminder' ? 'Instruksi' : 'Keluhan'} value={detail.description || 'Belum ada keterangan.'} />
+          {detail.feeAmount !== undefined ? <DetailLine label="Biaya layanan" value={formatRupiah(detail.feeAmount)} /> : null}
+          {detail.status === 'awaiting_payment' ? <InlineFeedback message="Menunggu pembayaran. Booking belum menjadi janji diterima dan chat belum dibuka." /> : null}
           {detail.visitAddress ? <DetailLine label="Alamat kunjungan" value={detail.visitAddress} /> : null}
         </View>
       ) : null}
@@ -483,12 +529,12 @@ function BottomNavigation({ role, route, onSelect, onOpenProfile }: {
   onSelect: (route: DashboardRoute) => void;
   onOpenProfile: () => void;
 }) {
-  const active = route.type === 'home' ? 'home' : route.type === 'detail' ? 'home' : route.kind;
+  const active = route.type === 'home' ? 'home' : route.type === 'patients' ? 'patients' : route.type === 'livestock' ? 'livestock' : route.type === 'doctors' || route.type === 'booking' ? 'consultations' : route.type === 'detail' ? 'home' : route.kind;
   const tabs: { key: string; label: string; icon: IconName; route?: DashboardRoute; action?: () => void; disabled?: boolean }[] = role === 'farmer'
     ? [
       { key: 'home', label: 'Beranda', icon: 'house', route: { type: 'home' } },
-      { key: 'livestock', label: 'Ternak', icon: 'paw-print', disabled: true },
-      { key: 'consultations', label: 'Konsultasi', icon: 'message-square', route: { type: 'list', kind: 'consultations' } },
+      { key: 'livestock', label: 'Ternak', icon: 'paw-print', route: { type: 'livestock', screen: 'list' } },
+      { key: 'consultations', label: 'Konsultasi', icon: 'message-square', route: { type: 'doctors' } },
       { key: 'orders', label: 'Pesanan', icon: 'package', disabled: true },
       { key: 'profile', label: 'Profil', icon: 'user-round', action: onOpenProfile },
     ]
@@ -496,7 +542,7 @@ function BottomNavigation({ role, route, onSelect, onOpenProfile }: {
       { key: 'home', label: 'Beranda', icon: 'house', route: { type: 'home' } },
       { key: 'appointments', label: 'Jadwal', icon: 'calendar-days', route: { type: 'list', kind: 'appointments' } },
       { key: 'consultations', label: 'Konsultasi', icon: 'message-square', route: { type: 'list', kind: 'consultations' } },
-      { key: 'patients', label: 'Pasien', icon: 'notebook-tabs', disabled: true },
+      { key: 'patients', label: 'Pasien', icon: 'notebook-tabs', route: { type: 'patients' } },
       { key: 'profile', label: 'Profil', icon: 'user-round', action: onOpenProfile },
     ];
 
@@ -531,16 +577,16 @@ function AccountMenu({ visible, role, onClose, onProfile, onSwitchRole, onLogout
   onClose: () => void;
   onProfile: () => void;
   onSwitchRole: () => void;
-  onLogout: () => void;
+  onLogout?: () => void;
 }) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.modalBackdrop}>
         <View style={styles.menuCard}>
-          <Text accessibilityRole="header" style={styles.menuTitle}>Akun VetLink</Text>
+          <Text accessibilityRole="header" style={styles.menuTitle}>Menu VetLink</Text>
           <Button label="Profil" role={role} onPress={onProfile} />
           <Button label="Ganti Peran" role={role} variant="secondary" onPress={onSwitchRole} />
-          <Button label="Keluar" role={role} variant="secondary" onPress={onLogout} />
+          {onLogout ? <Button label="Keluar" role={role} variant="secondary" onPress={onLogout} /> : null}
           <Button label="Tutup" role={role} variant="secondary" onPress={onClose} />
         </View>
       </View>

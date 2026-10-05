@@ -2,6 +2,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { LocalStoreProvider } from './src/application/LocalStoreContext';
 import { openLocalStore, retryLocalStoreBootstrap } from './src/data/local/sqlite/LocalStore';
 import { FE01ComponentChecks } from './src/ui/dev/FE01ComponentChecks';
@@ -9,11 +10,15 @@ import { FE02StorageChecks } from './src/ui/dev/FE02StorageChecks';
 import { Button } from './src/ui/components/Button';
 import { LoadingState } from './src/ui/components/Feedback';
 import { fontAssets } from './src/ui/theme/fontAssets';
-import { AuthFlow } from './src/ui/auth/AuthFlow';
+import { FrontendFlow } from './src/ui/preview/FrontendFlow';
 import { colors, fonts } from './src/ui/theme/tokens';
 import type { LocalStore } from './src/data/local/sqlite/LocalStore';
 
 export default function App() {
+  return <SafeAreaProvider initialMetrics={initialWindowMetrics}><VetLinkApp /></SafeAreaProvider>;
+}
+
+function VetLinkApp() {
   const [fontsLoaded, fontError] = useFonts(fontAssets);
   const [localStore, setLocalStore] = useState<LocalStore | null>(null);
   const [storeFailed, setStoreFailed] = useState(false);
@@ -81,7 +86,7 @@ export default function App() {
 
   return (
     <LocalStoreProvider store={localStore}>
-      <AuthFlow store={localStore} />
+      <FrontendFlow store={localStore} />
     </LocalStoreProvider>
   );
 }

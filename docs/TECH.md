@@ -1,6 +1,6 @@
 # Teknologi dan bahan diskusi
 
-Status per 5 Oktober 2026: FE-00 dan FE-02 selesai; FE-01, FE-03, FE-04, dan FE-05 sedang dikerjakan. Scaffold, fondasi database, AuthService, ProfileService, dan DashboardService tersedia. Build native FE-05 lulus; APK FE-04 sudah dipasang ke Xiaomi tetapi layar tidur saat QA, sedangkan visual Figma terbaru tertunda kuota MCP.
+Status per 5 Oktober 2026: FE-00/02 selesai; FE-01/03–08 sedang dikerjakan. Runtime aktif memakai persona lokal tanpa autentikasi/backend jaringan, dengan UI ternak, riwayat/pasien, dan direktori dokter. Typecheck/lint, 40 tes, export Android, dan build native terbaru lulus; APK FE-08 terpasang di Xiaomi. QA sentuh tertahan izin MIUI; visual Figma FE-08 tertahan izin file utama dan kuota MCP Starter.
 
 ## Keputusan mobile
 
@@ -59,10 +59,14 @@ Lucide dimuat sebelum shell dirender bersama Inter agar glyph ikon tersedia saat
 | Repository | Envelope entity dan relasi ber-FK; lookup by ID/owner/relationship; update optimistic version; final clinical note immutable |
 | Domain | Guard verified/assignment, akses peserta layanan, urutan Visit, kelengkapan/finalitas note, dan kalkulasi saldo integer rupiah |
 | Event | `domain_events` + `event_effects`; notification unik per penerima/event dan health event unik per source key; proyeksi satu transaksi |
-| Tes | `npm run test:domain` menjalankan Node `node:test` tanpa framework tambahan; 20 tes total: enam fondasi FE-02, empat FE-03, lima FE-04, dan lima FE-05 |
+| Tes | `npm run test:domain` menjalankan Node `node:test` tanpa framework tambahan; 40 tes total sampai FE-08, termasuk transaksi ekstensi fixture pada SQLite in-memory melalui `node:sqlite` |
 | Perangkat | Xiaomi `2311DRK48G`; schema 2, seed `fe02-v1`, 61 entitas/79 relasi dipertahankan oleh migrasi; foreign-key/integrity check lulus; cold restart dan retry event SQLite lulus |
 
-## Realisasi FE-03: akun dan sesi lokal
+## Tahap frontend aktif
+
+`App.tsx` sekarang memasang `FrontendFlow`. Pilih Peran menggunakan `FrontendPreviewService` untuk membuka persona fixture Peternak Budi atau Dokter Yuda tanpa credential, sesi autentikasi, maupun backend jaringan. SQLite lokal tetap menjadi sumber data untuk memperlihatkan list, detail, filter, dan perubahan form yang konsisten. Ini mode penelusuran UI, bukan otoritas akses produksi. Implementasi FE-03 di bawah tetap ada sebagai riwayat teknis tetapi tidak dipasang pada runtime aktif.
+
+## Realisasi historis FE-03: akun dan sesi lokal
 
 | Kebutuhan | Implementasi aktual |
 | --- | --- |
@@ -76,7 +80,7 @@ Lucide dimuat sebelum shell dirender bersama Inter agar glyph ikon tersedia saat
 | Session expiry | Sesi lokal kedaluwarsa setelah 30 hari dan diverifikasi kembali saat bootstrap |
 | Pemeriksaan | Empat tes AuthService lulus; build Android lulus dan layar Mulai terbuka. Uji tap/form di HP menunggu akses input MIUI; screenshot Figma FE-03 tertahan oleh batas MCP |
 
-Autentikasi tersebut hanya berjalan pada instalasi ini. SHA-256 bersalt bukan KDF password produksi; tidak ada verifikasi email, proteksi percobaan login/rate limit server, pemulihan identitas, atau otoritas lintas perangkat. Jangan merilisnya sebagai auth produksi—ganti adapter verifier/session dengan provider/server tepercaya ketika backend dipilih. Akun fixture sengaja tidak dapat diklaim lewat reset karena tidak memiliki verifier lokal.
+Kode autentikasi FE-03 tidak dipakai pada alur aktif. Jika kelak dipakai kembali, SHA-256 bersalt bukan KDF password produksi; tidak ada verifikasi email, proteksi percobaan login/rate limit server, pemulihan identitas, atau otoritas lintas perangkat. Adapter verifier/session harus diganti dengan provider/server tepercaya ketika backend dipilih. Akun fixture sengaja tidak dapat diklaim lewat reset karena tidak memiliki verifier lokal.
 
 ## Realisasi awal FE-04: profil, farm, alamat, dan verifikasi
 
@@ -140,3 +144,12 @@ Pemilihan ORM (misalnya Prisma), provider auth, penyimpanan media, realtime, que
 4. Target hosting, kebutuhan backup, biaya operasional dan target iOS.
 
 Pertanyaan ini tidak menghambat penyusunan dokumen atau adapter lokal. Catat jawabannya di [Decisions](DECISIONS.md); jangan memaksakan stack backend dari usulan ini.
+
+## Realisasi FE-08: direktori dan profil dokter
+
+`react-native-safe-area-context ~5.7.0` ditambahkan melalui Expo untuk inset status bar/gesture Android. Root memakai SafeAreaProvider dan shell aktif/Modal filter memakai SafeAreaView dari library tersebut, dengan provider tersendiri pada Modal. Kebutuhan native library ini adalah layout aman pada perangkat; tidak ada Kotlin aplikasi buatan sendiri atau backend jaringan baru. Mengikuti [dokumentasi Expo](https://docs.expo.dev/versions/latest/sdk/safe-area-context/) dan versi SDK yang tercantum pada `expo/bundledNativeModules.json`. `VetDirectoryService`, filter domain, dan proyeksi slot 7 hari menggunakan adapter SQLite bersama; `VetDirectoryFlow` memakai StyleSheet, tokens, Inter, Lucide, Modal, input, serta state loading/error/empty. Native debug APK tetap memuat JavaScript dari Metro. Pemeriksaan terbaru `npm run check` lulus 40 tes; export 736 modul dan Gradle debug build lulus. Tes ekstensi fixture memakai SQLite in-memory bawaan Node 24 yang terpasang (`node:sqlite`, masih menampilkan ExperimentalWarning), dengan rollback dan retry transaksi; runtime mobile tetap memakai `expo-sqlite`. Bukti perangkat serta batas QA dicatat di Testing.
+
+
+## Realisasi FE-09: booking
+
+Tidak ada dependency atau kode Kotlin aplikasi baru. Photo/video memakai `expo-image-picker` yang sudah terpasang; file disalin lewat adapter `expo-file-system`. `SelectedAsset` kini mengenal video untuk booking, sedangkan validator foto profil/ternak dan dokumen verifikasi tetap membatasi jenis sebelumnya. Booking memakai React Native ScrollView/TextInput/Modal, tokens Inter/Lucide, safe-area provider Modal dan keyboard avoidance shell aktif. Penyimpanan draft/quote/consultation memakai adapter SQLite tunggal; tes integrasi transaksi menggunakan `node:sqlite` in-memory, bukan SQLite mock yang menggantikan SQL. Status/perintah pemeriksaan aktual ada di Testing.

@@ -1,6 +1,6 @@
 # Katalog fitur VetLink
 
-Status implementasi per fitur dicatat pada [backlog frontend](backlog/FRONTEND.md); FE-03, FE-04, dan FE-05 sedang berjalan, sedangkan fitur lain masih direncanakan. Prioritas P0 = fondasi dan flow wajib; P1 = kelengkapan scope lokal. P1 tetap wajib sebelum milestone seluruh scope lokal diterima. Acuan fitur: permintaan pengguna; detail visual: [Figma mapping](FIGMA_MAPPING.md).
+Status implementasi per fitur dicatat pada [backlog frontend](backlog/FRONTEND.md); FE-00/02 selesai dan FE-01/03–08 sedang dikerjakan. Flow frontend aktif memakai persona lokal tanpa autentikasi/backend jaringan; penerimaan UI Android belum lengkap. Prioritas P0 = fondasi dan flow wajib; P1 = kelengkapan scope lokal. P1 tetap wajib sebelum milestone seluruh scope lokal diterima. Acuan fitur: permintaan pengguna; detail visual: [Figma mapping](FIGMA_MAPPING.md).
 
 ## Peternak
 
@@ -64,3 +64,8 @@ Status implementasi per fitur dicatat pada [backlog frontend](backlog/FRONTEND.m
 | Pencairan | Pengajuan dan reservasi saldo lokal; hasil diajukan sesuai adapter | Tidak mentransfer dana ke bank |
 
 Skenario gagal tersedia melalui fixture/test injection di pengembangan, bukan tombol “Simulasikan” dalam produk. Keberhasilan UI selalu mengikuti hasil adapter yang digunakan.
+
+
+## Implementasi F-08 pada FE-09
+
+Booking chat/kunjungan, ternak/jadwal/keluhan/alamat/media, draft dan review biaya tersedia pada frontend lokal. Konfirmasi menyimpan quote serta consultation awaiting_payment; belum ada pembayaran FE-19 atau pengiriman request ke dokter. Bukti domain/service tersedia, sedangkan acceptance interaksi/visual perangkat masih terblokir MIUI. Lihat backlog dan Testing untuk batas bukti, bukan status selesai penuh.

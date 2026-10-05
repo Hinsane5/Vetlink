@@ -1,6 +1,6 @@
 # Strategi pengujian VetLink
 
-Status: strategi pengujian untuk implementasi VetLink. FE-00 dan FE-02 selesai; FE-01 menunggu pembandingan viewport Figma; FE-03 menunggu input perangkat dan visual QA; FE-04 menunggu QA picker/form; FE-05 lulus typecheck/lint/domain tests dan build native tetapi menunggu QA dashboard pada HP; FE-06 lapisan domain lulus typecheck/lint/tests/build, sedangkan UI menunggu konteks Figma Starter. Fondasi SQLite FE-02 lulus cold-restart/event-idempotency dan FE-03 lulus tes service serta build native pada HP fisik.
+Status QA per 5 Oktober 2026: bukti FE-00/02 sebelumnya tetap berlaku. Tahap aktif memakai frontend tanpa autentikasi/backend jaringan; Pilih Peran membuka persona lokal. UI FE-06/07/08 tersedia dan FE-09 menambahkan booking/draft/media/review hingga awaiting_payment. Typecheck, lint dan 49 tes domain/service lulus. Export Android dan Gradle debug build FE-09 lulus; APK terpasang pada Xiaomi. Rincian dicatat pada bagian terbaru di bawah; bukti startup tidak berarti form sudah diuji. MIUI menolak input ADB, sehingga form/picker/keyboard/dialog/back/scroll, draft cold restart perangkat, viewport kecil/font besar dan pembandingan visual 390 × 844 belum terbukti. Figma Booking terhalang izin file utama dan kuota Starter pada link terbaru.
 
 ## Level pengujian
 
@@ -118,7 +118,7 @@ Tanggal: 5 Oktober 2026. Lingkungan: macOS, Node.js `24.1.0`, npm `11.3.0`, Expo
 
 Tanggal: 5 Oktober 2026. Lingkungan: macOS, Node.js `24.1.0`, npm `11.3.0`, Expo SDK `~57.0.26`, React Native `0.86.3`, JDK `23.0.1`, Gradle `9.3.1`, Android SDK `/Volumes/HowSSD/AndroidStudio/SDK/sdk`; perangkat Xiaomi `2311DRK48G` melalui USB. Resolusi perangkat 1220 × 2712 px pada density 480 dpi, sekitar 407 × 904 dp. Simulator tetap tertutup.
 
-- Figma `get_design_context` dan screenshot berhasil diperiksa untuk tombol Peternak `12:1666`, tombol Dokter `75:2492`, field `75:2509`, status `75:2614`, dan chat Dokter `46:16`. Pemetaan serta selisih tercatat di [Figma mapping](FIGMA_MAPPING.md).
+- Figma `get_design_context` dan screenshot berhasil diperiksa untuk tombol Peternak `12:1666`, tombol Dokter `75:2492`, field `75:2509`, status `75:2614`, chat Dokter `46:16`, serta—melalui link terbaru—Peternak Chat `12:2353` dan Logout Dialog `12:3184`. Screenshot referensi baru berukuran 390 × 844; pemetaan serta selisih tercatat di [Figma mapping](FIGMA_MAPPING.md).
 - `npm run check` — **Lulus**; typecheck TypeScript dan ESLint, termasuk harness pemeriksaan FE-01.
 - `npx expo export --platform android` — **Lulus**; bundle Android menyertakan empat bobot Inter lokal dan font Lucide.
 - `GRADLE_USER_HOME=/private/tmp/vetlink-gradle ./gradlew --no-daemon --max-workers=1 assembleDebug` — **Lulus**; APK debug sekitar 161 MB. Development build FE-01 dipasang dan dijalankan pada HP; katalog komponen hanya aktif di development melalui `EXPO_PUBLIC_FE01_CHECKS=1`.
@@ -126,8 +126,9 @@ Tanggal: 5 Oktober 2026. Lingkungan: macOS, Node.js `24.1.0`, npm `11.3.0`, Expo
 - Android fisik — **Lulus untuk interaksi komponen**: tombol utama Peternak dan aksi retry memperbarui feedback diagnostik; tinggi tombol Peternak/Dokter 52/48 dp; target EditText dan retry 44 dp. Field menerima teks `Kandang utama uji`, membacanya kembali melalui accessibility tree, dan membuka keyboard dengan field tetap terlihat. Teks bantuan membungkus pada font besar; drag menggulir konten (dan menutup keyboard sesuai `keyboardDismissMode="on-drag"`). Dialog teks panjang membuka, tombol Kembali/Konfirmasi bekerja, dan Back Android menutup dialog tanpa menjalankan konfirmasi.
 - Font besar — **Diuji pada pilihan OEM 125%**, terdekat dengan target tetapi bukan tepat 130%; galeri juga diperiksa pada 145%. Field/helper dan dialog tetap terbaca, tombol dialog tetap terlihat. Xiaomi tidak menyediakan 130% pada slider yang tersedia; setelah tes, ukuran dipulihkan ke 100% melalui Pengaturan. Nilai akhir `font_scale` dan `device_font_scale` diverifikasi 1.0.
 - Bukti Android: [katalog komponen pada font 100%](reference/android/fe01-component-catalog-font100.png), [form pada 125%](reference/android/fe01-component-form-font125.png), [keyboard pada 125%](reference/android/fe01-component-keyboard-font125.png), dan [dialog pada 125%](reference/android/fe01-component-dialog-font125.png). Screenshot adalah katalog diagnostik development, bukan screen produk.
-- Viewport visual — ukuran acuan tepat 390 × 844 dp dan ukuran kecil 360 × 800 dp **Belum dilakukan**. Perangkat asli 407 × 904 dp; `adb shell wm size 1170x2532` ditolak Android dengan `SecurityException` karena membutuhkan `WRITE_SECURE_SETTINGS`. Izin sistem tidak diberikan. Karena itu, screenshot perangkat adalah tinjauan visual kualitatif dan bukan pixel-match pada ukuran Figma.
-- Figma MCP menolak konteks/screenshot untuk Peternak Chat `12:2353` dan Logout Dialog `12:3184` dengan pesan batas panggilan Starter plan. Node lain yang terbaca tetap menjadi acuan; pembandingan terhadap dua node tersebut masih tertunda.
+- Viewport visual — 390 × 844 dp dan ukuran kecil 360 × 800 dp **Belum dilakukan**. Pada retrospektif, `adb shell wm size`/density menunjukkan perangkat asli 1220 × 2712 px, 480 dpi atau sekitar 407 × 904 dp. Override ke 390 × 844 dp sebelumnya ditolak Android dengan `SecurityException` karena membutuhkan `WRITE_SECURE_SETTINGS`; ukuran OEM kecil tidak tersedia untuk diuji. Font OEM 125% dan 145% yang sudah terdokumentasi tetap menjadi bukti keterbacaan; tidak diklaim sebagai pembandingan visual di target viewport.
+- Figma references `12:2353` dan `12:3184` kini berhasil dibaca dari link terbaru setelah sesi sebelumnya menerima `-32001: Unknown tool`. Perbandingan konteks Logout dengan kode menemukan selisih: Figma menumpuk tombol konfirmasi di atas tombol batal, sedangkan `ConfirmationDialog` saat ini menaruh Batal lalu Konfirmasi berdampingan. Ini perbandingan spesifikasi dengan kode, bukan pixel-match; screenshot Android yang tersedia hanya galeri diagnostik, bukan layar Chat/Logout produk.
+- Interaksi layar produk Chat/Logout pada Android — **Belum diuji** karena MIUI menolak input ADB. Posisi/ukuran aktual layar produk, termasuk dialog Logout, belum dapat diperiksa pada perangkat.
 - Pada pemeriksaan FE-01, tes unit/domain/repository dan E2E belum tersedia; tes domain ditambahkan pada FE-02, sementara E2E masih menunggu screen produk.
 - Instalasi dependency FE-01 melaporkan 24 advisori npm (8 moderate, 16 high). Rincian belum diaudit dan tidak menjalankan `npm audit fix`.
 
@@ -157,18 +158,32 @@ Tanggal: 5 Oktober 2026. Expo SDK `~57.0.26`; paket media `expo-image-picker ~57
 - `npx expo export --platform android` — **Lulus**; Metro membundel 710 modul dan mengekspor bundle Android 1.9 MB.
 - `GRADLE_USER_HOME=/private/tmp/vetlink-gradle ./gradlew --no-daemon --max-workers=1 assembleDebug` — **Lulus**; `BUILD SUCCESSFUL` dalam 2 menit 44 detik. Ada peringatan SDK XML versi 4 serta deprecation Gradle/Expo yang tidak menghalangi build.
 - Pemasangan APK dan pemilihan foto/PDF pada HP — APK berhasil diperbarui melalui `adb install -r` tanpa menghapus data; layar terdeteksi sedang tidur (`mWakefulness=Dozing`) dan screenshot hitam. Interaksi/picker belum diuji sampai layar dibuka kunci secara manual. Emulator tidak dibuka atau dipakai.
+- Retrospektif perangkat pada sesi ini: Xiaomi terdeteksi dan awake, tetapi hanya halaman “Pilih Peran” berhasil dibuka. Tap uji berikutnya ditolak dengan `SecurityException: Injecting input events requires the caller (or the source of the instrumentation, if any) to have the INJECT_EVENTS permission.` Edit profil/farm/alamat, keyboard, pemilihan foto/dokumen, penyimpanan lewat form, state verifikasi UI, dan tampilan guard dokter non-verified tetap **Belum diuji di layar**. Tes service/domain profil/verifikasi dan guard yang sudah ada lulus dalam `npm run check`; itu bukan bukti interaksi UI.
 - Alur verifikasi baru menyimpan pengajuan `pending`. Tidak ada reviewer lokal yang tepercaya untuk mengubah status menjadi `revision_required`/`verified`; layar membaca status tersebut dari entity jika diberikan sumber tepercaya. Dokter non-verified tetap ditolak oleh domain guard.
 
 ## Hasil pemeriksaan FE-06
 
-Tanggal: 5 Oktober 2026. Perubahan FE-06 sejauh ini hanya domain/use case, repository binding, dan test; UI belum dibuat karena Figma MCP membatasi akses Starter. Simulator tetap tertutup.
+Tanggal: 5 Oktober 2026. UI `LivestockFlow` kini menyediakan daftar/detail/tambah/edit ternak, search/filter species+sex, foto, empty/error/loading, dan konfirmasi setelah simpan. Sebelumnya domain FE-06 lulus enam skenario dengan 26 tes total; hasil itu tetap menjadi bukti service. Simulator tetap tertutup.
 
-- `npm run check` — **Lulus**; typecheck, ESLint, dan 26 tes domain/service. Enam skenario FE-06 memeriksa validasi field, kombinasi search/filter, list/detail sesuai owner dan farm, pembuatan ID unik beserta attachment foto dalam satu commit, edit record/version dan pelepasan relasi foto, serta pembatasan species dan MIME foto.
-- `npx expo export --platform android` — **Lulus**; Metro membundel 716 modul dan menghasilkan bundle Android sekitar 2 MB.
-- `GRADLE_USER_HOME=/private/tmp/vetlink-gradle ./gradlew --no-daemon --max-workers=1 assembleDebug` — **Lulus**; `BUILD SUCCESSFUL` dalam 27 detik (460 task; 17 dijalankan, sisanya up-to-date).
-- `adb devices -l` — **Lulus** setelah SDK dimount dan HP disambungkan ulang; Xiaomi `2311DRK48G` terdeteksi melalui USB. Tidak ada APK native baru yang dipasang karena perubahan FE-06 hanya TypeScript; smoke memakai development build yang sudah terpasang.
-- Smoke startup pada development build terpasang — **Lulus terbatas** setelah layar HP dinyalakan, Metro localhost berjalan pada port 8083, dan `adb reverse` disiapkan. Deep link membuka VetLink sampai layar “Pilih Peran”; screenshot [fe06-role-selection.png](reference/android/fe06-role-selection.png) menjadi bukti. Metro mencatat bootstrap LocalStore (`schema=2`, seed `fe02-v1`, 61 entitas, seed sudah ada) tanpa error JavaScript. Alur layar ternak, input, picker, dan visual Figma belum diuji karena UI FE-06 belum dibuat.
-- `get_design_context` beserta screenshot untuk node `12:1889`, `12:1934`, `12:3196`, `12:1980`, `12:2019`, dan `12:2032` — **Terhalang**; seluruh panggilan ditolak karena tool call limit Starter. `figma_whoami` mengonfirmasi plan tim Starter. Screenshot UI Android, interaksi UI, dan visual Figma belum diuji.
+- Pemeriksaan kode terbaru `npm run check` — **Lulus**; typecheck, ESLint, dan 32 tes domain/service. Enam skenario FE-06 tetap mencakup validasi, kombinasi search/filter, owner/farm scope, pembuatan ID dan foto dalam satu commit, edit/version serta pelepasan foto, dan pembatasan MIME/species. Tes ini tidak menguji komponen React Native.
+- `npx expo export --platform android` — **Lulus**; Metro membundel 724 modul dan menghasilkan bundle Android 2,1 MB untuk alur frontend terbaru.
+- `GRADLE_USER_HOME=/private/tmp/vetlink-gradle ./gradlew --no-daemon --max-workers=1 assembleDebug` — **Lulus**; build akhir `BUILD SUCCESSFUL in 16s`, 460 task (17 dijalankan, 443 up-to-date).
+- Xiaomi `2311DRK48G` terdeteksi melalui USB. APK terbaru dipasang dengan `adb install -r` (**Success**) tanpa menghapus data; deep link development client memuat bundle dan Metro mencatat `schema=2`, seed `fe02-v1`, 61 entitas, `already-seeded`, tanpa error JavaScript. Ini **smoke startup terbatas**, bukan bukti list/form FE-06. Screenshot build ini tidak disimpan karena overlay panggilan pribadi pada layar perangkat.
+- Satu tap ADB pada layar “Pilih Peran” ditolak MIUI dengan `java.lang.SecurityException: Injecting input events requires the caller (or the source of the instrumentation, if any) to have the INJECT_EVENTS permission.` Daftar/detail, search/filter, validasi form, picker foto, edit, back/keyboard/scroll, dan penolakan akses di UI tetap **Belum diuji/terblokir**. Domain owner/farm scope lulus pada tes service.
+- Node FE-06 `12:1889` pada file Figma utama gagal untuk context dan screenshot dengan pesan izin edit file `Looks like you don't have edit access to this file. The file owner can share it with you and make you an editor.` serta kode `INVALID_ARGUMENT`. Link terbaru untuk node yang sama terkena batas panggilan Starter. Karena acuan layar tidak berhasil diambil, tidak ada klaim pixel-match; rancangan mandiri mengikuti arahan pengguna dan dicatat pada [Figma mapping](FIGMA_MAPPING.md).
+
+## Hasil pemeriksaan FE-07
+
+Tanggal: 5 Oktober 2026. `PatientFlow` menyediakan daftar/detail pasien Dokter; `FarmerHealthFlow` sekarang menyediakan riwayat Peternak dari detail ternak, filter kategori, detail final hanya baca, viewer lampiran, dan form laporan Peternak. `FrontendFlow` membuka persona lokal tanpa login. Simulator tetap tertutup.
+
+- `npm run check` — **Lulus**; typecheck, ESLint, dan 32 tes domain/service. Enam tes FE-07 memeriksa laporan Peternak terpisah/idempotent, riwayat final-only, filter pasien, scope assignment, dan akses/URI lampiran. Ini tidak menguji komponen React Native.
+- Export awal sebelum UI riwayat Peternak: `npx expo export --platform android` — **Lulus**; 721 modul, bundle Android 2,1 MB.
+- Build awal sebelum UI riwayat Peternak: Gradle `assembleDebug` — **Lulus** dalam 26 detik (460 task; 17 dijalankan, 443 up-to-date). Percobaan sandbox pertama gagal membuka socket lock (`java.net.SocketException: Operation not permitted`); build berhasil setelah dijalankan dengan akses yang diperlukan.
+- Xiaomi `2311DRK48G` (1220 × 2712 px, 480 dpi, sekitar 407 × 904 dp; font scale 1.0) terdeteksi lewat ADB. APK debug terbaru dipasang dengan `adb install -r`, Metro lokal tersambung, dan bundle Android termuat sampai “Pilih Peran”. Log Metro menunjukkan `schema=2`, `seed=fe02-v1`, `entities=61`, tanpa error JavaScript. Screenshot startup: [fe07-ui-startup-after-build.png](reference/android/fe07-ui-startup-after-build.png). Ini hanya smoke startup, bukan bukti layar pasien.
+- Interaksi UI FE-07 pada build sebelumnya — **Belum diuji/terblokir**. Tap ke layar Pilih Peran ditolak dengan `java.lang.SecurityException: Injecting input events requires the caller (or the source of the instrumentation, if any) to have the INJECT_EVENTS permission.` Daftar pasien, riwayat Peternak, form, filter, modal/back, keyboard/scroll, dan viewer lampiran belum diuji pada HP. Tidak ada klaim lulus visual.
+- Figma link terbaru [Dokter / Tampilan dan interaksi](https://www.figma.com/design/TPG6qZunK9EY4z1Vy0GKDx/Untitled?node-id=93-7181&t=hYv9JEpqvZmEonSz-) berhasil untuk node daftar `80:4594`, detail `80:4726`, vaksin `80:4759`, obat `80:4786`, dan final `80:4842`; screenshot acuan layar utama 390 × 844 telah diperiksa. Frame `93:7181` mula-mula memberi metadata ringkas karena ukuran, lalu child nodes memberi konteks high-fidelity.
+- Node Peternak `12:2032`, `12:2068`, dan `12:2132` menghasilkan error persis `You've reached the Figma MCP tool call limit on the Starter plan. Upgrade your plan for more tool calls: https://www.figma.com/files/team/1688904264667270127/all-projects?upgrade=mcp_rate_limit_paywall`. `12:2100` sempat berhasil. `figma_whoami` berjalan dan melaporkan tier `starter`, seat `View`; ini rate limit, bukan tool MCP yang tidak tersedia (`-32001: Unknown tool`) dan bukan error autentikasi/izin file.
+- Pemeriksaan terbaru setelah penambahan `FarmerHealthFlow` dan bypass autentikasi: `npm run check` **Lulus** (32 tes), export Android **Lulus** (724 modul), Gradle debug build **Lulus** (16 detik). APK akhir dipasang pada Xiaomi dan Metro memuat LocalStore (`schema=2`, 61 entitas) hingga layar awal tanpa error JavaScript. Tap ADB tetap ditolak; interaksi FE-07 pada build terbaru **Belum diuji**. Layar riwayat Peternak dibuat dari tokens dan kontrak fitur karena node Figma tidak dapat diakses; perbandingan visual belum ada.
 
 ## Hasil pemeriksaan FE-05
 
@@ -178,8 +193,8 @@ Tanggal: 5 Oktober 2026. Dashboard Peternak/Dokter memakai screenshot referensi 
 - `npx expo export --platform android` — **Lulus**; Metro membundel 714 modul dan menghasilkan bundle Android 2 MB.
 - `npx expo prebuild --platform android` — **Lulus**; native project Android dibangkitkan dari konfigurasi Expo.
 - `GRADLE_USER_HOME=/private/tmp/vetlink-gradle ./gradlew --no-daemon --max-workers=1 assembleDebug` — **Lulus**; `BUILD SUCCESSFUL` (17 detik pada incremental build), menghasilkan APK debug sekitar 168 MB.
-- Instalasi dan peluncuran FE-05 pada HP — APK terbaru berhasil dipasang melalui USB tanpa menghapus data. Setelah layar dibangunkan, [screenshot perangkat](reference/android/fe05-role-selection.png) menunjukkan layar “Pilih Peran” dan pilihan Peternak sudah terpilih; dashboard belum dibuka, sehingga interaksi dashboard belum diuji. Ketukan “Masuk” perlu dilakukan langsung di HP karena MIUI menolak input tap ADB dengan `INJECT_EVENTS`. Simulator tetap tertutup.
-- Perbedaan visual yang diketahui: aksi Peternak pada screenshot Figma `Tambah ternak/Konsultasi` belum seluruhnya tersedia; yang ditampilkan adalah profil peternakan dan konsultasi saya. Tab Ternak/Pesanan/Pasien disabled sampai tiket terkait diimplementasikan. Pembandingan pixel pada 390 × 844 dp dan font besar belum dilakukan.
+- Instalasi dan peluncuran FE-05 pada HP — APK terbaru berhasil dipasang melalui USB tanpa menghapus data. Screenshot [fe05-role-selection.png](reference/android/fe05-role-selection.png) menunjukkan “Pilih Peran”; dashboard tidak dibuka. Retrospektif sesi ini berhasil membuka development bundle terbaru lagi sampai layar yang sama, tetapi tap masih ditolak MIUI dengan `INJECT_EVENTS`. Data, tombol, tujuan navigasi, empty state, dan availability pada layar dashboard **Belum diuji**.
+- Perbedaan visual yang diketahui: aksi cepat Peternak sekarang menampilkan “Tambah ternak” dan “Konsultasi saya”; tab Ternak dan Pasien Dokter aktif, sedangkan Pesanan masih nonaktif. Pembandingan pixel pada 390 × 844 dp dan font besar belum dilakukan.
 
 ## Hasil pemeriksaan FE-03
 
@@ -192,6 +207,96 @@ Tanggal: 5 Oktober 2026. Lingkungan: macOS, Node.js `24.1.0`, npm `11.3.0`, Expo
 - `adb devices -l` melihat hanya HP USB `WOGYXS4THUQ8H6UO`, model `2311DRK48G`; `adb install -r` berhasil dan VetLink dibuka. Layar Splash/Mulai tampil; screenshot [fe03-start-screen.png](reference/android/fe03-start-screen.png). Screenshot awal hitam terjadi saat Metro belum tersambung, lalu layar termuat setelah Metro di port 8082 dan `adb reverse` disiapkan.
 - Snapshot baca database setelah bootstrap — **Lulus**: migration schema `1 → 2`, 61 entitas/79 relasi tetap, `PRAGMA integrity_check=ok`, `foreign_key_check` kosong. Tidak ada akun percobaan yang dibuat pada HP.
 - Unique index email diuji pada salinan snapshot SQLite: `BUDI@EXAMPLE.TEST` dengan spasi tepi ditolak ketika `budi@example.test` sudah ada; transaksi tes dibatalkan dan hanya menyentuh file sementara.
-- Navigasi form, keyboard, registrasi/login/reset/logout, cold restart sesi, dan switch role pada HP — **Belum diuji**. `adb shell input tap` ditolak MIUI dengan `SecurityException: Injecting input events requires ... INJECT_EVENTS`. Pengguna diminta mengaktifkan Developer options → USB debugging (Security settings), atau mengetuk Mulai/Lewati manual supaya pemeriksaan dapat dilanjutkan. Jangan menghapus/menginstal ulang aplikasi; database fixture tetap terpasang.
+- Navigasi form, keyboard, registrasi/login/reset/logout, cold restart sesi, dan switch role pada HP — **Belum diuji**. Retrospektif ini mengulang satu tap pada layar peran dan tetap ditolak MIUI dengan `SecurityException: Injecting input events requires the caller (or the source of the instrumentation, if any) to have the INJECT_EVENTS permission.` Sesi akun/peran tidak dilewati dengan fixture atau bypass. Data fixture dan aplikasi tetap terpasang; tidak ada simulator.
 - Figma `get_design_context` untuk screenshot Auth node `12:1672`, `12:1683`, `12:1697`, `12:1711`, `46:2`, dan form auth — **Belum tersedia**; MCP membalas “Starter plan tool call limit”. Mapping kode berdasarkan token/route lokal dan seluruh selisih dicatat di [Figma mapping](FIGMA_MAPPING.md); tidak mengklaim visual match.
 - `npm install` melaporkan 24 advisori (8 moderate, 16 high). Tidak diaudit dan tidak menjalankan `npm audit fix`.
+
+## Hasil pemeriksaan FE-08
+
+Tanggal: 5 Oktober 2026. UI direktori/profil dokter dibuka melalui tab Konsultasi Peternak; alur aktif tetap tanpa autentikasi/backend jaringan. Simulator tidak dibuka. Data fiktif tambahan disimpan pada repository lokal yang sama; booking FE-09 dan editor availability FE-11 belum dibuat.
+
+- `npm run check` — **Lulus**, exit 0: typecheck, lint, dan 40 tes domain/service. Delapan skenario baru mencakup kombinasi filter, ID dokter berbeda, tarif efektif (termasuk offset zona waktu), ulasan konsultasi selesai yang cocok dengan pemilik/dokter, slot berzona waktu, konflik appointment/blocked/follow-up, guard verified/availability, batas end eksklusif, ekstensi fixture yang menjaga edit, serta rollback/retry transaksi pada SQLite in-memory. Tes ini tidak menjalankan komponen React Native atau input Android.
+- `npx expo export --platform android --output-dir /private/tmp/vetlink-fe08-final-export` — **Lulus**, exit 0; 736 modul, bundle Hermes Android sekitar 2,2 MB.
+- `env GRADLE_USER_HOME=/private/tmp/vetlink-gradle ANDROID_HOME=/Volumes/HowSSD/AndroidStudio/SDK/sdk ./gradlew --no-daemon --max-workers=1 assembleDebug` dari `apps/mobile/android` — **Lulus untuk build awal**, `BUILD SUCCESSFUL in 16s`; 460 task (17 dijalankan, 443 up-to-date). Setelah warning safe area ditemukan, build final diulang untuk menyertakan dependency layout native; hasilnya dicatat di bawah.
+- ADB sandbox awal gagal memulai daemon dengan `could not install *smartsocket* listener: Operation not permitted`. Setelah mendapat akses eksekusi yang diperlukan, `adb devices -l` mendeteksi Xiaomi USB `2311DRK48G`. Ini keterbatasan sandbox lokal, terpisah dari penolakan input oleh Android di bawah.
+- `adb install -r` — **Success**, mempertahankan data aplikasi. Metro normal pada port 8102 tersambung melalui USB reverse; deep link development client memuat bundle terbaru. Log startup: `[VetLink][local-store] schema=2 seed=fe02-v1 entities=62 seedStatus=already-seeded`. Ini **smoke bootstrap terbatas**, bukan bukti layar direktori/profil. Run awal juga memberi warning deprecation SafeAreaView shell, sehingga shell dan Modal filter kemudian diperbaiki dengan `react-native-safe-area-context ~5.7.0`; penerimaan inset pada layar direktori/profil tetap belum diuji.
+- Salinan baca database aplikasi melalui `run-as` — **Lulus**: schema 2, 62 entitas/82 relasi, marker `fixture_directory_version=fe08-v1`, tiga profil mempunyai species/location, dua availability mempunyai weekday rules, satu Review, `integrity_check=ok`, dan `foreign_key_check` kosong. Pemeriksaan ini dilakukan karena FE-08 menambahkan ekstensi fixture; bukan pengulangan seluruh QA persistence/event FE-02. Tests membuktikan field existing, termasuk array kosong dan availability off, tidak ditimpa, retry tidak menggandakan ulasan, dan failure rollback.
+- Satu tap pada tombol Lanjut sebagai Peternak yang ditemukan dari hierarchy VetLink ditolak dengan pesan persis `java.lang.SecurityException: Injecting input events requires the caller (or the source of the instrumentation, if any) to have the INJECT_EVENTS permission.` Exit 255. Pencarian/filter/reset, pemilihan dokter, layanan/tanggal jadwal, modal/header/hardware Back, keyboard/scroll, foto/fallback, teks panjang, serta perbandingan ukuran target/kecil/font besar — **Belum diuji/terblokir pada perangkat**. Tidak ada klaim lulus interaksi atau pixel-match. Tidak mengubah pengaturan keamanan MIUI atau memakai simulator untuk melewati batas tersebut.
+- Figma FE-08 — **Terblokir**: node daftar `12:2161` pada file utama menolak izin edit, link terbaru terkena kuota Starter; context/screenshot layar tidak diperoleh. Ini berbeda dari MCP tool tidak tersedia dan bukan kegagalan autentikasi. Error persis serta rancangan mandiri tercatat di [Figma mapping](FIGMA_MAPPING.md).
+
+Status fase terkait setelah FE-08:
+
+| Fase | Bukti yang tetap berlaku | Penerimaan layar yang belum lengkap |
+| --- | --- | --- |
+| FE-00/02 | Bootstrap, persistence dan event dari run terdahulu; kompatibilitas ekstensi fixture FE-08 diperiksa seperlunya | Tidak mengulang seluruh acceptance tanpa perubahan relevan |
+| FE-01 | Komponen dan font besar pernah diuji; checks terbaru lulus | Visual Figma Android, 390 × 844, ukuran kecil dan font besar pada layar produk terbaru belum diuji |
+| FE-03 | Tes akun/sesi lokal historis tetap lulus | Auth tidak dipasang pada frontend aktif; acceptance daftar/masuk/reset/logout/sesi setelah reopen ditunda |
+| FE-04 | Tes simpan profil/media/verifikasi/guard tetap lulus | Edit farm/alamat, picker, keyboard, persistence lewat form, status dan guard pada layar belum diuji |
+| FE-05 | Tes proyeksi dashboard dan availability yang menjaga janji tetap lulus | Kedua dashboard, CTA/tujuan navigasi, empty dan toggle pada layar belum diuji |
+| FE-06 | UI list/detail/tambah/edit kini tersedia; tes scope/validasi/filter/foto tetap lulus | Search/filter, form/foto/edit, back/keyboard dan akses akun lain di layar belum diuji |
+| FE-07 | UI riwayat/pasien tersedia; tes assignment/final-only/laporan/lampiran tetap lulus | List/detail/filter/form/modal/viewer di layar belum diuji |
+| FE-08 | UI direktori/profil/filter/jadwal tersedia; delapan tes baru, build dan bootstrap Android lulus | Interaksi dan visual layar tetap belum diuji karena input MIUI ditolak |
+
+Seluruh FE-01/03–08 tetap **Sedang dikerjakan** pada backlog. Tidak mengubah status menjadi selesai hanya berdasarkan checks/build.
+
+Pemeriksaan akhir FE-08 setelah perbaikan safe area:
+
+- `npx expo install react-native-safe-area-context` memasang versi SDK 57 `~5.7.0` dan mengunci `5.7.0` pada lockfile. Provider dipasang stabil pada root; shell aktif dan Modal filter memakai inset native. Dependency native dibutuhkan untuk layout status bar/gesture, tanpa menulis Kotlin aplikasi sendiri. Acuan API: [dokumentasi resmi Expo](https://docs.expo.dev/versions/latest/sdk/safe-area-context/).
+- `npm run check` akhir — **Lulus**, 40 tes/0 gagal; test ekstensi fixture juga memeriksa bahwa timestamp record tidak mundur saat menambah field dan retry tidak menulis ulang versi. `npx expo export --platform android --output-dir /private/tmp/vetlink-fe08-final-export` akhir — **Lulus**, 736 modul dan bundle sekitar 2,2 MB. Output sementara: `/private/tmp/vetlink-fe08-final-check.log` dan `/private/tmp/vetlink-fe08-final-export.log`.
+- Gradle `assembleDebug` akhir — **Lulus**, `BUILD SUCCESSFUL in 3m 28s`; 492 task (66 dijalankan, 426 up-to-date). Log sementara: `/private/tmp/vetlink-fe08-safearea-build.log`. Ada warning deprecation pada dependency native, tanpa kegagalan build.
+- APK akhir dipasang lagi dengan `adb install -r` (**Success**), lalu deep link Metro 8102 memuat “Pilih Peran”. Log LocalStore tetap schema 2/seed `fe02-v1`/62 entitas, tanpa error JavaScript pada startup akhir. Hierarchy menempatkan glyph brand pada y=264 px, dibanding y=144 px sebelum perbaikan, sehingga inset atas 120 px/40 dp diterapkan pada layar awal. [Screenshot startup akhir](reference/android/fe08-ui-startup-after-safe-area.png) diperiksa; status bar dan gesture tidak menutupi konten awal. Tombol Tools pada gambar berasal dari development client. Ini bukti inset/startup **layar awal saja**, bukan penerimaan visual atau interaksi direktori/profil/modal.
+
+Tidak ada commit/push pada pengerjaan FE-08. Perubahan FE-06/07 yang sebelumnya belum di-commit tetap dipertahankan.
+
+
+## Hasil pemeriksaan FE-09
+
+Tanggal: 5 Oktober 2026. Jalur UI: Peternak → Konsultasi → dokter → Booking konsultasi → Tinjau biaya → Konfirmasi booking → Menunggu pembayaran → Lihat detail booking. Aplikasi aktif tetap tanpa autentikasi/backend jaringan; tidak membuka simulator, mengirim payment nyata, commit, atau push. Perubahan FE-06/07/08 yang belum di-commit dipertahankan.
+
+| Pemeriksaan | Hasil / batas bukti |
+| --- | --- |
+| `npm run check` | Lulus: typecheck, lint, 49 tes; sembilan skenario booking baru memakai SQL SQLite in-memory serta migration/seed/adapter sebenarnya |
+| Export Android | Lulus: `npx expo export --platform android --output-dir /private/tmp/vetlink-fe09-export-verified`; 740 modul, bundle Hermes 2,2 MB |
+| Gradle debug | Lulus: `assembleDebug`, 24 menit 51 detik; 492 tasks (17 executed, 475 up-to-date), setelah cache/distribusi Gradle diunduh. Tidak ada dependency/native Kotlin aplikasi baru |
+| Install APK | Lulus: `adb install -r` mengembalikan Success pada Xiaomi; data aplikasi dipertahankan |
+| Draft | Tes lulus untuk save parsial, rehydration pada service baru, private owner, version conflict, discard dan draft baru; bukan bukti cold restart UI perangkat |
+| Validasi booking | Tes lulus untuk alamat wajib, ternak akun lain, slot tidak valid, dokter belum verified, hilangnya verifikasi/berubahnya pemilik setelah review, availability off, tarif berubah dan versi draft stale |
+| Atomicity/idempotensi | Tes lulus untuk consultation/quote/draft dalam satu transaksi, rollback saat quote gagal dan retry; submit paralel antar instance mengembalikan satu ID, dua Peternak pada slot sama hanya satu berhasil |
+| Status / akses pasien | Konfirmasi hanya awaiting_payment dengan paymentId null; tes membuktikan tidak membuat Payment/Message dan tidak menambah assignment pasien dokter sebelum pembayaran |
+| Media | Tes dengan adapter media fiktif lulus untuk pemanggilan store, metadata image/video persisten/private, rollback MIME invalid/gagal transaksi, metadata removed dan pemanggilan cleanup saat hapus/ganti/discard; picker OS, penyalinan file dan berkas video nyata pada Android belum diuji |
+| Xiaomi startup | APK hasil build dibuka melalui Metro offline port 8102; [screenshot startup](reference/android/fe09-ui-startup-after-build.png) menunjukkan Pilih Peran dan inset nyata. Overlay gear Tools milik Expo development client, bukan tombol produk. Metro membaca schema 2, seed fe02-v1, 62 entitas, already-seeded. Ini bukan bukti membuka Booking |
+| QA sentuh | Terblokir: tap tombol Lanjut sebagai Peternak ditolak MIUI (exit 255), termasuk setelah APK hasil build dipasang, sehingga flow booking belum dapat dimasuki melalui otomatisasi |
+| Figma | Context/screenshot node Booking nyata 12:2280 gagal izin edit file utama; link terbaru terkena kuota Starter. Tool tersedia, bukan error Unknown tool/auth. Referensi lokal lama ditinjau dan layout dirancang mandiri; pixel-match belum diuji |
+
+Error input yang benar-benar diperoleh:
+
+```text
+java.lang.SecurityException: Injecting input events requires the caller (or the source of the instrumentation, if any) to have the INJECT_EVENTS permission.
+```
+
+Perangkat fisik Xiaomi `2311DRK48G`, serial `WOGYXS4THUQ8H6UO`, viewport 1220 × 2712 px (480 dpi pada pemeriksaan sebelumnya), fontScale 1.0. Tidak mengubah pengaturan keamanan atau membuka simulator. `uiautomator` membuktikan hierarchy startup milik com.vetlink.mobile dengan Pilih Peran/Peternak/Dokter Hewan; tidak memperoleh hierarchy Booking atau bukti tap berhasil.
+
+Penerimaan FE-09 yang masih **Belum diuji/terblokir**: pilihan layanan/ternak/tanggal/jam, perubahan keluhan/alamat, photo/video picker dan thumbnail/hapus, draft setelah cold restart Android, resume/discard dialog, review biaya, double tap pada UI, scroll teks panjang, keyboard, back Android, viewport 390 × 844/kecil/font besar. Pemilihan/payment pending/failed/success dan payment-success → requested **Belum dapat diuji** karena FE-19 belum dibuat; editor availability FE-11 belum dibuat. Video dipilih/disimpan dan dilabeli sebagai berkas, belum mempunyai playback form. Slot awaiting_payment belum mempunyai TTL produksi; itu keputusan terbuka DEC-17. File cleanup best effort melapor lewat kanal diagnostik bila gagal.
+
+Status retrospektif fase terdahulu tetap akurat:
+
+| Fase | Bukti yang tersedia | Yang tetap tertunda |
+| --- | --- | --- |
+| FE-00/02 | Bukti bootstrap/persistensi/integritas/idempotensi sebelumnya tetap berlaku; tes SQL baru diperlukan untuk perubahan booking | Tidak mengulang seluruh cold restart/event perangkat tanpa alasan baru |
+| FE-01 | Tokens/komponen dan startup safe area sebelumnya | Perbandingan Figma Android 390 × 844, viewport kecil dan font besar |
+| FE-03 | Tes domain historis masih lulus | QA masuk/reset/logout/sesi tidak dijalankan karena auth tidak aktif sesuai fokus frontend |
+| FE-04 | UI profil dan tes save/domain tersedia | Edit profil/farm/alamat, picker dokumen/foto dan guard pada UI belum diuji di run ini |
+| FE-05 | Dashboard/proyeksi serta tes availability tersedia | Flow kedua peran, tujuan tombol, empty state dan availability pada UI |
+| FE-06 | UI ternak sekarang tersedia; tes ownership/validasi/photo/update lulus | Search/filter/form/foto/edit serta penolakan akses pada UI Android |
+| FE-07 | UI riwayat/pasien dan tes domain tersedia | Interaksi/visual pada perangkat |
+| FE-08 | UI direktori/profil/filter/jadwal dan tes tersedia | Interaksi/visual pada perangkat |
+| FE-09 | UI form/review/result dan tes transaksi tersedia | QA interaksi Android, visual, dependensi FE-11/19; tetap Sedang dikerjakan |
+
+
+Perintah native FE-09 yang benar-benar dijalankan dari `apps/mobile/android`:
+
+```sh
+env GRADLE_USER_HOME=/private/tmp/vetlink-gradle ANDROID_HOME=/Volumes/HowSSD/AndroidStudio/SDK/sdk ./gradlew --no-daemon --max-workers=1 assembleDebug
+```
+
+Runtime diuji dengan `npm start -- --port 8102 --offline` dari `apps/mobile`, reverse USB port 8102, force-stop lalu buka kembali lewat deep link development client. Ini bukti bootstrap APK/bundle terbaru; tidak dihitung sebagai kelulusan draft/form cold restart Android. Paket APK: `apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk`. `git diff --check` akhir bersih; tidak ada commit/push.

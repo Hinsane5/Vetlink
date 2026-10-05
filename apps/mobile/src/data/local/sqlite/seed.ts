@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { validateFixtureGraph } from '../../../domain/fixtureValidation';
-import { fixtureEntities, fixtureIds, fixtureRelations, fixtureSeedVersion } from '../../../testing/fixtures';
+import { directoryFixturePatches, fixtureEntities, fixtureIds, fixtureRelations, fixtureSeedVersion } from '../../../testing/fixtures';
 import { insertEntity, insertRelations } from './entitySql';
 
 const seededAt = '2026-10-05T00:00:00.000Z';
@@ -18,8 +18,9 @@ export async function seedFixturesIfEmpty(database: SQLiteDatabase): Promise<See
     const marker = await transaction.getFirstAsync<{ value: string }>(
       "SELECT value FROM app_metadata WHERE key = 'fixture_seed_version'",
     );
-    const counts = await getCounts(transaction);
     if (marker) {
+      if (marker.value === fixtureSeedVersion) await extendDirectoryFixtures(transaction);
+      const counts = await getCounts(transaction);
       result = {
         status: 'already-seeded',
         version: marker.value,
@@ -28,6 +29,7 @@ export async function seedFixturesIfEmpty(database: SQLiteDatabase): Promise<See
       };
       return;
     }
+    const counts = await getCounts(transaction);
     if (counts.entityCount > 0) {
       result = { status: 'skipped-nonempty', ...counts };
       return;
@@ -50,6 +52,7 @@ export async function seedFixturesIfEmpty(database: SQLiteDatabase): Promise<See
       fixtureSeedVersion,
       seededAt,
     );
+    await transaction.runAsync('INSERT INTO app_metadata (key, value, updated_at) VALUES (?, ?, ?)', 'fixture_directory_version', 'fe08-v1', seededAt);
     const afterSeed = await getCounts(transaction);
     result = {
       status: 'seeded',
@@ -60,6 +63,32 @@ export async function seedFixturesIfEmpty(database: SQLiteDatabase): Promise<See
   });
 
   return result!;
+}
+
+async function extendDirectoryFixtures(database: SQLiteDatabase): Promise<void> {
+  const marker = await database.getFirstAsync<{ value: string }>("SELECT value FROM app_metadata WHERE key = 'fixture_directory_version'");
+  if (marker) return;
+  for (const [id, fields] of Object.entries(directoryFixturePatches)) {
+    const fixture = fixtureEntities.find((item) => item.id === id)!;
+    const row = await database.getFirstAsync<{ payload_json: string; updated_at: string }>('SELECT payload_json, updated_at FROM entities WHERE id = ? AND kind = ? AND owner_id = ?', id, fixture.kind, fixture.ownerId);
+    if (!row) continue;
+    const payload = JSON.parse(row.payload_json) as Record<string, unknown>;
+    const missing = Object.fromEntries(Object.entries(fields).filter(([key]) => !Object.hasOwn(payload, key)));
+    if (!Object.keys(missing).length) continue;
+    const updatedAt = new Date(Math.max(Date.now(), Date.parse(row.updated_at) || 0)).toISOString();
+    await database.runAsync('UPDATE entities SET payload_json = ?, version = version + 1, updated_at = ? WHERE id = ?', JSON.stringify({ ...payload, ...missing }), updatedAt, id);
+  }
+  const review = fixtureEntities.find((item) => item.id === fixtureIds.yudaReview)!;
+  const consultation = await database.getFirstAsync<{ payload_json: string }>('SELECT payload_json FROM entities WHERE id = ? AND kind = ?', fixtureIds.completed, 'consultation');
+  const existing = await database.getFirstAsync<{ id: string }>("SELECT id FROM entities WHERE id = ? OR (kind = 'review' AND json_extract(payload_json, '$.consultationId') = ?)", review.id, fixtureIds.completed);
+  if (consultation && !existing) {
+    const payload = JSON.parse(consultation.payload_json) as Record<string, unknown>;
+    if (payload.status === 'completed' && payload.vetId === fixtureIds.vetZero && payload.farmerId === fixtureIds.sari) {
+      await insertEntity(database, review);
+      await insertRelations(database, fixtureRelations.filter((relation) => relation.sourceId === review.id));
+    }
+  }
+  await database.runAsync('INSERT INTO app_metadata (key, value, updated_at) VALUES (?, ?, ?)', 'fixture_directory_version', 'fe08-v1', new Date().toISOString());
 }
 
 async function getCounts(database: SQLiteDatabase) {

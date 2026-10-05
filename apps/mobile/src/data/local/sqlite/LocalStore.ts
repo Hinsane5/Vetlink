@@ -8,6 +8,12 @@ import { SqliteProfileRepository } from './SqliteProfileRepository';
 import { ProfileService } from '../../../application/ProfileService';
 import { DashboardService } from '../../../application/DashboardService';
 import { LivestockService } from '../../../application/LivestockService';
+import { HealthRecordService } from '../../../application/HealthRecordService';
+import { PatientService } from '../../../application/PatientService';
+import { FrontendPreviewService } from '../../../application/FrontendPreviewService';
+import { BookingService } from '../../../application/BookingService';
+import { SqliteBookingRepository } from './SqliteBookingRepository';
+import { VetDirectoryService } from '../../../application/VetDirectoryService';
 import { ExpoAttachmentMedia } from '../ExpoAttachmentMedia';
 import { migrateDatabase } from './migrations';
 import { readFixtureSeedVersion, seedFixturesIfEmpty, type SeedResult } from './seed';
@@ -20,6 +26,11 @@ export interface LocalStore {
   profiles: ProfileService;
   dashboard: DashboardService;
   livestock: LivestockService;
+  healthRecords: HealthRecordService;
+  patients: PatientService;
+  preview: FrontendPreviewService;
+  vetDirectory: VetDirectoryService;
+  booking: BookingService;
   authStore: ExpoSecureAuthStore;
   schemaVersion: number;
   fixtureSeedVersion: string | null;
@@ -63,6 +74,11 @@ async function createLocalStore(): Promise<LocalStore> {
   );
   const dashboard = new DashboardService(repositories, profiles, new ExpoIdFactory());
   const livestock = new LivestockService(repositories, profileRepository, attachmentMedia, new ExpoIdFactory());
+  const healthRecords = new HealthRecordService(repositories, livestock, profiles, events);
+  const patients = new PatientService(repositories, profiles, healthRecords);
+  const preview = new FrontendPreviewService(repositories, profiles);
+  const vetDirectory = new VetDirectoryService(repositories, profiles);
+  const booking = new BookingService(new SqliteBookingRepository(database), attachmentMedia, new ExpoIdFactory());
   const counts = await repositories.countAll();
 
   if (__DEV__) {
@@ -72,5 +88,5 @@ async function createLocalStore(): Promise<LocalStore> {
     );
   }
 
-  return { database, repositories, events, auth, profiles, dashboard, livestock, authStore, schemaVersion, fixtureSeedVersion, seedResult };
+  return { database, repositories, events, auth, profiles, dashboard, livestock, healthRecords, patients, preview, vetDirectory, booking, authStore, schemaVersion, fixtureSeedVersion, seedResult };
 }

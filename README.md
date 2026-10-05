@@ -2,15 +2,16 @@
 
 Aplikasi mobile berbahasa Indonesia untuk pengelolaan kesehatan ternak, konsultasi dokter hewan, kunjungan, dan pembelian produk kesehatan hewan.
 
-**Status: FE-00 dan FE-02 selesai; FE-01, FE-03, FE-04, FE-05, dan FE-06 sedang dikerjakan.** FE-01 menyediakan tokens, Inter, Lucide, dan komponen UI reusable; pembandingan viewport Figma masih tertunda. FE-02 menyediakan SQLite lokal, seed sekali, repository bersama, domain guard awal, dan event idempotent. FE-03 memiliki flow akun dan session guard, tetapi uji input penuh di HP serta visual Figma tertunda. FE-04 menyediakan profil Peternak/Dokter, persistensi farm/alamat, pemilih foto/dokumen, draft lokal, dan pengajuan verifikasi `pending`; QA picker/form di HP masih tertunda. FE-05 menyediakan dashboard berbasis repository bersama, agenda/permintaan/reminder/saldo, detail berbasis ID, dan availability tersimpan dengan guard verified; APK terbaru menampilkan “Pilih Peran” di Xiaomi. QA dashboard menunggu login di HP. FE-06 kini memiliki service domain untuk list/detail/tambah/edit ternak, validasi, pencarian/filter, ownership, dan lampiran foto privat; layar FE-06 menunggu konteks screenshot Figma karena MCP Starter menolak permintaan. Status `revision_required`/`verified` hanya boleh datang dari sumber tepercaya.
+**Fokus saat ini: flow frontend Android tanpa autentikasi dan tanpa backend jaringan.** Aplikasi membuka “Pilih Peran”, lalu langsung menampilkan data fiktif lokal untuk Peternak atau Dokter. FE-06 menyediakan pengelolaan ternak; FE-07 menyediakan riwayat kesehatan dan pasien. FE-08 menambahkan direktori/profil dokter, pencarian, filter, tarif, jadwal 7 hari, serta ulasan. FE-09 menambahkan booking chat/kunjungan, draft, pemilihan media dan review biaya hingga status menunggu pembayaran. FE-00/02 selesai; FE-01/03/04/05/06/07/08/09 tetap berstatus sedang dikerjakan karena penerimaan visual dan interaksi perangkat belum lengkap. Typecheck, lint dan 49 tes domain/service FE-09 lulus; export Android dan Gradle debug APK lulus. Rincian bukti perangkat ada di Testing. Xiaomi memuat bundle terbaru sampai layar awal; MIUI masih menolak tap ADB sehingga interaksi layar FE-06/07/08/09 dan perbandingan visual belum dapat dinyatakan lulus.
 
 ## Arah yang telah dipilih
 
 - Mobile: React Native + Expo + TypeScript; target pertama Android. Kode aplikasi tidak menggunakan Kotlin.
+- Tahap frontend memakai persona fixture lokal melalui “Pilih Peran”. Layar daftar/masuk/reset/keluar FE-03 tidak dipasang pada alur aktif; backend jaringan belum dibuat.
 - Sumber data awal lokal persisten memakai `expo-sqlite`; backend menyusul melalui kontrak repository yang sama.
 - Chat, pembayaran, pengiriman, notifikasi, dan pencairan menggunakan layanan simulasi pada tahap lokal.
 - Framework backend, hosting, provider produksi, versi backend, dan dependency backend belum ditetapkan.
-- Figma: [VetLink](https://www.figma.com/design/f1WBeG5S1OGXlPXyVEHjuW/Untitled), halaman `01 · VetLink / Prototype` (`0:1`). Bukti dan pemetaan ada di [Figma mapping](docs/FIGMA_MAPPING.md).
+- Figma utama terdokumentasi: [VetLink](https://www.figma.com/design/f1WBeG5S1OGXlPXyVEHjuW/Untitled), halaman `01 · VetLink / Prototype` (`0:1`). Untuk inspeksi FE-07 digunakan link terbaru yang diberikan pengguna: [VetLink — referensi FE-07](https://www.figma.com/design/TPG6qZunK9EY4z1Vy0GKDx/Untitled?node-id=93-7181&t=hYv9JEpqvZmEonSz-), khusus node daftar/detail pasien Dokter. Bukti dan pemetaan ada di [Figma mapping](docs/FIGMA_MAPPING.md).
 
 ## Versi mobile dan development build
 
@@ -26,6 +27,7 @@ Aplikasi mobile berbahasa Indonesia untuk pengelolaan kesehatan ternak, konsulta
 | Foto, dokumen, file lokal FE-04 | `expo-image-picker ~57.0.20`, `expo-document-picker ~57.0.3`, `expo-file-system ~57.0.7` |
 | Node.js / npm di lingkungan pengerjaan | `24.1.0` / `11.3.0` |
 | Package manager / lockfile | npm / `apps/mobile/package-lock.json` |
+| Safe area FE-08 | `react-native-safe-area-context ~5.7.0` |
 | Font/icon FE-01 | `expo-font ~57.0.4`, Inter lokal (OFL), `@react-native-vector-icons/lucide ^13.1.4` |
 | Android application ID | `com.vetlink.mobile` (sementara untuk build lokal; belum ID rilis) |
 
@@ -52,7 +54,15 @@ Persyaratan build lokal: Android Studio, Android SDK dan Platform Tools terpasan
 
 SDK tersedia di mount `/Volumes/HowSSD/AndroidStudio/SDK/sdk`. ADB mendeteksi HP Xiaomi `2311DRK48G` melalui USB; simulator tetap tertutup sesuai permintaan. [Screenshot smoke test FE-00](docs/reference/android/fe00-phone-launch.png) dan hasil pemeriksaan rinci tersedia di [catatan pengujian](docs/TESTING.md).
 
-Seed data fiktif FE-02 tersedia di database lokal, tetapi tidak memiliki credential login. FE-03 menyimpan credential lokal akun yang dibuat pengguna di SecureStore; autentikasi dan pemulihan ini simulasi satu perangkat, bukan layanan produksi. Perintah reset database belum disediakan.
+Saat aplikasi terbuka, pilih Peternak atau Dokter Hewan lalu tekan “Lanjut”. Peternak memakai profil fiktif Budi dan Dokter memakai profil fiktif Yuda; keduanya membaca penyimpanan lokal yang sama. Tidak diperlukan credential atau layanan backend. Data yang diubah lewat form tersimpan pada SQLite perangkat. Implementasi FE-03 lama masih berada di source untuk riwayat pekerjaan, tetapi tidak digunakan oleh alur aplikasi aktif. Perintah reset database belum disediakan.
+
+Untuk melihat FE-07: sebagai Peternak buka **Ternak → detail ternak → Riwayat Kesehatan**; sebagai Dokter buka tab **Pasien → detail pasien**. Menu pada beranda kedua peran menyediakan **Ganti Peran**.
+
+Untuk melihat FE-08: pilih **Peternak → Konsultasi → pilih dokter**. Pencarian nama dan filter jenis ternak/layanan/lokasi/availability/tarif maksimum dapat digabungkan. Detail memakai ID dokter yang dipilih; layanan, tarif aktif, badge verifikasi, pengalaman, dan ulasan berasal dari record lokal. Jadwal membaca aturan mingguan dalam zona waktu dokter dan menghindari konsultasi, blocked time, serta tindak lanjut yang terjadwal. Tombol Booking konsultasi membuka FE-09 untuk dokter terverifikasi yang menerima permintaan. Tombol **Konsultasi saya** pada beranda tetap membuka layanan milik Peternak.
+
+Untuk melihat FE-09: **Peternak → Konsultasi → dokter → Booking konsultasi**. Pilih layanan, ternak milik Anda, tanggal/jam tersedia, isi keluhan dan alamat untuk kunjungan, lalu pilih foto/video bila diperlukan. **Simpan draft** mempertahankan form setelah aplikasi dibuka ulang; kembali dengan perubahan menawarkan Simpan draft/Buang/Tetap mengedit. Draft dilanjutkan dari dokter yang sama. **Tinjau biaya → Konfirmasi booking** menyimpan konsultasi dan quote secara atomik; hasil berstatus **Menunggu pembayaran**, kemudian **Lihat detail booking** membuka ID konsultasi yang dibuat. Biaya juga tampil pada detail dan daftar Konsultasi saya membaca record yang sama. FE-19 belum menyediakan pembayaran; konfirmasi booking tidak memotong saldo, membuat payment succeeded, mengaktifkan chat, atau membuat janji diterima.
+
+Data fiktif FE-08 disimpan pada SQLite yang sama. Instalasi dengan seed `fe02-v1` mendapat ekstensi `fe08-v1` satu kali: hanya field profil/jadwal yang belum ada ditambahkan, disertai satu ulasan fiktif atas konsultasi selesai. Nilai yang sudah disimpan, termasuk availability off, daftar kosong yang sengaja disimpan, dan lokasi hasil edit, dipertahankan. Tidak ada akun atau layanan jaringan baru.
 
 ## Panduan dokumen
 
@@ -99,6 +109,11 @@ Verifikasi awal FE-04: `npm run check` lulus dengan 15 tes; lima tes baru mencak
 
 Verifikasi FE-05: `npm run check` lulus dengan 20 tes; lima tes baru mencakup selector dashboard Peternak, agenda/saldo Dokter, guard availability verified, persistensi availability tanpa mengubah janji accepted, dan akses detail sesuai assignment/ID. `npx expo export --platform android` membundle 714 modul; prebuild Android lulus. Hasil Gradle/debug APK dan uji perangkat dicatat pada [Testing](docs/TESTING.md).
 
-Verifikasi FE-06 (lapisan domain): `npm run check` lulus dengan 26 tes; export Android membundle 716 modul dan Gradle `assembleDebug` lulus. Service memakai repository lokal bersama, membatasi list/detail berdasarkan pemilik dan farm, memvalidasi data dan ID unik, serta menyimpan foto privat bersama relasinya. Layar dan QA perangkat belum dikerjakan karena konteks Figma FE-06 tidak tersedia pada kuota Starter. Detail ada di [Testing](docs/TESTING.md) dan [Figma mapping](docs/FIGMA_MAPPING.md).
+Verifikasi FE-06/07 terbaru: `npm run check` lulus dengan 32 tes; `npx expo export --platform android` membundel 724 modul; Gradle `assembleDebug` lulus dan APK terpasang di Xiaomi. Metro memuat bundle dan LocalStore (`schema=2`, 61 entitas) sampai “Pilih Peran”. Interaksi list, form, filter, modal, keyboard, serta perbandingan visual belum dapat diuji karena MIUI menolak input ADB dengan `INJECT_EVENTS`. Node Figma pasien Dokter berhasil diperiksa sebelumnya; node Peternak FE-06/07 tidak dapat diambil karena batas Starter, sehingga layar riwayat Peternak dirancang dari tokens dan aturan fitur. Rincian ada di [Testing](docs/TESTING.md) dan [Figma mapping](docs/FIGMA_MAPPING.md).
+
+Verifikasi FE-08: `npm run check` lulus dengan 40 tes, termasuk delapan skenario direktori/jadwal dan ekstensi fixture; export Android membundel 736 modul; build akhir Gradle `assembleDebug` lulus dalam 3 menit 28 detik setelah perbaikan safe area. APK dipasang pada Xiaomi dan Metro membaca schema 2, 62 entitas, serta seed lama yang dipertahankan. Salinan database perangkat memiliki marker `fixture_directory_version=fe08-v1`, 82 relasi, `integrity_check=ok`, dan tidak ada pelanggaran foreign key. Interaksi layar tetap belum diuji karena MIUI menolak `INJECT_EVENTS`. Figma FE-08 terhalang izin file utama dan kuota Starter; UI dirancang mandiri sesuai arahan pengguna. Rincian serta batas bukti ada di [Testing](docs/TESTING.md).
 
 `npm ci` FE-00 melaporkan 23 advisori (7 moderate, 16 high); instalasi dependency hingga FE-04 melaporkan 24 (8 moderate, 16 high). Rincian belum diaudit dan tidak ada perbaikan otomatis.
+
+
+Verifikasi FE-09: `npm run check` lulus (49 tes, termasuk sembilan skenario booking); export Android lulus (740 modul, 2,2 MB); Gradle `assembleDebug` lulus (24 menit 51 detik, 492 tasks). APK dipasang dengan `install -r` dan dibuka di Xiaomi melalui Metro offline port 8102; [screenshot startup](docs/reference/android/fe09-ui-startup-after-build.png) membuktikan layar awal, bukan interaksi Booking. MIUI tetap menolak tap `INJECT_EVENTS`, termasuk setelah instalasi build baru. Draft/file/video pada perangkat, form, keyboard/back/dialog/scroll serta visual 390 × 844/kecil/font besar belum diuji; pembayaran FE-19 belum tersedia. FE-09 tetap Sedang dikerjakan. Bukti dan perintah aktual ada di [Testing](docs/TESTING.md).

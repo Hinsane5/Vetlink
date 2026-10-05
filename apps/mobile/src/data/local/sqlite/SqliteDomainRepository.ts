@@ -8,11 +8,16 @@ import { columnsForAlias, entityColumns, insertEntity, insertRelations, toDomain
 const immutableKinds = new Set<EntityKind>(['ledgerEntry', 'paymentAttempt', 'review']);
 
 export class SqliteDomainRepository implements DomainRepository {
-  constructor(private readonly database: SQLiteDatabase) {}
+  constructor(private readonly database: SQLiteDatabase, private readonly inTransaction = false) {}
+
+  private async write(action: (transaction: SQLiteDatabase) => Promise<void>): Promise<void> {
+    if (this.inTransaction) await action(this.database);
+    else await this.database.withExclusiveTransactionAsync(action);
+  }
 
   async create(entity: DomainEntity, relations: readonly EntityRelation[] = []): Promise<void> {
     assertValidFinalNote(entity);
-    await this.database.withExclusiveTransactionAsync(async (transaction) => {
+    await this.write(async (transaction) => {
       await insertEntity(transaction, entity);
       await insertRelations(transaction, relations);
     });
@@ -77,7 +82,7 @@ export class SqliteDomainRepository implements DomainRepository {
       throw new DomainError('IMMUTABLE_RECORD', 'Record transaksi atau histori bersifat append-only.');
     }
 
-    await this.database.withExclusiveTransactionAsync(async (transaction) => {
+    await this.write(async (transaction) => {
       if (entity.kind === 'clinicalNote') {
         const existing = await transaction.getFirstAsync<{ payload_json: string }>(
           'SELECT payload_json FROM entities WHERE id = ? AND kind = ?',

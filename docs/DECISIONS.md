@@ -24,9 +24,14 @@ Tanggal baseline: 5 Oktober 2026. “Dipilih” berarti berasal dari jawaban/ins
 | DEC-18 | iOS, hosting, provider nyata dan operasional admin | Terbuka | Belum diminta sebagai tahap awal |
 | DEC-19 | Mulai implementasi dari tiket FE-00 | Dipilih | Instruksi pengguna 5 Oktober 2026; memulai scaffold mobile tanpa memilih backend atau memperluas fitur produk |
 | DEC-20 | Lanjut ke FE-02 setelah fondasi FE-01 | Diterapkan | Instruksi pengguna 5 Oktober 2026; fondasi domain, SQLite lokal, seed, repository dan event selesai dengan bukti di Testing |
-| DEC-21 | Autentikasi FE-03 satu perangkat; role membership dijaga AuthService; session/verifier lokal memakai SecureStore | Diterapkan untuk milestone lokal | Credential berupa salt + SHA-256 verifier, reset tidak mengirim email dan session kedaluwarsa 30 hari; ini bukan auth produksi/KDF produksi dan harus diganti saat provider backend dipilih |
+| DEC-21 | Autentikasi FE-03 satu perangkat; role membership dijaga AuthService; session/verifier lokal memakai SecureStore | Riwayat implementasi, tidak aktif pada UI sekarang | Credential berupa salt + SHA-256 verifier; alur ini digantikan sementara oleh DEC-23 untuk fokus frontend |
 | DEC-22 | Lampiran profil FE-04 dipilih pengguna lalu disalin privat ke storage dokumen aplikasi; tahap lokal tidak mengunggah dokumen atau menerbitkan hasil review | Diterapkan untuk milestone lokal | Metadata/URI disimpan sebagai Attachment; submission dokter hanya menghasilkan pending. Keputusan storage API dan reviewer produksi tetap terbuka |
+| DEC-23 | Fokus sekarang pada flow frontend tanpa autentikasi dan backend jaringan | Dipilih | Instruksi pengguna 5 Oktober 2026; `FrontendFlow` memilih persona fixture lokal, sedangkan layar daftar/masuk/reset/keluar tidak dipasang pada runtime aktif |
+| DEC-24 | Jika node Figma tidak dapat diakses, desain layar mandiri dengan UI/UX aman dan sesuai fungsi | Dipilih | Instruksi pengguna 5 Oktober 2026; FE-06, riwayat Peternak FE-07, direktori/profil FE-08, serta booking FE-09 memakai tokens/aturan fitur, dengan keterbatasan pixel-match dicatat di Figma mapping |
 
-DEC-01 mencatat keadaan tahap dokumentasi sebelum pengguna meminta implementasi. DEC-19 memperbarui tahap kerja saat ini; keputusan scope/backend lain tetap berlaku.
+DEC-01 mencatat keadaan tahap dokumentasi sebelum pengguna meminta implementasi. DEC-19 memulai implementasi; DEC-23/24 menetapkan fokus frontend aktif. Keputusan backend lain tetap terbuka.
 
 Untuk mengubah keputusan, tambah tanggal, alasan dan dampak pada PRD, model status, API, backlog dan acceptance criteria. Jangan menghapus riwayat keputusan pengguna tanpa mencatat penggantinya.
+
+
+5 Oktober 2026 — FE-09 menerapkan DEC-23/24: booking berjalan melalui data lokal tanpa credential/backend jaringan, dengan rancangan mandiri karena izin/kuota Figma. Draft eksplisit tersimpan, review dan submit atomik tidak menandakan pembayaran sukses. Batas media dan expiry hold produksi tetap terbuka (DEC-17); komisi 10% hanya snapshot fixture DEC-13. Tidak memilih provider pembayaran atau memperluas scope ke layanan nyata.

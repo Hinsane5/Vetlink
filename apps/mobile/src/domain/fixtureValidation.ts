@@ -14,8 +14,8 @@ const relationTargetKinds: Partial<Record<EntityKind, Record<string, EntityKind[
   consultation: { farmer: ['user'], veterinarian: ['user'], animal: ['livestock'] },
   visit: { consultation: ['consultation'] },
   scheduleProposal: { consultation: ['consultation'] },
-  clinicalNote: { consultation: ['consultation'], animal: ['livestock'], veterinarian: ['user'] },
-  healthEvent: { animal: ['livestock'], clinicalNote: ['clinicalNote'], reminder: ['reminder'] },
+  clinicalNote: { consultation: ['consultation'], animal: ['livestock'], veterinarian: ['user'], attachment: ['attachment'] },
+  healthEvent: { animal: ['livestock'], clinicalNote: ['clinicalNote'], reminder: ['reminder'], attachment: ['attachment'] },
   followUp: { consultation: ['consultation'], animal: ['livestock'], veterinarian: ['user'] },
   reminder: { animal: ['livestock'], consultation: ['consultation'], followUp: ['followUp'] },
   cartItem: { cart: ['cart'], product: ['product'] },
@@ -28,6 +28,7 @@ const relationTargetKinds: Partial<Record<EntityKind, Record<string, EntityKind[
   notification: { recipient: ['user'] },
   message: { consultation: ['consultation'] },
   preferences: { user: ['user'] },
+  review: { consultation: ['consultation'], veterinarian: ['user'], farmer: ['user'] },
 };
 
 export function validateFixtureGraph(

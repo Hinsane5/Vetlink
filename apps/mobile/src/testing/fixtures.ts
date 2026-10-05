@@ -68,6 +68,7 @@ export const fixtureIds = {
   requestPaymentSucceeded: id(62),
   chatPaymentSucceeded: id(63),
   visitPaymentSucceeded: id(64),
+  yudaReview: id(65),
 } as const;
 
 function entity(
@@ -90,6 +91,15 @@ function entity(
 
 const ids = fixtureIds;
 
+// Data fiktif FE-08; disimpan pada repository yang sama, bukan fallback angka di UI.
+export const directoryFixturePatches: Record<string, Record<string, unknown>> = {
+  [ids.raniProfile]: { species: ['cattle', 'goat'], practiceLocation: 'Bogor', visitRegions: [], experienceYears: 6 },
+  [ids.damarProfile]: { species: ['goat', 'sheep'], practiceLocation: 'Sleman', visitRegions: ['Sleman'], experienceYears: 3 },
+  [ids.yudaProfile]: { species: ['cattle', 'goat'], practiceLocation: 'Bogor', visitRegions: ['Bogor', 'Depok'], experienceYears: 8 },
+  [ids.raniAvailability]: { weekdayRules: [1, 2, 3, 4, 5].map((weekday) => ({ weekday, start: '09:00', end: '12:00' })), chatDurationMinutes: 30, visitDurationMinutes: 60 },
+  [ids.yudaAvailability]: { weekdayRules: [1, 2, 3, 4, 5, 6].map((weekday) => ({ weekday, start: '09:00', end: '12:00' })), chatDurationMinutes: 30, visitDurationMinutes: 60 },
+};
+
 export const fixtureEntities: DomainEntity[] = [
   entity('user', ids.budi, { name: 'Budi Santoso', email: 'budi@example.test', roles: ['farmer'], status: 'active' }),
   entity('user', ids.sari, { name: 'Sari Lestari', email: 'sari@example.test', roles: ['farmer'], status: 'active' }),
@@ -102,12 +112,12 @@ export const fixtureEntities: DomainEntity[] = [
   entity('farm', ids.sariFarm, { name: 'Kebun Sari', species: ['goat'], visitAddressId: ids.sariAddress }, ids.sari),
   entity('farmerProfile', ids.budiProfile, { userId: ids.budi, farmId: ids.budiFarm }, ids.budi),
   entity('farmerProfile', ids.sariProfile, { userId: ids.sari, farmId: ids.sariFarm }, ids.sari),
-  entity('vetProfile', ids.raniProfile, { userId: ids.rani, professionalName: 'drh. Rani Putri', verificationStatus: 'verified', services: ['chat'] }, ids.rani),
-  entity('vetProfile', ids.damarProfile, { userId: ids.damar, professionalName: 'drh. Damar Wijaya', verificationStatus: 'pending', services: ['visit'] }, ids.damar),
-  entity('vetProfile', ids.yudaProfile, { userId: ids.vetZero, professionalName: 'drh. Yuda Pratama', verificationStatus: 'verified', services: ['visit'] }, ids.vetZero),
+  entity('vetProfile', ids.raniProfile, { ...directoryFixturePatches[ids.raniProfile], userId: ids.rani, professionalName: 'drh. Rani Putri', verificationStatus: 'verified', services: ['chat'] }, ids.rani),
+  entity('vetProfile', ids.damarProfile, { ...directoryFixturePatches[ids.damarProfile], userId: ids.damar, professionalName: 'drh. Damar Wijaya', verificationStatus: 'pending', services: ['visit'] }, ids.damar),
+  entity('vetProfile', ids.yudaProfile, { ...directoryFixturePatches[ids.yudaProfile], userId: ids.vetZero, professionalName: 'drh. Yuda Pratama', verificationStatus: 'verified', services: ['visit'] }, ids.vetZero),
   entity('verificationSubmission', ids.damarVerification, { vetId: ids.damar, status: 'pending', submittedAt: fixtureDate }, ids.damar),
-  entity('availability', ids.raniAvailability, { vetId: ids.rani, acceptingNewRequests: true, timezone: 'Asia/Jakarta', services: ['chat'] }, ids.rani),
-  entity('availability', ids.yudaAvailability, { vetId: ids.vetZero, acceptingNewRequests: true, timezone: 'Asia/Jakarta', services: ['visit'] }, ids.vetZero),
+  entity('availability', ids.raniAvailability, { ...directoryFixturePatches[ids.raniAvailability], vetId: ids.rani, acceptingNewRequests: true, timezone: 'Asia/Jakarta', services: ['chat'] }, ids.rani),
+  entity('availability', ids.yudaAvailability, { ...directoryFixturePatches[ids.yudaAvailability], vetId: ids.vetZero, acceptingNewRequests: true, timezone: 'Asia/Jakarta', services: ['visit'] }, ids.vetZero),
   entity('serviceRate', ids.raniChatRate, { vetId: ids.rani, serviceType: 'chat', amount: 75000, currency: 'IDR', effectiveAt: fixtureDate }, ids.rani),
   entity('serviceRate', ids.yudaVisitRate, { vetId: ids.vetZero, serviceType: 'visit', amount: 150000, currency: 'IDR', effectiveAt: fixtureDate }, ids.vetZero),
   entity('livestock', ids.cow, { displayCode: 'BUD-01', name: 'Mawar', species: 'cattle', breed: 'Sapi fiktif', sex: 'female', weightKg: 340, estimatedAgeMonths: 48 }, ids.budi),
@@ -152,6 +162,7 @@ export const fixtureEntities: DomainEntity[] = [
   entity('notification', ids.notification, { recipientId: ids.budi, eventId: 'fixture-consultation-requested', type: 'consultation_requested', contextId: ids.request, title: 'Permintaan konsultasi tersimpan', body: 'Dokter akan meninjau permintaan Anda.', deliveryStatus: 'sent', readAt: null }, ids.budi),
   entity('message', ids.message, { consultationId: ids.chat, senderId: ids.budi, clientMessageId: 'fixture-chat-message-1', text: 'Terima kasih, Dok.', deliveryStatus: 'sent', sentAt: fixtureUpdate }, ids.budi),
   entity('preferences', ids.preferences, { userId: ids.budi, notifications: { consultations: true, reminders: true, commerce: false } }, ids.budi),
+  entity('review', ids.yudaReview, { consultationId: ids.completed, farmerId: ids.sari, vetId: ids.vetZero, stars: 5, text: 'Penjelasan pemeriksaan mudah dipahami dan jadwal kunjungan jelas.', submittedAt: '2026-10-02T03:00:00.000Z' }, ids.sari),
 ];
 
 export const fixtureRelations: EntityRelation[] = [];
@@ -236,5 +247,8 @@ link(ids.notification, 'recipient', ids.budi);
 link(ids.notification, 'context', ids.request);
 link(ids.message, 'consultation', ids.chat);
 link(ids.preferences, 'user', ids.budi);
+link(ids.yudaReview, 'consultation', ids.completed);
+link(ids.yudaReview, 'veterinarian', ids.vetZero);
+link(ids.yudaReview, 'farmer', ids.sari);
 
 export const fixtureSeedVersion = 'fe02-v1';

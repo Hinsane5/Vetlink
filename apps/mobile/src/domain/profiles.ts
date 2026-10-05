@@ -48,7 +48,7 @@ export interface SelectedAsset {
   filename: string;
   mimeType: string;
   byteSize: number | null;
-  kind: 'image' | 'document';
+  kind: 'image' | 'video' | 'document';
 }
 
 export type AttachmentSelection =
@@ -66,7 +66,7 @@ export interface AttachmentSummary {
   mimeType: string;
   byteSize: number;
   localUri: string;
-  kind: 'image' | 'document';
+  kind: 'image' | 'video' | 'document';
 }
 
 export interface ProfileDraftSnapshot {

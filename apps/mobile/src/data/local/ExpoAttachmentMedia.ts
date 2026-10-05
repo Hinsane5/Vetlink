@@ -5,6 +5,18 @@ import type { AttachmentMedia } from '../../application/ports/ProfileRepository'
 import type { SelectedAsset } from '../../domain/profiles';
 
 export class ExpoAttachmentMedia implements AttachmentMedia {
+  async pickBookingMedia(): Promise<SelectedAsset[]> {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images', 'videos'], allowsMultipleSelection: true, quality: 0.9,
+    });
+    if (result.canceled) return [];
+    return result.assets.map((asset) => ({
+      uri: asset.uri, filename: asset.fileName ?? (asset.type === 'video' ? 'video.mp4' : 'foto.jpg'),
+      mimeType: asset.mimeType ?? (asset.type === 'video' ? 'video/mp4' : 'image/jpeg'),
+      byteSize: asset.fileSize ?? null, kind: asset.type === 'video' ? 'video' : 'image',
+    }));
+  }
+
   async pickPhoto(): Promise<SelectedAsset | null> {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],

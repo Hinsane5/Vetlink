@@ -60,6 +60,7 @@ export interface VetDashboardSnapshot {
 export type DashboardSnapshot = FarmerDashboardSnapshot | VetDashboardSnapshot;
 
 export interface DashboardContextDetail {
+  feeAmount?: number;
   role: AccountRole;
   kind: 'consultation' | 'reminder';
   id: string;

@@ -23,6 +23,7 @@ export const entityKinds = [
   'message',
   'attachment',
   'profileDraft',
+  'bookingDraft',
   'product',
   'cart',
   'cartItem',

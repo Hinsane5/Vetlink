@@ -17,11 +17,19 @@
     "src/application/ProfileService.ts",
     "src/application/DashboardService.ts",
     "src/application/LivestockService.ts",
+    "src/application/HealthRecordService.ts",
+    "src/application/PatientService.ts",
+    "src/application/VetDirectoryService.ts",
+    "src/data/local/sqlite/seed.ts",
+    "src/data/local/sqlite/migrations.ts",
+    "src/application/vetPatientAccess.ts",
     "src/application/ports/EventStore.ts",
     "src/application/ports/AuthRepository.ts",
     "src/application/ports/ProfileRepository.ts",
     "src/domain/auth.ts",
     "src/domain/dashboard.ts",
-    "src/domain/livestock.ts"
+    "src/domain/livestock.ts",
+    "src/application/BookingService.ts",
+    "src/data/local/sqlite/SqliteBookingRepository.ts"
   ]
 }

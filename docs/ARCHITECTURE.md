@@ -1,10 +1,10 @@
 # Arsitektur VetLink
 
-Status: scaffold FE-00, komponen UI FE-01, fondasi lokal FE-02, autentikasi FE-03, profil FE-04, dan dashboard FE-05 tersedia di `apps/mobile`. FE-03/04/05 masih menunggu QA perangkat penuh; inspeksi visual terbaru tertahan kuota MCP Figma. Mobile React Native + Expo + TypeScript dipilih; Android dan data lokal terlebih dahulu. Backend di bawah adalah rancangan netral framework, dengan NestJS/PostgreSQL sebagai kandidat, belum keputusan.
+Status: tahap aktif adalah frontend Android tanpa layar autentikasi dan tanpa backend jaringan. `FrontendFlow` memilih persona fixture lokal berdasarkan peran; `DashboardFlow`, `LivestockFlow`, `FarmerHealthFlow`, `PatientFlow`, dan `VetDirectoryFlow` menampilkan flow FE-05–08. Data tetap berasal dari SQLite lokal melalui service dan repository. FE-03 tetap ada sebagai implementasi historis, tetapi tidak dipasang pada root aplikasi. QA interaksi di Xiaomi tertunda karena input MIUI ditolak; acuan Peternak FE-06/07/08 terhalang izin file utama atau batas Figma Starter. Backend di bawah adalah rancangan netral framework, belum keputusan implementasi.
 
 ## Boundary aplikasi
 
-Satu aplikasi memiliki shell Peternak dan Dokter. Root menangani bootstrap database, session, role guard dan providers. Tiap shell memiliki stack/tab sendiri; context layanan disimpan sebagai `consultationId` dan pasien sebagai `animalId`. Komponen bersama menggunakan tokens yang sama dengan variasi ukuran/tampilan per Figma.
+Satu aplikasi memiliki shell Peternak dan Dokter. Root menangani bootstrap database dan provider. `FrontendPreviewService` memilih Budi atau Yuda dari fixture untuk membuat konteks peran sementara tanpa credential/sesi autentikasi; service domain tetap membatasi data menurut ID pemilik atau assignment. Tiap shell memiliki stack/tab sendiri; context layanan disimpan sebagai `consultationId` dan pasien sebagai `animalId`. Komponen bersama menggunakan tokens yang sama dengan variasi ukuran/tampilan per Figma.
 
 Aliran dependensi:
 
@@ -72,11 +72,15 @@ Seed hanya saat database kosong, dengan versi fixture, tidak menimpa data setiap
 
 Implementasi FE-02 membuka `vetlink.db` melalui `expo-sqlite`. Envelope lokal menyimpan `id`, `kind`, `owner_id`, `context_id`, JSON payload, timestamp, version, dan idempotency/event keys; `entity_relations` menyimpan link ber-foreign-key antarentitas. Port repository menyediakan query pemilik/relasi serta update optimistic-version di dalam exclusive transaction. Tabel metadata menyimpan `PRAGMA user_version` dan marker seed `fe02-v1`; database nonkosong tidak di-seed ulang. Field payload yang akan menerima aturan transaksi tetap divalidasi domain/use case, bukan oleh komponen UI.
 
-FE-03 menambahkan `AuthRepository` serta `LocalAuthService` di lapisan application. Pendaftaran membuat `User` dan profil role-specific secara atomik; SQLite migration v2 menegakkan uniqueness email yang dinormalisasi. `expo-secure-store` memisahkan verifier lokal dan session ID dari data domain, sementara pemeriksaan membership/profile berada di service. Reset lokal hanya mengganti verifier yang telah dibuat pada perangkat ini; tidak ada email atau verifikasi identitas. Adapter ini adalah simulator pengembangan satu perangkat, bukan identitas produksi.
+FE-03 pernah menambahkan `AuthRepository` serta `LocalAuthService` di lapisan application. Kode dan tes historisnya masih ada, tetapi `App.tsx` sekarang memasang `FrontendFlow`; tidak ada masuk, daftar, reset, atau keluar pada UI aktif. Mode ini hanya untuk penelusuran frontend dengan persona lokal dan tidak mewakili sistem izin produksi.
 
 FE-04 menambahkan `ProfileService` dan port `ProfileRepository`. Layar tidak mengakses SQLite; adapter `SqliteProfileRepository` memuat owner/profile/farm/alamat/lampiran dan melakukan batch create/update dengan optimistic version dalam satu exclusive transaction. Adapter media memilih foto/dokumen melalui Expo dan menyalin berkas ke direktori privat aplikasi; belum ada upload/sinkronisasi. Dokter hanya dapat mengajukan dokumen sehingga submission menjadi `pending`; tidak ada use case/aksi produk untuk menetapkan `verified` atau `revision_required`. Guard FE-02 `assertCanAcceptConsultation` tetap mewajibkan status verified.
 
 FE-05 menambahkan `DashboardService` yang menyusun snapshot peran dari `DomainRepository` dan `ProfileService`. Selector domain menghitung ternak/konsultasi/reminder, agenda/request dan saldo dari entitas yang sama; halaman detail memuat ulang menggunakan ID serta memeriksa owner/assignment. Availability disimpan melalui repository dengan optimistic version, membutuhkan status verified untuk menerima layanan baru, dan tidak mengubah konsultasi yang telah diterima.
+
+FE-06 menambahkan `LivestockFlow` sebagai layar Peternak untuk daftar, pencarian, filter species/sex, detail berbasis ID, tambah/edit, dan pemilihan foto. Layar memanggil `LivestockService`/`ProfileService`; ia tidak mengakses SQLite langsung. Tab Ternak membuka daftar, sementara aksi tambah pada dashboard membuka form. `LivestockService` membatasi owner/farm, memvalidasi input, dan mengikat attachment privat hanya setelah commit berhasil. Detail ternak membuka `FarmerHealthFlow` dengan `animalId` yang sama.
+
+FE-07 menambahkan `HealthRecordService` serta `PatientService`. Riwayat Peternak memuat laporan owner dan catatan klinis final berdasarkan `animalId`; draft klinis tidak dipublikasikan dan laporan owner dibuat sebagai event terpisah yang idempotent. `FarmerHealthFlow` menampilkan filter kategori, detail final hanya baca, viewer lampiran, dan form laporan Peternak yang disimpan dengan operation key. Daftar pasien Dokter hanya dibentuk dari konsultasi yang relasi farmer/vet/animal-nya tervalidasi; lookup detail memakai scope yang sama. `PatientFlow` menyediakan pencarian, filter species, detail pasien, filter riwayat, dan catatan final hanya baca. Viewer kedua peran memeriksa ulang izin sebelum membuka URI. Pengujian interaksi layar pada HP masih tertunda setelah MIUI menolak `adb shell input tap` dengan `INJECT_EVENTS`.
 
 Selector dashboard, jadwal, riwayat, pasien dan saldo membaca entitas yang sama. Setelah transaksi domain commit, modul penerima event memperbarui inbox/health projection secara konsisten, lalu query yang terpengaruh di-refresh. Event lokal mempunyai ID unik agar restart/retry tidak menggandakan notification atau health record.
 
@@ -124,3 +128,18 @@ Media privat hanya dapat dilihat pihak terkait; backend nanti memakai URL akses 
 5. Uji flow dua perangkat, network failure dan retry sebelum mengklaim integrasi lintas perangkat.
 
 Sync offline dengan merge queue/conflict resolution perlu rancangan tambahan jika diminta; tidak termasuk baseline Android lokal ini.
+
+## Implementasi direktori FE-08
+
+`VetDirectoryFlow` memanggil `VetDirectoryService`, bukan SQLite langsung. Service menyusun profil publik dokter aktif, tarif terakhir yang sudah efektif, availability verified, dan ulasan yang berelasi dengan konsultasi selesai. Filter murni dan proyeksi slot berada pada `domain/directory.ts`; detail menyimpan `vetId` pada navigasi dan memuat ulang record. Daftar kembali mempertahankan query/filter saat pengguna menutup profil.
+
+`DomainRepository.listByKind` mengekspos query yang sebelumnya sudah ada pada adapter SQLite untuk katalog dokter dan proyeksi terkait. API produksi nanti perlu adapter katalog/profil publik yang membatasi data di server; frontend lokal ini tidak memberikan akses produksi. Slot adalah proyeksi baca, bukan reservasi; command booking dan validasi konflik terakhir tersedia pada FE-09. Bootstrap seed menambahkan ekstensi fixture FE-08 secara atomik/idempotent pada database fixture, mengisi hanya field yang belum ada dan menjaga satu sumber data.
+
+Inset frontend aktif diperoleh dari `react-native-safe-area-context ~5.7.0`. `SafeAreaProvider` berada di luar bootstrap/fonts sehingga tidak remount saat layar berubah; shell menggunakan satu SafeAreaView dan Modal filter mempunyai provider sendiri. Keyboard avoidance tetap berada di dalam shell/sheet, sedangkan bottom navigation menempati area layout tersendiri di atas inset bawah. Screenshot startup membuktikan inset atas pada Xiaomi; verifikasi detail/modal/font besar masih menunggu interaksi perangkat.
+
+
+## Implementasi booking FE-09
+
+`BookingFlow` hanya memanggil use case `BookingService` dan jadwal publik `VetDirectoryService`; tidak mengakses SQLite. Route membawa vetId dan hasil konsultasi dibuka memakai ID dari submit. Form menyimpan input sementara; BookingDraft, Attachment, Quote dan Consultation berada pada repository bersama. Detail/dashboard membaca consultation yang sama dan biaya snapshot.
+
+`BookingRepository` menyediakan unit repository/profile baca dan callback transaksi. `SqliteBookingRepository` mengantrikan command booking pada objek database bersama dan menjalankan callback pada exclusive transaction; repository domain dalam unit menulis langsung ke transaction tersebut sehingga tidak membuat nested transaction. Validasi memakai service profil, ternak dan direktori dengan unit transaksi yang sama. Reservasi slot, pemeriksaan tarif, penulisan konsultasi/quote dan penanda submitted menjadi satu operasi atomik; foreign key serta unique operation key tetap berlaku. Tidak ada backend/auth UI aktif, database kedua atau otoritas tulis paralel.

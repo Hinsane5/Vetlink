@@ -4,6 +4,8 @@ Sumber: [VetLink prototype](https://www.figma.com/design/f1WBeG5S1OGXlPXyVEHjuW/
 
 Metadata menemukan 97 top-level frame layar 390 × 844 dan component set Dokter `93:7181` dengan 283 variants. Jumlah frame/variant bukan jumlah route. [Inventory](reference/figma/inventory.json) mencatat ID/nama/dimensi; [sample prototype links](reference/figma/prototype-links.json) mencatat koneksi pilihan; [design specs](reference/figma/design-specs.json) mencatat tokens dan navigasi utama.
 
+Inspeksi FE-07 juga menggunakan link terbaru dari pengguna ke file [VetLink — Dokter / Tampilan dan interaksi](https://www.figma.com/design/TPG6qZunK9EY4z1Vy0GKDx/Untitled?node-id=93-7181&t=hYv9JEpqvZmEonSz-), key `TPG6qZunK9EY4z1Vy0GKDx`, node `93:7181`. Node ini relevan: metadata component set memuat `Screen=patients` (`80:4594`) dan `Screen=patient` (`80:4726`) beserta variants. File ini dipakai sebagai acuan visual FE-07 saja; pemetaan layar lain tetap menunjuk file sumber yang tercatat di atas.
+
 Route di dokumen ini merupakan usulan identifier navigasi Expo Router; belum file route implementasi. `:id` harus berisi entity ID dan tidak mengambil pasien/konsultasi default. Suffix `/review` digunakan untuk langkah tinjau; dialog/modal umumnya state pada route asal.
 
 ## Visual dan komponen
@@ -52,7 +54,7 @@ Tokens mobile ada di `apps/mobile/src/ui/theme/tokens.ts`; Inter Regular/Medium/
 
 Selisih yang disengaja: varian status di Figma menampilkan glyph cek yang sama; komponen menggunakan Lucide `check`, `clock-3`, atau `circle-alert` agar berhasil/menunggu/gagal dapat dibedakan. Field error tetap memakai border gold dari desain dan menambah pesan validasi warna orange. Button mempertahankan tinggi minimum per peran dan mengembang untuk label/font besar.
 
-Konteks dan screenshot high-fidelity berhasil diperiksa untuk `12:1666`, `75:2492`, `75:2509`, `75:2614`, dan chat Dokter `46:16`. Pengambilan konteks/screenshot untuk Peternak Chat `12:2353` dan Logout Dialog `12:3184` ditolak oleh Figma MCP karena batas panggilan Starter plan. Karena itu, komponen dialog menggunakan tokens/pola konfirmasi bersama; kecocokan terhadap dua node yang tidak terbaca belum dapat dipastikan.
+Konteks dan screenshot high-fidelity berhasil diperiksa untuk `12:1666`, `75:2492`, `75:2509`, `75:2614`, chat Dokter `46:16`, serta—pada link terbaru—Peternak Chat `12:2353` dan Logout Dialog `12:3184`. Kedua node FE-01 yang sebelumnya tertunda kini terbaca; screenshot referensinya menampilkan chat pada 390 × 844 dan modal logout pada viewport yang sama. Frame Logout menampilkan tombol konfirmasi lalu batal secara vertikal. `ConfirmationDialog` saat ini menampilkan Batal lalu Konfirmasi dalam satu baris; catat sebagai selisih implementasi yang perlu ditinjau. Screenshot Android komponen lama adalah galeri diagnostik, bukan layar Chat/Logout produk, sehingga ukuran/posisi layar produk dan pixel-match belum terverifikasi.
 
 Pemeriksaan perangkat FE-01 pada 5 Oktober 2026: Xiaomi `2311DRK48G`, 1220 × 2712 px, density 480 dpi atau sekitar 407 × 904 dp. Tombol Peternak/Dokter terukur 52/48 dp; TextInput memiliki area sentuh 44 dp; aksi retry chat 44 dp. Teks berhasil diketik dan dibaca kembali, keyboard membuka pada field aktif, teks bantuan membungkus, katalog dapat discroll, retry merespons, serta dialog panjang tetap menampilkan kedua aksi dan tertutup melalui Back Android. Font Xiaomi diuji pada pilihan 125% (langkah terdekat ke 130%) dan 145%; dikembalikan ke 100% sesudahnya dan nilai akhir `font_scale`/`device_font_scale` diverifikasi 1.0. Screenshot bukti: [field dan keyboard pada font 125%](reference/android/fe01-component-keyboard-font125.png) dan [dialog panjang pada font 125%](reference/android/fe01-component-dialog-font125.png).
 
@@ -74,7 +76,7 @@ Dokter: Beranda → dashboard; Jadwal → schedule; Konsultasi → history; Pasi
 | Daftar | Farmer `12:1763`, Vet `12:1798`, Dokter register `46:4` | `/auth/register/:role` | Form, MediaPicker | profile draft, validation |
 | Verifikasi | Dokter verification `46:5` | `/vet/verification` | DocumentPicker, StatusBadge | submission, pending/revision/verified |
 
-Implementasi FE-03 menggunakan node Splash `12:1672`, Onboarding `12:1683`/`12:1697`/`12:1711`, Pilih/Ganti Peran `46:2`, Login `12:1723`, Reset `12:1746`, Daftar Peternak `12:1763`, Daftar Dokter `12:1798`, dan dialog Keluar `12:3184` sebagai tujuan pemetaan. Screenshot high-fidelity baru untuk node-node tersebut tidak berhasil diambil pada sesi ini karena Figma MCP mengembalikan batas panggilan Starter. Implementasi mengikuti tokens/komponen FE-01 yang sudah didokumentasikan; karena konteks visual baru tidak tersedia, kecocokan piksel layar FE-03 belum diverifikasi.
+Implementasi FE-03 menggunakan node Splash `12:1672`, Onboarding `12:1683`/`12:1697`/`12:1711`, Pilih/Ganti Peran `46:2`, Login `12:1723`, Reset `12:1746`, Daftar Peternak `12:1763`, Daftar Dokter `12:1798`, dan dialog Keluar `12:3184` sebagai tujuan pemetaan. Dari link terbaru, Logout `12:3184` berhasil diperiksa; konteks autentikasi lain belum dapat diambil karena limit Starter. Implementasi mengikuti tokens/komponen FE-01 yang sudah didokumentasikan; kecocokan piksel layar FE-03 belum diverifikasi.
 
 Selisih implementasi awal yang perlu ditinjau pada pemeriksaan Figma berikutnya: onboarding memakai ilustrasi ikon Lucide yang disusun di kode, bukan aset screenshot; role/login/register memakai layout scroll satu stack tanpa Expo Router; reset lokal langsung mengganti verifier di perangkat dan menjelaskan bahwa email tidak dikirim. Logout memakai `ConfirmationDialog` FE-01. Ini pemetaan sementara yang mengikuti aturan PRD/data model dan belum klaim visual akhir.
 
@@ -162,16 +164,75 @@ Sebelum coding setiap layar: ambil high-fidelity context subtree dan screenshot 
 
 ## Implementasi awal FE-05: dashboard
 
-Dashboard Peternak memakai node `12:1833` dan Dokter `46:7`; screenshot referensi lokal `screenshots/farmer-dashboard.png` serta `screenshots/vet-dashboard.png` telah diperiksa ulang sebelum implementasi. Figma MCP tidak dapat mengambil konteks/screenshot terbaru karena batas Starter yang juga menahan inspeksi FE-04, sehingga perubahan desain setelah snapshot ini belum diverifikasi.
+Dashboard Peternak memakai node `12:1833` dan Dokter `46:7`; screenshot referensi lokal `screenshots/farmer-dashboard.png` serta `screenshots/vet-dashboard.png` telah diperiksa ulang sebelum implementasi. Figma MCP belum dapat mengambil konteks dashboard terbaru karena batas Starter; tampilan implementasi dashboard pada perangkat masih menunggu QA.
 
-Penerapan menampilkan metrics dan kartu dari `DashboardService`, membuka detail dengan ID konsultasi/pengingat yang dibaca ulang, dan memisahkan peran melalui query owner/assignment. Availability memakai record tersimpan dan mensyaratkan verified untuk menerima layanan baru; janji terjadwal tetap terlihat setelah toggle off. Selisih saat ini: tombol cepat Peternak diarahkan ke profil peternakan/konsultasi sendiri karena alur tambah ternak dan booking berada pada FE-06/09; tab Ternak, Pesanan, dan Pasien nonaktif hingga layar masing-masing tersedia. QA screenshot Android FE-05 belum dilakukan.
+Penerapan menampilkan metrics dan kartu dari `DashboardService`, membuka detail dengan ID konsultasi/pengingat yang dibaca ulang, dan memisahkan peran melalui query owner/assignment. Availability memakai record tersimpan dan mensyaratkan verified untuk menerima layanan baru; janji terjadwal tetap terlihat setelah toggle off. Tombol cepat Peternak “Tambah ternak” kini membuka form FE-06. Tab Ternak dan tab Pasien Dokter aktif; Pesanan masih nonaktif karena layar FE-19 belum dibuat. QA screenshot Android FE-05 belum dilakukan.
 
 ## Implementasi awal FE-06: data ternak
 
-Node yang sudah dipetakan untuk FE-06: daftar `12:1889`, daftar dengan filter `12:1934`, empty `12:3196`, tambah `12:1980`, konfirmasi tersimpan `12:2019`, dan detail `12:2032`. Pada 5 Oktober 2026, `get_design_context` dengan screenshot diwajibkan dicoba untuk keenam node; seluruh permintaan ditolak karena batas panggilan MCP plan Starter. `figma_whoami` mengonfirmasi tim masih memakai Starter. Tidak ada screenshot lokal untuk layar ternak ini, sehingga UI FE-06 belum diimplementasikan dan belum ada klaim kecocokan visual.
+Node yang dipetakan untuk FE-06: daftar `12:1889`, daftar dengan filter `12:1934`, empty `12:3196`, tambah `12:1980`, konfirmasi tersimpan `12:2019`, dan detail `12:2032`. Panggilan `get_design_context` serta `get_screenshot` untuk `12:1889` pada file utama `f1WBeG5S1OGXlPXyVEHjuW` mengembalikan pesan persis `Looks like you don't have edit access to this file. The file owner can share it with you and make you an editor.` dengan kode `INVALID_ARGUMENT`. Itu kegagalan izin file. Pada link terbaru `TPG6qZunK9EY4z1Vy0GKDx`, `get_design_context` untuk node yang sama mengembalikan `You've reached the Figma MCP tool call limit on the Starter plan. Upgrade your plan for more tool calls: https://www.figma.com/files/team/1688904264667270127/all-projects?upgrade=mcp_rate_limit_paywall`. Itu batas kuota, bukan kegagalan autentikasi. `figma_whoami` berhasil dan menampilkan tier Starter serta seat View. Tool MCP tersedia pada sesi ini; error sesi sebelumnya `-32001: Unknown tool` adalah kondisi berbeda. Konteks detail dan screenshot FE-06 tidak berhasil diperoleh, sehingga tidak ada klaim kesesuaian pixel.
 
-Lapisan domain awal menggunakan `LivestockService` dan `selectLivestock`: baca/tulis melalui repository, scope farmer/farm dan detail ID, ID tampilan unik per farm, validasi field dari kontrak data, kombinasi pencarian/filter, serta attachment foto privat dengan commit satu transaksi. Setelah konteks Figma tersedia, inspeksi hierarchy/assets/screenshot diperlukan sebelum implementasi list, sheet filter, empty state, form, konfirmasi, dan detail sebagai state interaktif; screenshot layar tidak boleh menjadi aset aplikasi.
+`LivestockFlow` sekarang menyediakan daftar, pencarian dan filter species/sex, empty/error/loading, detail berdasarkan `livestockId`, form tambah/edit, foto lokal, serta konfirmasi setelah commit berhasil. Susunan layar memakai tokens, Inter, dan Lucide yang telah diperiksa sebelumnya; ini rancangan frontend mandiri sesuai instruksi pengguna ketika node tidak dapat diakses. `LivestockService` tetap menjaga owner/farm dan validasi. Selisih visual detail terhadap Figma akan ditinjau saat konteks/screenshot node kembali tersedia. Screenshot layar Figma tidak digunakan sebagai aset aplikasi.
+
+## Implementasi awal FE-07: riwayat kesehatan dan pasien
+
+Node FE-07 pada link terbaru: Dokter patients `80:4594`; patient detail `80:4726`; variants vaksin `80:4759`, obat `80:4786`, kambing `80:4809`, dan catatan final `80:4842`. Node `93:7181` mengembalikan metadata ringkas karena frame besar; sesuai prasyarat design-to-code, screenshot dan high-fidelity context kemudian diambil dari child nodes. Screenshot `80:4594` dan `80:4726` berukuran 390 × 844; variants `80:4759`, `80:4786`, dan `80:4842` juga diperiksa. Daftar menunjukkan pencarian ID/nama pemilik dan filter Semua/Sapi/Kambing. Detail memakai tab Periksa/Vaksin/Obat, riwayat bertanggal, status final, dan back action.
+
+Konteks Peternak `12:2032`, `12:2068`, dan `12:2132` terkena error persis `You've reached the Figma MCP tool call limit on the Starter plan. Upgrade your plan for more tool calls: https://www.figma.com/files/team/1688904264667270127/all-projects?upgrade=mcp_rate_limit_paywall`. Konteks/screenshot `12:2100` sempat berhasil sebelum limit tercapai. `figma_whoami` berhasil dan mengembalikan plan tier `starter` dengan seat `View`; karena beberapa node di file yang sama berhasil dibaca, kegagalan ini adalah rate limit Starter, bukan MCP tool yang tidak tersedia atau error autentikasi/izin file. Sesi sebelumnya yang mengembalikan `-32001: Unknown tool` adalah kondisi MCP tool tidak tersedia sebelum akun/izin file dapat diperiksa. Tidak ada kegagalan autentikasi atau permission error pada pemeriksaan link terbaru.
+
+`PatientFlow` memasang daftar pasien, filter species, dan pencarian berbasis `PatientService`; detail dimuat memakai `animalId` route dan menampilkan riwayat final serta laporan terkait assignment. Catatan dibuka hanya baca; lampiran diotorisasi ulang oleh `HealthRecordService`. Selisih dari prototype: UI menambah tab “Lainnya” agar disease/care tidak tersembunyi; draft klinis tidak ditampilkan karena aturan final-only; tombol “Catatan Pemeriksaan” menunggu FE-14; back hit area menjadi 44 dp dan glyph diganti Lucide.
+
+`FarmerHealthFlow` sekarang dibuka dari detail ternak menggunakan `livestockId`/`animalId` yang sama. Riwayat menampilkan Semua/Periksa/Penyakit/Vaksin/Obat/Perawatan, sumber catatan, detail final hanya baca, dan lampiran dengan pemeriksaan akses ulang. Form laporan Peternak menyimpan kategori, keterangan, dan waktu saat simpan; tidak mengubah catatan Dokter. Karena node Peternak tidak dapat diambil, susunan ini dirancang dari tokens dan aturan fitur, bukan salinan visual Figma. Screenshot Android layar riwayat, input, modal, viewer, dan visual comparison belum diperoleh; MIUI menolak ADB input dengan `INJECT_EVENTS`.
 
 ## Implementasi shell FE-03
 
-`apps/mobile/App.tsx` sekarang memuat `AuthFlow` setelah bootstrap SQLite dan Inter. Splash/onboarding memandu ke Pilih Peran; akun masuk ke landing sesi sederhana yang menyediakan Ganti Peran dan Keluar. Landing ini akan digantikan shell/dashboard fitur pada tiket berikutnya. Screenshot layar Mulai pada HP ada di [fe03-start-screen.png](reference/android/fe03-start-screen.png); ini bukti app asli, bukan screenshot desain Figma. Gear Expo development menu yang terlihat di sudut kanan atas hanya milik development build. Pemeriksaan pixel-match terhadap ukuran 390 × 844 dan visual Figma untuk node autentikasi masih tertunda.
+`apps/mobile/App.tsx` sekarang memuat `FrontendFlow` setelah bootstrap SQLite dan Inter. Pilih Peran membuka persona fixture lokal tanpa daftar/masuk/reset/keluar; menu menyediakan Ganti Peran. `AuthFlow` FE-03 masih ada di source historis tetapi tidak dipasang pada alur aktif. Ini keputusan tahap frontend dari pengguna, bukan perubahan pada prototipe Figma. Screenshot lama [fe03-start-screen.png](reference/android/fe03-start-screen.png) hanya bukti tahap FE-03 terdahulu. Pemeriksaan visual Android untuk flow baru pada 390 × 844 dan font besar belum dilakukan.
+
+## Implementasi FE-08: direktori dan profil dokter
+
+Node nyata yang sudah dipetakan pada file utama adalah Doctor List `12:2161`, Filter Sheet `12:2215`, dan Doctor Profile `12:2245`, untuk fitur F-06/F-07. Skill `figma-design-to-code` dibaca sebelum permintaan konteks desain beserta screenshot node daftar. Panggilan ke `f1WBeG5S1OGXlPXyVEHjuW`, node `12:2161`, mengembalikan pesan persis:
+
+```text
+Looks like you don't have edit access to this file. The file owner can share it with you and make you an editor.Figma Debug UUID: 10656066-aa9f-49dd-a732-75119a243224
+```
+
+Kode terstruktur `INVALID_ARGUMENT` pada respons tersebut menunjukkan penolakan izin file. Percobaan pada key link terbaru `TPG6qZunK9EY4z1Vy0GKDx` mengembalikan pesan persis:
+
+```text
+You've reached the Figma MCP tool call limit on the Starter plan. Upgrade your plan for more tool calls: https://www.figma.com/files/team/1688904264667270127/all-projects?upgrade=mcp_rate_limit_paywall
+```
+
+Respons kuota juga memakai `INVALID_ARGUMENT`; maknanya dibedakan lewat pesan. `figma_whoami` dapat dipanggil pada sesi ini (Starter, seat View). Tool MCP tersedia; kegagalan lama `-32001: Unknown tool` adalah kondisi berbeda sebelum akun/izin bisa diperiksa. Pemeriksaan FE-08 tidak memperoleh konteks/screenshot desain, dan tidak menunjukkan error autentikasi. Keberadaan node daftar pada file terbaru belum dapat dikonfirmasi karena request berhenti pada batas kuota.
+
+Sesuai arahan pengguna, UI FE-08 dibuat mandiri dari tokens yang sudah terinspeksi dan kontrak F-06/F-07: daftar kartu, search, filter sheet, profil, tarif, jadwal 7 hari, serta ulasan. Foto memakai lampiran profil bila tersedia, dengan fallback Lucide `stethoscope`; badge verifikasi memakai `badge-check`; pencarian/filter/back/clock memakai keluarga ikon yang sama. Semua aksi utama minimal 44 dp, konten membungkus dan dapat discroll, filter menyediakan keyboard avoidance dan dialog nyata. Ini rancangan kode, belum bukti QA sentuh/visual pada Android.
+
+Tab Konsultasi Peternak kini membuka direktori dokter sesuai pemetaan navigasi; tombol Konsultasi saya pada dashboard membuka konsultasi milik akun. Profil dibuka berdasarkan `vetId`, bukan dokter fixture pertama. Jadwal membaca data repository dan menolak slot untuk dokter non-verified/tidak menerima, tarif yang belum aktif, atau waktu terisi. Slot ditampilkan untuk dibaca; pemesanan masuk FE-09. Tidak ada angka rating, tanggal, atau screenshot penuh yang dijadikan UI hardcoded. Pixel-match dan perbandingan viewport/font besar belum diperoleh karena akses Figma gagal dan input ADB ditolak MIUI.
+
+Shell aktif dan filter FE-08 kemudian memakai `react-native-safe-area-context ~5.7.0` untuk inset nyata. Ini perbaikan terhadap pola SafeAreaView lama, bukan token visual Figma baru. Screenshot startup akhir di [Testing](TESTING.md) hanya membuktikan inset layar awal; ukuran/visual direktori, profil, dan filter tetap belum dibandingkan.
+
+
+## Implementasi FE-09: booking
+
+Skill wajib `figma-design-to-code` dibaca sebelum memanggil get_design_context; node Booking nyata dari mapping file utama adalah `12:2280`. Pada 5 Oktober 2026, context file utama `f1WBeG5S1OGXlPXyVEHjuW` gagal dengan pesan persis:
+
+```text
+Looks like you don't have edit access to this file. The file owner can share it with you and make you an editor.Figma Debug UUID: e33f6896-aaab-42a1-9929-98cd13154859
+```
+
+Get_screenshot langsung untuk node yang sama juga gagal:
+
+```text
+Looks like you don't have edit access to this file. The file owner can share it with you and make you an editor.Figma Debug UUID: 11ed444c-8cbf-4a8b-96ab-1e59d23cb161
+```
+
+Percobaan context serta screenshot node `12:2280` pada link terbaru `TPG6qZunK9EY4z1Vy0GKDx` mengembalikan pesan persis:
+
+```text
+You've reached the Figma MCP tool call limit on the Starter plan. Upgrade your plan for more tool calls: https://www.figma.com/files/team/1688904264667270127/all-projects?upgrade=mcp_rate_limit_paywall
+```
+
+Tool MCP tersedia; file utama gagal izin edit, link terbaru gagal kuota Starter. Tidak memperoleh konteks/screenshot baru, tidak membuktikan error autentikasi, dan keberadaan node Booking pada file terbaru belum dapat dikonfirmasi. Kondisi ini berbeda dari error lama `-32001: Unknown tool`. Status akun terakhir yang benar-benar terbaca pada FE-08 adalah Starter dengan seat View; tidak ada akun Figma lain yang digunakan untuk mencoba bypass akses.
+
+Referensi lokal lama [farmer-booking.png](reference/figma/screenshots/farmer-booking.png) (390 × 844) sudah ditinjau: header cokelat, pilihan layanan, tanggal/jam, ternak, keluhan/media, biaya dan tombol lanjut pembayaran. PNG itu membantu memahami struktur layar, bukan pemeriksaan ulang desain terkini dan bukan asset UI. Sesuai izin fallback pengguna, form dan review FE-09 dirancang mandiri menggunakan cream/brown/gold, Inter, Lucide, kartu, area sentuh minimal 44 dp, teks membungkus, scroll, inset shell/Modal dan keyboard avoidance shell.
+
+Selisih fungsi/visual: waktu berasal dari slot nyata dalam repository, bukan chips waktu statis; ternak dibatasi owner/farm serta species yang dilayani; kunjungan mewajibkan alamat; review biaya dipisah agar dapat ditinjau sebelum penulisan. Tombol prototype lanjut pembayaran menjadi Tinjau biaya → Konfirmasi booking karena pembayaran FE-19 belum tersedia. Hasil hanya awaiting_payment, tidak melompati requested/scheduled/chat. Draft tersimpan dan dialog tiga pilihan ditambahkan sesuai kontrak PRD. Video memakai glyph Lucide file-text sebagai penanda berkas; foto ditampilkan sebagai thumbnail. Belum ada playback video dalam form. Pixel-match, visual form Android 390 × 844, viewport kecil dan font besar belum dibuktikan; input ADB Xiaomi ditolak MIUI.
