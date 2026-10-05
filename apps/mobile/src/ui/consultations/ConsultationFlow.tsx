@@ -17,7 +17,7 @@ import { colors, fonts, radii, roleTokens, spacing } from '../theme/tokens';
 
 type Form = { action: 'propose' | 'reject' | 'cancel'; input: ProposalInput; saved: ProposalInput; draft: DomainEntity | null; schedule: DirectorySchedule | null };
 type Tab = 'requests' | 'appointments' | 'history';
-export function ConsultationFlow({ store, session, initialId, initialTab = 'requests', onExit, onOpenAnimal }: { store: LocalStore; session: SessionSnapshot; initialId?: string; initialTab?: Tab; onExit: () => void; onOpenAnimal: (id: string) => void }) {
+export function ConsultationFlow({ store, session, initialId, initialTab = 'requests', onExit, onOpenAnimal, onOpenChat }: { store: LocalStore; session: SessionSnapshot; initialId?: string; initialTab?: Tab; onExit: () => void; onOpenAnimal: (id: string) => void; onOpenChat: (id: string) => void }) {
   const role = session.activeRole;
   const [selectedId, setSelectedId] = useState(initialId ?? '');
   const [items, setItems] = useState<ConsultationDetail[]>([]);
@@ -92,6 +92,8 @@ export function ConsultationFlow({ store, session, initialId, initialTab = 'requ
   const started = !!detail?.visit && detail.visit.payload.stage !== 'scheduled';
   const canDoctor = role === 'vet' && detail?.verified && detail.paid && future && !started;
   const cancellable = role === 'farmer' && !started && ['awaiting_payment', 'requested', 'scheduled', 'reschedule_pending'].includes(status);
+  const chatPriorStatus = status === 'reschedule_pending' ? String(detail?.record.payload.previousStatus ?? 'scheduled') : status;
+  const canOpenChat = detail?.record.payload.type === 'chat' && detail.paid && ['scheduled', 'in_progress', 'completed', 'cancelled'].includes(chatPriorStatus) && !['rejected', 'awaiting_payment'].includes(status);
   const photo = detail?.attachments.find((item) => item.id === photoId && item.kind === 'image');
   const shown = items.filter((item) => consultationTab(item.record) === tab && [item.otherPartyName, item.animalName, item.record.payload.displayCode].join(' ').toLocaleLowerCase('id').includes(query.trim().toLocaleLowerCase('id')));
   return <View style={styles.root}>
@@ -122,6 +124,7 @@ export function ConsultationFlow({ store, session, initialId, initialTab = 'requ
           {detail.record.payload.refundStatus === 'refund_needed' ? <InlineFeedback message="Pengembalian dana diperlukan. Dana belum dikembalikan." /> : null}
           {detail.record.payload.rejectionReason || detail.record.payload.cancellationReason ? <Line label="Alasan" value={String(detail.record.payload.rejectionReason || detail.record.payload.cancellationReason)} /> : null}
           {detail.visit ? <Line label="Tahap kunjungan" value={visitLabel(String(detail.visit.payload.stage))} /> : null}
+          {canOpenChat ? <Button role={role} label={['completed', 'cancelled'].includes(status) ? 'Lihat percakapan' : 'Buka chat'} onPress={() => onOpenChat(detail.record.id)} /> : null}
           {role === 'farmer' || !['rejected', 'cancelled'].includes(status) ? <Button role={role} variant="secondary" label={role === 'vet' ? 'Riwayat pasien' : 'Lihat ternak'} onPress={() => onOpenAnimal(String(detail.record.payload.animalId))} /> : null}
         </View>
         {detail.attachments.length ? <View style={styles.card}><Text style={styles.heading}>Lampiran keluhan</Text>{detail.attachments.map((item) => <View key={item.id} style={styles.card}>

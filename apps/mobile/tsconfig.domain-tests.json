@@ -31,6 +31,7 @@
     "src/domain/livestock.ts",
     "src/application/BookingService.ts",
     "src/application/ConsultationService.ts",
+    "src/application/ChatService.ts",
     "src/application/AvailabilityService.ts",
     "src/data/local/sqlite/SqliteBookingRepository.ts"
   ]

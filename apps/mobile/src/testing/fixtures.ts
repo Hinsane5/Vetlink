@@ -71,6 +71,9 @@ export const fixtureIds = {
   yudaReview: id(65),
   visitRequest: id(66),
   visitRequestPayment: id(67),
+  chatFlow: id(68),
+  chatFlowPayment: id(69),
+  chatFlowMessage: id(70),
 } as const;
 
 function entity(
@@ -78,12 +81,13 @@ function entity(
   entityId: string,
   payload: Record<string, unknown>,
   ownerId: string | null = null,
+  contextId: string | null = null,
 ): DomainEntity {
   return {
     id: entityId,
     kind,
     ownerId,
-    contextId: null,
+    contextId,
     createdAt: fixtureDate,
     updatedAt: fixtureUpdate,
     version: 1,
@@ -162,7 +166,7 @@ export const fixtureEntities: DomainEntity[] = [
   entity('withdrawal', ids.withdrawal, { vetId: ids.vetZero, destinationSnapshot: 'Bank Contoh •••• 1234', amount: 20000, feeSnapshot: 0, netAmount: 20000, status: 'submitted', operationKey: 'fixture-withdrawal-submitted' }, ids.vetZero),
   entity('ledgerEntry', ids.reserveEntry, { vetId: ids.vetZero, withdrawalId: ids.withdrawal, kind: 'reserve_withdrawal', amount: 20000, operationKey: 'fixture-reserve-withdrawal', occurredAt: fixtureUpdate }, ids.vetZero),
   entity('notification', ids.notification, { recipientId: ids.budi, eventId: 'fixture-consultation-requested', type: 'consultation_requested', contextId: ids.request, title: 'Permintaan konsultasi tersimpan', body: 'Dokter akan meninjau permintaan Anda.', deliveryStatus: 'sent', readAt: null }, ids.budi),
-  entity('message', ids.message, { consultationId: ids.chat, senderId: ids.budi, clientMessageId: 'fixture-chat-message-1', text: 'Terima kasih, Dok.', deliveryStatus: 'sent', sentAt: fixtureUpdate }, ids.budi),
+  entity('message', ids.message, { consultationId: ids.chat, senderId: ids.sari, clientMessageId: 'fixture-chat-message-1', text: 'Terima kasih, Dok.', deliveryStatus: 'sent', sentAt: fixtureUpdate }, ids.sari),
   entity('preferences', ids.preferences, { userId: ids.budi, notifications: { consultations: true, reminders: true, commerce: false } }, ids.budi),
   entity('review', ids.yudaReview, { consultationId: ids.completed, farmerId: ids.sari, vetId: ids.vetZero, stars: 5, text: 'Penjelasan pemeriksaan mudah dipahami dan jadwal kunjungan jelas.', submittedAt: '2026-10-02T03:00:00.000Z' }, ids.sari),
 ];
@@ -265,4 +269,19 @@ export const consultationFixtureRelations: EntityRelation[] = [
   { sourceId: ids.visitRequest, targetId: ids.vetZero, relationship: 'veterinarian' },
   { sourceId: ids.visitRequest, targetId: ids.cow, relationship: 'animal' },
   { sourceId: ids.visitRequestPayment, targetId: ids.visitRequest, relationship: 'payable' },
+];
+
+// Accepted, paid local conversation makes the shared farmer/vet chat reachable from the active personas.
+export const chatFixtureEntities: DomainEntity[] = [
+  entity('consultation', ids.chatFlow, { displayCode: 'VL-C-107', farmerId: ids.budi, vetId: ids.vetZero, animalId: ids.cow, type: 'chat', status: 'in_progress', complaint: 'Pemeriksaan kondisi umum ternak.', startsAt: '2026-10-05T02:00:00.000Z', endsAt: '2026-10-05T02:30:00.000Z', feeSnapshot: 75000, commissionSnapshot: 7500 }, ids.budi),
+  entity('payment', ids.chatFlowPayment, { ownerId: ids.budi, payableType: 'consultation', payableId: ids.chatFlow, method: 'bank_transfer', amount: 75000, status: 'succeeded', operationKey: 'fixture-fe12-chat-paid' }, ids.budi),
+  entity('message', ids.chatFlowMessage, { consultationId: ids.chatFlow, senderId: ids.vetZero, clientMessageId: 'fixture-fe12-initial-message', text: 'Selamat pagi, Pak Budi. Bagaimana kondisi Mawar hari ini?', deliveryStatus: 'sent', sentAt: fixtureUpdate }, ids.vetZero, ids.chatFlow),
+];
+
+export const chatFixtureRelations: EntityRelation[] = [
+  { sourceId: ids.chatFlow, targetId: ids.budi, relationship: 'farmer' },
+  { sourceId: ids.chatFlow, targetId: ids.vetZero, relationship: 'veterinarian' },
+  { sourceId: ids.chatFlow, targetId: ids.cow, relationship: 'animal' },
+  { sourceId: ids.chatFlowPayment, targetId: ids.chatFlow, relationship: 'payable' },
+  { sourceId: ids.chatFlowMessage, targetId: ids.chatFlow, relationship: 'consultation' },
 ];

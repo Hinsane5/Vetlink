@@ -286,3 +286,17 @@ You've reached the Figma MCP tool call limit on the Starter plan. Upgrade your p
 Tool MCP berjalan dan membalas permintaan; file utama melaporkan izin edit, sedangkan link terbaru melaporkan kuota. Ini bukan bukti kegagalan autentikasi dan berbeda dari `-32001: Unknown tool` pada sesi lama. Context/screenshot desain terbaru tidak berhasil diperoleh. Screenshot referensi lokal [vet-availability.png](reference/figma/screenshots/vet-availability.png) ditinjau untuk hierarki isi, tetapi cache tersebut tidak menggantikan pemeriksaan ulang Figma terkini.
 
 Sesuai arahan fallback pengguna, UI dibangun dari tokens lokal dan aturan produk: editor layanan/jam/tarif/durasi, timezone, blok, draft/back dialog, dan kalender harian/mingguan. Kalender menampilkan data scoped dan navigasi mengikuti timezone; persetujuan/availability off tidak menghapus appointment. Selisih fungsi dari prototype belum dibandingkan pada context terkini. Android screenshot produk, 390 × 844, layar kecil, font besar, dan pixel-match belum tersedia; startup Xiaomi hanya mencapai Pilih/Ganti Peran karena MIUI menolak tap `INJECT_EVENTS`.
+
+## Implementasi FE-12: chat lokal dua peran
+
+Mapping lokal yang sudah ada menamai Peternak Chat `12:2353`, Sent `12:2375`, Attachment `12:2394`, dan Dokter Chat `46:16` pada pemetaan/prototype proyek sebelumnya. Pada file terbaru yang diberi pengguna (`TPG6qZunK9EY4z1Vy0GKDx`), context dan screenshot diminta dari node ID `12:2353`, tetapi kedua pemanggilan ditolak kuota sebelum mengembalikan node tree/screenshot. Karena itu saya tidak mengklaim ID tersebut benar-benar hadir atau relevan di file terbaru. Ini bukan kegagalan autentikasi dan bukan error `-32001: Unknown tool`; MCP membalas dengan limit Starter yang sama persis:
+
+```text
+You've reached the Figma MCP tool call limit on the Starter plan. Upgrade your plan for more tool calls: https://www.figma.com/files/team/1688904264667270127/all-projects?upgrade=mcp_rate_limit_paywall
+```
+
+`figma_whoami` pada sesi ini membalas akun bertier Starter dengan seat View. Tidak ada akun lain yang digunakan untuk melewati akses. Skill `figma-design-to-code` telah dibaca sebelum pemanggilan context. Tidak ada screenshot lokal khusus Chat pada folder referensi, maka UI disusun mandiri dari tokens FE-01 dan aturan produk.
+
+`ChatFlow` memakai header peserta/status, kartu konteks konsultasi, pesan kronologis, attachment tiles, modal viewer foto, composer multiline, tombol lampiran/kirim berukuran minimal 44 dp, safe area, keyboard avoidance, scroll ke pesan terbaru, dan konfirmasi saat keluar dengan teks/media belum dikirim. `ChatBubble` mempertahankan metadata delivery dan aksi retry. Lucide menggantikan glyph prototype demi satu keluarga ikon. Status accepted/pembayaran dan scope participant menentukan kapan tombol chat terlihat; konsultasi selesai/dibatalkan menjadi riwayat read-only.
+
+Selisih/cakupan yang belum tercapai: foto memiliki viewer penuh, sedangkan video hanya membuka panel informasi nama/ukuran karena playback native belum terpasang. Tidak ada konteks desain terbaru untuk dibandingkan; ini bukan klaim pixel-match. ADB Android tidak dapat memulai daemon pada sesi ini, jadi screenshot UI Chat, perbandingan 390 × 844, viewport kecil/font besar, keyboard, scroll, retry dan Back Android **belum diuji**. Export bundle hanya membuktikan Metro berhasil membangun JS.

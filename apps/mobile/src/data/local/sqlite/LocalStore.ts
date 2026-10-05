@@ -12,6 +12,7 @@ import { HealthRecordService } from '../../../application/HealthRecordService';
 import { PatientService } from '../../../application/PatientService';
 import { FrontendPreviewService } from '../../../application/FrontendPreviewService';
 import { AvailabilityService } from '../../../application/AvailabilityService';
+import { ChatService } from '../../../application/ChatService';
 import { ConsultationService } from '../../../application/ConsultationService';
 import { BookingService } from '../../../application/BookingService';
 import { SqliteBookingRepository } from './SqliteBookingRepository';
@@ -34,6 +35,7 @@ export interface LocalStore {
   vetDirectory: VetDirectoryService;
   booking: BookingService;
   consultations: ConsultationService;
+  chat: ChatService;
   availability: AvailabilityService;
   authStore: ExpoSecureAuthStore;
   schemaVersion: number;
@@ -82,9 +84,11 @@ async function createLocalStore(): Promise<LocalStore> {
   const patients = new PatientService(repositories, profiles, healthRecords);
   const preview = new FrontendPreviewService(repositories, profiles);
   const vetDirectory = new VetDirectoryService(repositories, profiles);
-  const booking = new BookingService(new SqliteBookingRepository(database), attachmentMedia, new ExpoIdFactory());
-  const consultations = new ConsultationService(new SqliteBookingRepository(database), attachmentMedia, new ExpoIdFactory());
-  const availability = new AvailabilityService(new SqliteBookingRepository(database), attachmentMedia, new ExpoIdFactory());
+  const bookingRepository = new SqliteBookingRepository(database);
+  const booking = new BookingService(bookingRepository, attachmentMedia, new ExpoIdFactory());
+  const consultations = new ConsultationService(bookingRepository, attachmentMedia, new ExpoIdFactory());
+  const chat = new ChatService(bookingRepository, attachmentMedia, new ExpoIdFactory());
+  const availability = new AvailabilityService(bookingRepository, attachmentMedia, new ExpoIdFactory());
   const counts = await repositories.countAll();
 
   if (__DEV__) {
@@ -94,5 +98,5 @@ async function createLocalStore(): Promise<LocalStore> {
     );
   }
 
-  return { database, repositories, events, auth, profiles, dashboard, livestock, healthRecords, patients, preview, vetDirectory, booking, consultations, availability, authStore, schemaVersion, fixtureSeedVersion, seedResult };
+  return { database, repositories, events, auth, profiles, dashboard, livestock, healthRecords, patients, preview, vetDirectory, booking, consultations, chat, availability, authStore, schemaVersion, fixtureSeedVersion, seedResult };
 }

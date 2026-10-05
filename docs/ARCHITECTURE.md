@@ -86,7 +86,7 @@ Selector dashboard, jadwal, riwayat, pasien dan saldo membaca entitas yang sama.
 
 Port event menyimpan event, effect, notification, dan health projection dalam satu SQLite transaction. Constraint unik melindungi `(recipient_id, event_id)` untuk notification, `source_key` untuk health event, dan `(event_id, effect_key)` untuk effect. Tes perangkat FE-02 menjalankan retry event yang sama lalu memeriksa satu proyeksi per jenis sebelum membersihkan record probe development.
 
-Simulasi chat dua peran beroperasi pada instalasi yang sama. Tidak ada janji sinkronisasi antar perangkat atau realtime produksi. Jika backend diperkenalkan, API menjadi otoritas write untuk modul yang dipindahkan; cache lokal tidak boleh mengubah status finansial atau final note secara independen.
+FE-12 `ChatService` membaca/menulis Message dan Attachment lewat repository bersama dalam transaction queue SQLite. Kedua persona melihat percakapan dari data yang sama pada satu instalasi; participant, payment/status, pemilik file, relasi attachment, MIME dan URI diperiksa di service. Adapter lokal mengembalikan delivery `sent` tanpa jaringan; pending/failed dapat diuji dan retry memperbarui pesan yang sama memakai `clientMessageId`. Tidak ada realtime/sinkronisasi antar perangkat atau playback video. Jika backend diperkenalkan, adapter API menjadi otoritas write untuk modul yang dipindahkan; cache lokal tidak boleh mengubah status finansial atau final note secara independen.
 
 ## Use case yang memerlukan transaksi
 

@@ -1,6 +1,6 @@
 # Strategi pengujian VetLink
 
-Status QA per 6 Oktober 2026: bukti FE-00/02 sebelumnya tetap berlaku. Tahap aktif memakai frontend tanpa autentikasi/backend jaringan; Pilih Peran membuka persona lokal. UI FE-06–11 kini tersedia, termasuk booking, respons layanan, editor availability dan kalender. `npm run check` terbaru lulus typecheck, lint dan 70 tes domain/service; export Android lulus pada 746 modul. APK development terpasang pada Xiaomi dan startup mencapai Pilih/Ganti Peran; screenshot itu tidak membuktikan layar produk/flow sudah diuji. MIUI menolak tap ADB, sehingga form, filter, picker, kalender, keyboard/dialog/back/scroll, cold restart draft perangkat, viewport kecil/font besar dan pembandingan visual 390 × 844 belum terbukti. Figma FE-11 node file utama terhalang izin edit; link terbaru terhalang kuota Starter.
+Status QA per 6 Oktober 2026: bukti FE-00/02 sebelumnya tetap berlaku. Tahap aktif memakai frontend tanpa autentikasi/backend jaringan; Pilih Peran membuka persona lokal. UI FE-06–12 tersedia, termasuk chat lokal dua peran. `npm run check` terbaru lulus typecheck, lint dan 79 tes domain/service; export Android lulus pada 749 modul. Xiaomi fisik membuka aplikasi sampai Pilih Peran dan screenshot tersimpan, tetapi satu tap ditolak MIUI dengan `INJECT_EVENTS`. Layar produk, form, filter, picker, kalender, chat, keyboard/dialog/back/scroll, cold restart draft perangkat, viewport kecil/font besar dan pembandingan visual 390 × 844 belum terbukti. Figma link terbaru terhalang kuota Starter.
 
 ## Level pengujian
 
@@ -341,12 +341,14 @@ Penerimaan UI FE-10 **Belum diuji/terblokir**: tabs/search/status/ID, membuka de
 | FE-08 | UI direktori/profil tersedia; interaksi/filter/slot/visual Android belum diuji |
 | FE-09 | UI booking tersedia; form/media/review/draft Android dan dependensi FE-11/19 belum diterima |
 | FE-10 | UI dan 12 tes baru tersedia; QA interaksi/visual Android serta integrasi pembayaran FE-19 belum diterima |
+| FE-11 | UI editor availability/kalender tersedia; seluruh interaksi layar dan visual belum diuji di Android |
+| FE-12 | UI chat tersedia dan 9 tes domain/repository lulus; chat pada layar Android, media viewer, retry sentuh, keyboard/scroll dan visual belum diuji |
 
 FE-01/03–11 tetap **Sedang dikerjakan**. Tidak menaikkan status fase berdasarkan screenshot startup. Untuk review manual: Dokter → Konsultasi → request VL-V-106 → terima/tolak/usulkan; Peternak → Konsultasi saya → layanan yang sama → respons usulan. Waktu fixture 7 Oktober 2026 11:00–12:00 Asia/Jakarta sengaja tidak digeser otomatis; setelah lewat, permintaan tidak dapat diterima, sesuai guard stale.
 
 ## Hasil pemeriksaan FE-11 — 6 Oktober 2026
 
-FE-11 menambahkan AvailabilityService/SQLite dan halaman Dokter **Jadwal → Atur ketersediaan**. Perubahan masih lokal dan tidak di-commit; FE-10 sudah di-commit sebagai `8dd97a0` sesuai instruksi sebelumnya. Tidak di-push. Frontend tetap tanpa autentikasi dan backend jaringan, serta simulator tidak dibuka.
+FE-11 menambahkan AvailabilityService/SQLite dan halaman Dokter **Jadwal → Atur ketersediaan**. FE-10 sebelumnya di-commit sebagai `8dd97a0`; FE-11 kini di-commit sebagai `917a83c` sesuai instruksi pengguna dan tidak di-push. FE-12 masih berada di working tree. Frontend tetap tanpa autentikasi/backend jaringan, serta simulator tidak dibuka.
 
 | Pemeriksaan | Hasil dan batas bukti |
 | --- | --- |
@@ -376,3 +378,22 @@ Penerimaan UI FE-11 **Belum diuji/terblokir**: navigasi tab Jadwal, buka/tutup e
 | FE-11 | UI editor availability/kalender tersedia; seluruh interaksi layar dan visual belum diuji di Android |
 
 FE-01 dan FE-03–11 tetap **Sedang dikerjakan**; status backlog mencerminkan bahwa acceptance Android/visual belum lengkap. Pengujian fase lain tidak diulang kecuali check regression yang berjalan bersama suite domain.
+
+## Hasil pemeriksaan FE-12 — 6 Oktober 2026
+
+FE-12 menambahkan `ChatService`/`ChatFlow` dan tombol chat dari detail konsultasi. Marker `fixture_chat_version=fe12-v1` menambahkan konsultasi chat fiktif Budi→Yuda/Mawar, payment lokal succeeded, dan pesan awal agar kedua persona utama bisa mencapai halaman yang sama. Ekstensi tidak mereset record/data existing. Jalur layar: Peternak Budi → **Konsultasi saya → Jadwal → VL-C-107**; Dokter Yuda → **Konsultasi → Jadwal → VL-C-107**.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm run check` dari `apps/mobile` | Lulus: typecheck, lint, 79 tes domain/service (9 baru untuk scope, payment/status guard, assigned participant, shared messages, media, clientMessageId, retry, rollback dan fixture extension) |
+| `npx expo export --platform android --output-dir /private/tmp/vetlink-fe12-export-final2` | Lulus: 749 modul; Hermes Android bundle 2,4 MB. Ini export JavaScript, bukan APK baru atau bukti semua layar terpasang |
+| Native build | Gradle tidak dijalankan; FE-12 hanya mengubah TypeScript/JavaScript serta data fixture SQLite. Tidak ada dependency/config native baru |
+| Xiaomi fisik `2311DRK48G` | ADB mendeteksi perangkat; APK development dibuka dan screenshot [fe12-startup-metro.png](reference/android/fe12-startup-metro.png) menunjukkan Pilih Peran. Ini smoke test startup, bukan bukti halaman Chat |
+| Interaksi perangkat | Satu tap tombol Lanjut gagal dengan pesan persis `java.lang.SecurityException: Injecting input events requires the caller (or the source of the instrumentation, if any) to have the INJECT_EVENTS permission.` Maka Chat tidak dibuka; interaksi UI **Belum diuji/terblokir**. Simulator tidak dibuka |
+| Figma | Skill `figma-design-to-code` dibaca. Context/screenshot diminta dari node `12:2353` pada link nyata `TPG6qZunK9EY4z1Vy0GKDx`, tetapi keduanya ditolak kuota Starter. Kehadiran/relevansi node itu pada file terbaru tidak dapat dipastikan. Tool tersedia dan membalas; bukan `-32001: Unknown tool` atau bukti auth gagal. Detail ada di [Figma mapping](FIGMA_MAPPING.md) |
+
+Tes FE-12 membuktikan service hanya membuka konsultasi chat dengan participant/relasi valid dan payment yang cocok; request belum diterima dan layanan belum dibayar tidak membuka chat; dokter assigned dengan verifikasi pending tidak dapat menulis; Peternak/Dokter ditugaskan membaca record sama; clientMessageId duplikat tidak menambah pesan dan isi berbeda ditolak; foto/video disalin privat dan viewer mengotorisasi ulang; write gagal merollback data/file; status failed dapat retry di record lama; pending baru tidak di-retry sebelum 30 detik; fixture hanya ditambahkan sekali.
+
+Penerimaan UI FE-12 **Belum diuji/terblokir**: membuka tab Jadwal dan Buka Chat di kedua peran, mengirim teks/media, viewer foto/video, status pending/failed dan retry sentuh, keyboard/composer/scroll, Back Android, pergantian persona, ukuran 390 × 844/layar kecil/font besar, serta pembandingan Figma. Foto mempunyai viewer penuh. Video bisa dipilih/dikirim dan detail lampirannya tampil, tetapi playback belum tersedia. Tidak ada sinkronisasi multi-device atau backend jaringan.
+
+FE-11 telah di-commit `917a83c` tanpa push. FE-12 belum di-commit. FE-01 dan FE-03–12 tetap **Sedang dikerjakan** sampai acceptance layar/visual Android yang tertunda selesai; screenshot startup atau service tests tidak dihitung sebagai kelulusan flow.

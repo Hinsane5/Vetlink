@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { validateFixtureGraph } from '../../../domain/fixtureValidation';
-import { consultationFixtureEntities, consultationFixtureRelations, directoryFixturePatches, fixtureEntities, fixtureIds, fixtureRelations, fixtureSeedVersion } from '../../../testing/fixtures';
+import { chatFixtureEntities, chatFixtureRelations, consultationFixtureEntities, consultationFixtureRelations, directoryFixturePatches, fixtureEntities, fixtureIds, fixtureRelations, fixtureSeedVersion } from '../../../testing/fixtures';
 import { insertEntity, insertRelations } from './entitySql';
 
 const seededAt = '2026-10-05T00:00:00.000Z';
@@ -11,7 +11,7 @@ export type SeedResult =
   | { status: 'skipped-nonempty'; entityCount: number; relationCount: number };
 
 export async function seedFixturesIfEmpty(database: SQLiteDatabase): Promise<SeedResult> {
-  validateFixtureGraph([...fixtureEntities, ...consultationFixtureEntities], [...fixtureRelations, ...consultationFixtureRelations]);
+  validateFixtureGraph([...fixtureEntities, ...consultationFixtureEntities, ...chatFixtureEntities], [...fixtureRelations, ...consultationFixtureRelations, ...chatFixtureRelations]);
   let result: SeedResult | undefined;
 
   await database.withExclusiveTransactionAsync(async (transaction) => {
@@ -22,6 +22,7 @@ export async function seedFixturesIfEmpty(database: SQLiteDatabase): Promise<See
       if (marker.value === fixtureSeedVersion) {
         await extendDirectoryFixtures(transaction);
         await extendConsultationFixtures(transaction);
+        await extendChatFixtures(transaction);
       }
       const counts = await getCounts(transaction);
       result = {
@@ -57,6 +58,7 @@ export async function seedFixturesIfEmpty(database: SQLiteDatabase): Promise<See
     );
     await transaction.runAsync('INSERT INTO app_metadata (key, value, updated_at) VALUES (?, ?, ?)', 'fixture_directory_version', 'fe08-v1', seededAt);
     await extendConsultationFixtures(transaction);
+    await extendChatFixtures(transaction);
     const afterSeed = await getCounts(transaction);
     result = {
       status: 'seeded',
@@ -119,4 +121,15 @@ async function extendConsultationFixtures(database: SQLiteDatabase): Promise<voi
   }
   await insertRelations(database, consultationFixtureRelations);
   await database.runAsync('INSERT INTO app_metadata (key, value, updated_at) VALUES (?, ?, ?)', 'fixture_consultations_version', 'fe10-v1', new Date().toISOString());
+}
+
+async function extendChatFixtures(database: SQLiteDatabase): Promise<void> {
+  if (await database.getFirstAsync("SELECT value FROM app_metadata WHERE key = 'fixture_chat_version'")) return;
+  for (const record of chatFixtureEntities) {
+    const existing = await database.getFirstAsync<{ id: string }>('SELECT id FROM entities WHERE id = ?', record.id);
+    if (existing) throw new Error('FE-12 fixture ID collision; existing data preserved.');
+    await insertEntity(database, record);
+  }
+  await insertRelations(database, chatFixtureRelations);
+  await database.runAsync('INSERT INTO app_metadata (key, value, updated_at) VALUES (?, ?, ?)', 'fixture_chat_version', 'fe12-v1', new Date().toISOString());
 }

@@ -1,6 +1,6 @@
 # Model data dan aturan status
 
-Status: kontrak domain untuk mobile lokal lalu backend; envelope SQLite/aturan dasar FE-02, autentikasi historis FE-03, profil FE-04, dashboard FE-05, ternak/riwayat/pasien FE-06/07, direktori/jadwal baca FE-08, draft/quote/booking menunggu pembayaran FE-09, respons/status/proposal/riwayat FE-10, serta ketersediaan dokter, tarif, blok waktu, draft pengaturan dan kalender FE-11 tersedia. ID menggunakan string stabil (UUID atau ekuivalen); kode tampilan seperti `VL-001` bukan primary key. Timestamp disimpan UTC, ditampilkan menggunakan timezone lokasi layanan (fixture `Asia/Jakarta`). Rupiah disimpan integer nonnegatif, bukan string `Rp...` atau float.
+Status: kontrak domain untuk mobile lokal lalu backend; envelope SQLite/aturan dasar FE-02, autentikasi historis FE-03, profil FE-04, dashboard FE-05, ternak/riwayat/pasien FE-06/07, direktori/jadwal baca FE-08, draft/quote/booking menunggu pembayaran FE-09, respons/status/proposal/riwayat FE-10, ketersediaan dan kalender FE-11, serta chat lokal FE-12 tersedia. ID menggunakan string stabil (UUID atau ekuivalen); kode tampilan seperti `VL-001` bukan primary key. Timestamp disimpan UTC, ditampilkan menggunakan timezone lokasi layanan (fixture `Asia/Jakarta`). Rupiah disimpan integer nonnegatif, bukan string `Rp...` atau float.
 
 Entitas memiliki `id`, `createdAt`, `updatedAt`; entitas mutable memiliki `version` untuk konflik edit. Snapshot final/transaksi tidak dapat ditulis ulang. Nullable field dinyatakan pada implementasi schema, bukan diisi string kosong untuk relasi yang tidak ada.
 
@@ -34,7 +34,7 @@ Entitas memiliki `id`, `createdAt`, `updatedAt`; entitas mutable memiliki `versi
 | FollowUp | consultationId, animalId, vetId, startsAt/endsAt, kind(recheck), status, reason, followUpConsultationId optional; layanan baru memiliki parentConsultationId |
 | Reminder | animalId, consultationId/followUpId optional, ownerId, kind, dueAt, instructions, careStatus, deliveryStatus, completedAt |
 | ProgressReport | consultationId/followUpId, farmerId, animalId, text, attachmentIds[], submittedAt, viewedAt |
-| Message | consultationId, senderId, clientMessageId, text optional, attachmentIds[], deliveryStatus, sentAt |
+| Message | consultationId, senderId, clientMessageId, text optional, attachmentIds[], deliveryStatus, deliveryAttempt, deliveryAttemptAt, fingerprint, sentAt |
 | Attachment | ownerId, kind(image/video/document), MIME, filename, byteSize, localUri atau storageKey, accessContext, uploadStatus |
 | Product | nama, kategori, species[], description, unitPrice, imageAttachmentId, active; katalog fixture, bukan inventori dokter |
 | Cart / CartItem | farmerId, productId, quantity positif; total sebagai kalkulasi, bukan otoritas harga |
@@ -161,3 +161,11 @@ Attachment image/video dipilih pengguna, disalin privat ke document storage dan 
 Propose menyimpan previousStatus dan waktu baru pada ScheduleProposal tanpa mengganti waktu layanan. Konsultasi menjadi reschedule_pending dan waktu lama masih direservasi. Approve Peternak memeriksa ulang konflik/verifikasi/pembayaran, lalu mengganti waktu dan menjadi scheduled; decline mengembalikan requested/scheduled. Fixture FE-02 yang punya proposal pending pada scheduled ditangani sebagai previousStatus scheduled, tanpa menulis ulang pada bootstrap. Cancel sebelum visit dimulai menyupersede proposal. Reject/cancel berbayar menandai refundStatus=refund_needed; Payment succeeded dan ledger tetap utuh. Kebijakan refund produksi belum dipilih.
 
 Ekstensi fiktif `fixture_consultations_version=fe10-v1` menambahkan request kunjungan Budi→Yuda/Mawar 7 Oktober 2026 11:00–12:00 Asia/Jakarta dan payment succeeded Rp150.000 sekali, agar frontend persona Dokter mempunyai request. Base fixture tetap terpisah; keputusan yang disimpan tidak di-reset saat bootstrap. Booking baru FE-09 tetap awaiting_payment sampai FE-19 dibuat. Database fleksibel schema 2 dipakai kembali; tidak ada migrasi destruktif atau otoritas data baru.
+
+## Realisasi chat FE-12
+
+`ChatService` membatasi percakapan ke consultation bertipe chat dengan relasi farmer/veterinarian/animal valid dan Payment succeeded yang payable/owner/amount cocok. Status accepted/scheduled/in_progress membuka penulisan; terminal dibaca saja. Akses selalu diperiksa ulang lewat owner/assignment dan ID konteks; retry hanya untuk pesan pemiliknya. Lampiran `Attachment` terkait ke `Message`, memiliki `contextId=messageId`, `accessContext=consultation`, `uploadStatus=local`, dan URI dalam document storage privat. UI hanya menerima image/video, teks maksimal 4.000 karakter dan lima lampiran per pesan.
+
+Message menyimpan `clientMessageId` dan fingerprint input sebagai kunci idempotensi. Duplicate ID dengan isi/konsultasi berbeda ditolak; kiriman berulang yang sama mengembalikan record tersimpan. Delivery adapter lokal menyimpan `sent` pada SQLite yang sama agar persona Peternak/Dokter pada satu instalasi membaca pesan yang sama. Status `pending/failed` dan jumlah/waktu percobaan tersimpan; retry memperbarui record pesan lama, tidak menambah pesan baru. Tidak ada sinkronisasi multi-device, realtime server, upload jarak jauh, atau pemutaran video pada tahap ini.
+
+Marker `fixture_chat_version=fe12-v1` menambahkan konsultasi chat fiktif Budi→Yuda/Mawar, payment lokal succeeded, dan pesan awal agar flow dapat dijangkau oleh persona aktif kedua peran. Ekstensi berjalan satu kali di instalasi seed FE-02, transaction rollback bila ada kegagalan, tidak mengganti isi atau status record lain, dan tidak me-reset keputusan fixture.

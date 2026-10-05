@@ -1,6 +1,6 @@
 # Katalog fitur VetLink
 
-Status implementasi per fitur dicatat pada [backlog frontend](backlog/FRONTEND.md); FE-00/02 selesai dan FE-01/03–08 sedang dikerjakan. Flow frontend aktif memakai persona lokal tanpa autentikasi/backend jaringan; penerimaan UI Android belum lengkap. Prioritas P0 = fondasi dan flow wajib; P1 = kelengkapan scope lokal. P1 tetap wajib sebelum milestone seluruh scope lokal diterima. Acuan fitur: permintaan pengguna; detail visual: [Figma mapping](FIGMA_MAPPING.md).
+Status implementasi per fitur dicatat pada [backlog frontend](backlog/FRONTEND.md); FE-00/02 selesai dan FE-01/03–12 sedang dikerjakan. Flow frontend aktif memakai persona lokal tanpa autentikasi/backend jaringan; penerimaan UI Android belum lengkap. Prioritas P0 = fondasi dan flow wajib; P1 = kelengkapan scope lokal. P1 tetap wajib sebelum milestone seluruh scope lokal diterima. Acuan fitur: permintaan pengguna; detail visual: [Figma mapping](FIGMA_MAPPING.md).
 
 ## Peternak
 
@@ -57,7 +57,7 @@ Status implementasi per fitur dicatat pada [backlog frontend](backlog/FRONTEND.m
 | Data/akun | CRUD tersimpan di satu database perangkat; sesi lokal melalui adapter autentikasi | Tidak menyediakan keamanan akun atau login antar perangkat setara backend |
 | Reset password | Form dan hasil layanan pemulihan lokal; skenario berhasil/gagal diuji lewat adapter | Tidak mengirim email/SMS nyata atau mengklaim tautan sudah dikirim oleh provider |
 | Verifikasi | Dokumen lokal dan status fixture/service lokal | Tidak menilai keabsahan izin profesi |
-| Chat | Message disimpan, delivery status dari adapter lokal; lawan bicara lewat sesi akun lain di instalasi yang sama atau fixture balasan | Tidak ada realtime lintas perangkat; balasan fixture tidak menjadi instruksi medis nyata |
+| Chat | Pesan teks/foto/video dan delivery status tersimpan di SQLite; persona Peternak/Dokter assigned pada instalasi yang sama melihat conversation yang sama | Tidak ada realtime/sinkronisasi lintas perangkat; video playback belum tersedia |
 | Pembayaran | Adapter hasil pending/succeeded/failed; ID transaksi dan status persisten | Tidak memindahkan uang, tidak memakai rekening pengguna nyata |
 | Pengiriman | Shipment timeline dari adapter lokal dengan hasil tersimpan | Tidak menghubungi kurir atau melacak GPS nyata |
 | Notifikasi | Inbox lokal dibentuk dari event; pengiriman simulasi tercatat | Tidak ada push produksi dan tidak menjamin alarm saat aplikasi ditutup |

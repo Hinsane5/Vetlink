@@ -23,6 +23,7 @@ export function ChatBubble({
   const outgoing = direction === 'outgoing';
   const foreground = outgoing ? colors.white : colors.dark;
   const metadataColor = outgoing ? colors.cream : colors.brown;
+  const retryable = deliveryState !== 'sent' && Boolean(onRetry);
   const deliveryLabel = deliveryState === 'pending'
     ? ' · Menunggu terkirim'
     : deliveryState === 'failed'
@@ -31,10 +32,10 @@ export function ChatBubble({
 
   return (
     <View
-      accessible={!(deliveryState === 'failed' && onRetry)}
+      accessible={!retryable}
       accessibilityRole="text"
       accessibilityLabel={`${message}. ${author}, ${timeLabel}${deliveryLabel}`}
-      accessibilityHint={deliveryState === 'failed' && onRetry ? 'Ketuk Kirim ulang untuk mencoba lagi.' : undefined}
+      accessibilityHint={retryable ? 'Ketuk Coba lagi untuk mengirim pesan ini.' : undefined}
       style={[
         styles.bubble,
         {
@@ -47,16 +48,16 @@ export function ChatBubble({
       <Text style={[styles.message, { color: foreground }]}>{message}</Text>
       <View style={styles.metadataRow}>
         <Text style={[styles.metadata, { color: metadataColor }]}>{author} · {timeLabel}{deliveryLabel}</Text>
-        {deliveryState === 'failed' && onRetry ? (
+        {retryable && onRetry ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Kirim ulang pesan"
-            accessibilityHint="Coba kirim pesan ini kembali."
+            accessibilityLabel="Coba lagi mengirim pesan"
+            accessibilityHint="Kirim ulang pesan yang sama pada percakapan ini."
             hitSlop={4}
             onPress={onRetry}
             style={styles.retry}
           >
-            <Text style={[styles.retryLabel, { color: metadataColor }]}>Kirim ulang</Text>
+            <Text style={[styles.retryLabel, { color: metadataColor }]}>Coba lagi</Text>
           </Pressable>
         ) : null}
       </View>
