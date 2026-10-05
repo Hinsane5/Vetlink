@@ -14,6 +14,7 @@ export interface DashboardConsultationItem {
   otherPartyName: string;
   type: DashboardServiceType;
   status: string;
+  previousStatus?: string;
   startsAt: string | null;
   endsAt: string | null;
   complaint: string;
@@ -74,7 +75,7 @@ export interface DashboardContextDetail {
   visitAddress: string | null;
 }
 
-const activeConsultationStatuses = new Set(['requested', 'scheduled', 'in_progress']);
+const activeConsultationStatuses = new Set(['requested', 'scheduled', 'reschedule_pending', 'in_progress']);
 const appointmentStatuses = new Set(['scheduled', 'in_progress']);
 
 export function selectFarmerDashboard(input: {
@@ -129,7 +130,7 @@ export function selectVetDashboard(input: {
     .filter((item) => item.status === 'requested')
     .sort(compareStartsAt);
   const appointments = consultations
-    .filter((item) => appointmentStatuses.has(item.status))
+    .filter((item) => appointmentStatuses.has(item.status) || (item.status === 'reschedule_pending' && item.previousStatus === 'scheduled'))
     .filter((item) => item.status === 'in_progress' || !item.startsAt ||
       Date.parse(item.startsAt) >= input.now.getTime() || localDateKey(new Date(item.startsAt)) === localDateKey(input.now))
     .sort(compareStartsAt);

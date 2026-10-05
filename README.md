@@ -2,7 +2,7 @@
 
 Aplikasi mobile berbahasa Indonesia untuk pengelolaan kesehatan ternak, konsultasi dokter hewan, kunjungan, dan pembelian produk kesehatan hewan.
 
-**Fokus saat ini: flow frontend Android tanpa autentikasi dan tanpa backend jaringan.** Aplikasi membuka “Pilih Peran”, lalu langsung menampilkan data fiktif lokal untuk Peternak atau Dokter. FE-06 menyediakan pengelolaan ternak; FE-07 menyediakan riwayat kesehatan dan pasien. FE-08 menambahkan direktori/profil dokter, pencarian, filter, tarif, jadwal 7 hari, serta ulasan. FE-09 menambahkan booking chat/kunjungan, draft, pemilihan media dan review biaya hingga status menunggu pembayaran. FE-00/02 selesai; FE-01/03/04/05/06/07/08/09 tetap berstatus sedang dikerjakan karena penerimaan visual dan interaksi perangkat belum lengkap. Typecheck, lint dan 49 tes domain/service FE-09 lulus; export Android dan Gradle debug APK lulus. Rincian bukti perangkat ada di Testing. Xiaomi memuat bundle terbaru sampai layar awal; MIUI masih menolak tap ADB sehingga interaksi layar FE-06/07/08/09 dan perbandingan visual belum dapat dinyatakan lulus.
+**Fokus saat ini: flow frontend Android tanpa autentikasi dan tanpa backend jaringan.** Aplikasi membuka “Pilih Peran”, lalu langsung menampilkan data fiktif lokal untuk Peternak atau Dokter. FE-06 menyediakan pengelolaan ternak; FE-07 menyediakan riwayat kesehatan dan pasien. FE-08 menambahkan direktori/profil dokter, pencarian, filter, tarif, jadwal 7 hari, serta ulasan. FE-09 menambahkan booking chat/kunjungan, draft, pemilihan media dan review biaya hingga status menunggu pembayaran. FE-00/02 selesai; FE-01/03/04/05/06/07/08/09/10 tetap berstatus sedang dikerjakan karena penerimaan visual dan interaksi perangkat belum lengkap. FE-10 menambahkan daftar/detail layanan, tab riwayat, terima/tolak beralasan, usulan jadwal dan respons Peternak, draft, serta pembatalan. Typecheck, lint dan 61 tes domain/service lulus; export Android FE-10 lulus memakai APK development yang sudah terpasang dan Metro. Rincian bukti perangkat ada di Testing. Xiaomi memuat bundle terbaru sampai layar awal; MIUI masih menolak tap ADB sehingga interaksi layar FE-06/07/08/09/10 dan perbandingan visual belum dapat dinyatakan lulus.
 
 ## Arah yang telah dipilih
 
@@ -117,3 +117,16 @@ Verifikasi FE-08: `npm run check` lulus dengan 40 tes, termasuk delapan skenario
 
 
 Verifikasi FE-09: `npm run check` lulus (49 tes, termasuk sembilan skenario booking); export Android lulus (740 modul, 2,2 MB); Gradle `assembleDebug` lulus (24 menit 51 detik, 492 tasks). APK dipasang dengan `install -r` dan dibuka di Xiaomi melalui Metro offline port 8102; [screenshot startup](docs/reference/android/fe09-ui-startup-after-build.png) membuktikan layar awal, bukan interaksi Booking. MIUI tetap menolak tap `INJECT_EVENTS`, termasuk setelah instalasi build baru. Draft/file/video pada perangkat, form, keyboard/back/dialog/scroll serta visual 390 × 844/kecil/font besar belum diuji; pembayaran FE-19 belum tersedia. FE-09 tetap Sedang dikerjakan. Bukti dan perintah aktual ada di [Testing](docs/TESTING.md).
+
+## Iterasi frontend melalui Metro
+
+Untuk perubahan TypeScript/JS, gunakan APK development yang sudah terpasang; tidak perlu membangun native APK setiap fase. Perintah yang dipakai pada Xiaomi:
+
+```sh
+cd apps/mobile
+EXPO_OFFLINE=1 npx expo start --dev-client --port 8102 --localhost
+```
+
+Hubungkan USB dengan `adb reverse tcp:8102 tcp:8102`, lalu buka development client VetLink ke `http://127.0.0.1:8102`. Native build diperlukan kembali bila dependency/config native berubah. Pertahankan cache Gradle `/private/tmp/vetlink-gradle`; jangan menjalankan clean untuk iterasi UI rutin.
+
+Checkpoint FE-06–09 di-commit sebagai `d21126a` (`feat: checkpoint frontend flows through FE-09`) sesuai instruksi pengguna; tidak di-push. FE-10 berikutnya masih merupakan perubahan working tree. `npm run check` lulus 61 tes dan export Android lulus 743 modul/2,3 MB. [Screenshot Metro Xiaomi](docs/reference/android/fe10-ui-startup-metro.png) hanya membuktikan layar awal. Input ADB ditolak MIUI; interaksi dan visual FE-10 belum diuji. Pembayaran booking baru menunggu FE-19; request yang dapat ditanggapi saat ini berasal dari data fiktif pra-bayar. Rincian ada di [Testing](docs/TESTING.md).

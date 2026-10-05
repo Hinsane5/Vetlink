@@ -216,6 +216,7 @@ export class DashboardService {
         otherPartyName: otherParty ? stringValue(otherParty.payload.name) || 'Pengguna' : role === 'farmer' ? 'Dokter hewan' : 'Peternak',
         type: record.payload.type === 'chat' || record.payload.type === 'visit' ? record.payload.type : 'unknown',
         status: stringValue(record.payload.status) || 'unknown',
+        previousStatus: stringValue(record.payload.previousStatus),
         startsAt: stringValue(record.payload.startsAt) || null,
         endsAt: stringValue(record.payload.endsAt) || null,
         complaint: stringValue(record.payload.complaint),
@@ -268,6 +269,7 @@ function consultationStatusLabel(status: string): string {
     case 'requested': return 'Menunggu dokter';
     case 'awaiting_payment': return 'Menunggu pembayaran';
     case 'scheduled': return 'Terjadwal';
+    case 'reschedule_pending': return 'Menunggu respons jadwal';
     case 'in_progress': return 'Berlangsung';
     case 'completed': return 'Selesai';
     case 'rejected': return 'Ditolak';

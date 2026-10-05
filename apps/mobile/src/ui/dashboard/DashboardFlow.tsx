@@ -20,6 +20,7 @@ import { Icon, type IconName } from '../components/Icon';
 import { StatusBadge, type StatusTone } from '../components/StatusBadge';
 import { LivestockFlow, type LivestockRoute } from '../livestock/LivestockFlow';
 import { PatientFlow } from '../patients/PatientFlow';
+import { ConsultationFlow } from '../consultations/ConsultationFlow';
 import { BookingFlow } from '../booking/BookingFlow';
 import { VetDirectoryFlow } from '../directory/VetDirectoryFlow';
 import { colors, fonts, layout, radii, roleTokens, spacing, typeScale } from '../theme/tokens';
@@ -71,7 +72,7 @@ export function DashboardFlow({ store, session, onOpenProfile, onSwitchRole, onL
   }, [reload]);
 
   useEffect(() => {
-    if (route.type !== 'detail') return;
+    if (route.type !== 'detail' || route.kind === 'consultation') return;
     let mounted = true;
     store.dashboard.loadContext(session.userId, role, route.kind, route.id).then((next) => {
       if (mounted) setDetail(next);
@@ -97,7 +98,7 @@ export function DashboardFlow({ store, session, onOpenProfile, onSwitchRole, onL
         setRoute(route.vetId ? { type: 'doctors' } : { type: 'home' });
         return true;
       }
-      if (route.type === 'livestock' || route.type === 'booking') return false;
+      if (route.type === 'livestock' || route.type === 'booking' || route.type === 'list' || (route.type === 'detail' && route.kind === 'consultation')) return false;
       if (route.type !== 'home') {
         setRoute({ type: 'home' });
         return true;
@@ -135,10 +136,11 @@ export function DashboardFlow({ store, session, onOpenProfile, onSwitchRole, onL
     );
   }
 
-  const listItems = route.type === 'list' ? getListItems(snapshot, route.kind) : [];
   return (
     <View style={styles.fullScreen}>
-      {route.type === 'booking' ? (
+      {route.type === 'list' || (route.type === 'detail' && route.kind === 'consultation') ? (
+        <ConsultationFlow key={route.type === 'detail' ? route.id : route.kind} store={store} session={session} initialId={route.type === 'detail' ? route.id : undefined} initialTab={route.type === 'list' && route.kind === 'appointments' ? 'appointments' : 'requests'} onExit={() => { setRoute({ type: 'home' }); void reload(); }} onOpenAnimal={(id) => setRoute(role === 'vet' ? { type: 'patients', patientId: id } : { type: 'livestock', screen: 'detail', livestockId: id })} />
+      ) : route.type === 'booking' ? (
         <BookingFlow store={store} userId={session.userId} vetId={route.vetId} onBack={() => setRoute({ type: 'doctors', vetId: route.vetId })} onComplete={(id) => { void reload(); openContext('consultation', id); }} />
       ) : route.type === 'livestock' ? (
         <LivestockFlow
@@ -162,16 +164,6 @@ export function DashboardFlow({ store, session, onOpenProfile, onSwitchRole, onL
           snapshot.role === 'farmer'
             ? <FarmerDashboard snapshot={snapshot} error={error} onOpenMenu={() => setMenuVisible(true)} onOpenList={(kind) => setRoute({ type: 'list', kind })} onAddLivestock={() => setRoute({ type: 'livestock', screen: 'form', mode: 'create', returnTo: 'list' })} onOpenContext={openContext} />
             : <VetDashboard snapshot={snapshot} error={error} availabilityBusy={availabilityBusy} onAvailability={(value) => void changeAvailability(value)} onOpenList={(kind) => setRoute({ type: 'list', kind })} onOpenContext={openContext} onOpenMenu={() => setMenuVisible(true)} />
-        ) : null}
-        {route.type === 'list' ? (
-          <DashboardList
-            role={role}
-            title={listTitle(role, route.kind)}
-            items={listItems}
-            kind={route.kind}
-            onBack={() => setRoute({ type: 'home' })}
-            onOpenContext={openContext}
-          />
         ) : null}
         {route.type === 'detail' ? (
           <DashboardDetail
@@ -199,7 +191,7 @@ export function DashboardFlow({ store, session, onOpenProfile, onSwitchRole, onL
         ) : null}
       </ScrollView>
       )}
-      {route.type !== 'booking' && !(route.type === 'patients' && route.patientId) && !(route.type === 'livestock' && route.screen !== 'list') && !(route.type === 'doctors' && route.vetId) ? (
+      {route.type !== 'booking' && route.type !== 'list' && !(route.type === 'detail' && route.kind === 'consultation') && !(route.type === 'patients' && route.patientId) && !(route.type === 'livestock' && route.screen !== 'list') && !(route.type === 'doctors' && route.vetId) ? (
         <BottomNavigation role={role} route={route} onSelect={(next) => setRoute(next)} onOpenProfile={onOpenProfile} />
       ) : null}
       <AccountMenu
@@ -399,49 +391,6 @@ function VetAgendaRow({ item, onPress }: { item: DashboardConsultationItem; onPr
   );
 }
 
-function DashboardList({ role, title, items, kind, onBack, onOpenContext }: {
-  role: AccountRole;
-  title: string;
-  items: DashboardConsultationItem[];
-  kind: 'consultations' | 'appointments';
-  onBack: () => void;
-  onOpenContext: (kind: 'consultation', id: string) => void;
-}) {
-  return (
-    <View style={styles.listScreen}>
-      <View style={styles.routeHeader}>
-        <RoundAction label="Kembali ke beranda" icon="arrow-left" onPress={onBack} />
-        <Text accessibilityRole="header" style={styles.routeTitle}>{title}</Text>
-        <View style={styles.headerSpacer} />
-      </View>
-      {items.length ? (
-        <View style={styles.rows}>
-          {items.map((item) => (
-            <AppointmentRow
-              key={item.id}
-              role={role}
-              title={role === 'vet' ? `${item.otherPartyName} · ${item.animalName}` : item.otherPartyName}
-              description={`${item.animalName} · ${serviceTypeLabel(item.type)} · ${item.displayCode}`}
-              dateLabel={formatDateTime(item.startsAt)}
-              statusLabel={consultationStatusLabel(item.status)}
-              statusTone={statusTone(item.status)}
-              leading={<LeadingIcon icon={kind === 'appointments' ? 'calendar-days' : 'stethoscope'} role={role} />}
-              onPress={() => onOpenContext('consultation', item.id)}
-            />
-          ))}
-        </View>
-      ) : (
-        <EmptyState
-          title={kind === 'appointments' ? 'Belum ada janji' : 'Belum ada konsultasi'}
-          description={kind === 'appointments' ? 'Jadwal yang sudah diterima akan tampil di sini.' : 'Permintaan dan konsultasi aktif akan tampil di sini.'}
-          role={role}
-          style={styles.inlineEmpty}
-        />
-      )}
-    </View>
-  );
-}
-
 function DashboardDetail({ role, detail, loading, error, onBack, onRetry }: {
   role: AccountRole;
   detail: DashboardContextDetail | null;
@@ -594,21 +543,6 @@ function AccountMenu({ visible, role, onClose, onProfile, onSwitchRole, onLogout
   );
 }
 
-function getListItems(snapshot: DashboardSnapshot, kind: 'consultations' | 'appointments'): DashboardConsultationItem[] {
-  if (snapshot.role === 'farmer') return snapshot.activeConsultations;
-  if (kind === 'appointments') return snapshot.upcomingAppointments;
-  const all = [...snapshot.newRequests, ...snapshot.upcomingAppointments];
-  return [...new Map(all.map((item) => [item.id, item])).values()].sort((left, right) => {
-    const leftAt = left.startsAt ? Date.parse(left.startsAt) : Number.MAX_SAFE_INTEGER;
-    const rightAt = right.startsAt ? Date.parse(right.startsAt) : Number.MAX_SAFE_INTEGER;
-    return leftAt - rightAt;
-  });
-}
-
-function listTitle(role: AccountRole, kind: 'consultations' | 'appointments'): string {
-  return kind === 'appointments' ? 'Jadwal' : role === 'farmer' ? 'Konsultasi saya' : 'Konsultasi';
-}
-
 function greeting(): string {
   const hour = new Date().getHours();
   if (hour < 11) return 'Selamat pagi';
@@ -654,6 +588,7 @@ function consultationStatusLabel(status: string): string {
     case 'requested': return 'Menunggu dokter';
     case 'awaiting_payment': return 'Menunggu pembayaran';
     case 'scheduled': return 'Terjadwal';
+    case 'reschedule_pending': return 'Menunggu respons jadwal';
     case 'in_progress': return 'Berlangsung';
     case 'completed': return 'Selesai';
     case 'rejected': return 'Ditolak';

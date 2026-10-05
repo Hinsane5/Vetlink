@@ -13,6 +13,8 @@ export const entityKinds = [
   'healthEvent',
   'consultation',
   'scheduleProposal',
+  'consultationAction',
+  'consultationDraft',
   'visit',
   'clinicalNote',
   'recommendation',

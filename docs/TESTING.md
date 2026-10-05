@@ -1,6 +1,6 @@
 # Strategi pengujian VetLink
 
-Status QA per 5 Oktober 2026: bukti FE-00/02 sebelumnya tetap berlaku. Tahap aktif memakai frontend tanpa autentikasi/backend jaringan; Pilih Peran membuka persona lokal. UI FE-06/07/08 tersedia dan FE-09 menambahkan booking/draft/media/review hingga awaiting_payment. Typecheck, lint dan 49 tes domain/service lulus. Export Android dan Gradle debug build FE-09 lulus; APK terpasang pada Xiaomi. Rincian dicatat pada bagian terbaru di bawah; bukti startup tidak berarti form sudah diuji. MIUI menolak input ADB, sehingga form/picker/keyboard/dialog/back/scroll, draft cold restart perangkat, viewport kecil/font besar dan pembandingan visual 390 × 844 belum terbukti. Figma Booking terhalang izin file utama dan kuota Starter pada link terbaru.
+Status QA per 6 Oktober 2026: bukti FE-00/02 sebelumnya tetap berlaku. Tahap aktif memakai frontend tanpa autentikasi/backend jaringan; Pilih Peran membuka persona lokal. UI FE-06/07/08 tersedia dan FE-09 menambahkan booking/draft/media/review hingga awaiting_payment. FE-10 menambahkan UI respons layanan/proposal dan histori. Typecheck, lint dan 61 tes domain/service lulus. Export Android FE-10 lulus melalui Metro; Gradle debug build terakhir FE-09 lulus; APK terpasang pada Xiaomi. Rincian dicatat pada bagian terbaru di bawah; bukti startup tidak berarti form sudah diuji. MIUI menolak input ADB, sehingga form/picker/keyboard/dialog/back/scroll, draft cold restart perangkat, viewport kecil/font besar dan pembandingan visual 390 × 844 belum terbukti. Figma Booking/Requests terhalang izin file utama dan kuota Starter pada link terbaru.
 
 ## Level pengujian
 
@@ -300,3 +300,46 @@ env GRADLE_USER_HOME=/private/tmp/vetlink-gradle ANDROID_HOME=/Volumes/HowSSD/An
 ```
 
 Runtime diuji dengan `npm start -- --port 8102 --offline` dari `apps/mobile`, reverse USB port 8102, force-stop lalu buka kembali lewat deep link development client. Ini bukti bootstrap APK/bundle terbaru; tidak dihitung sebagai kelulusan draft/form cold restart Android. Paket APK: `apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk`. `git diff --check` akhir bersih; tidak ada commit/push.
+
+## Hasil pemeriksaan FE-10 — 6 Oktober 2026
+
+Checkpoint progres FE-06–09 di-commit sebagai `d21126a` (`feat: checkpoint frontend flows through FE-09`) atas instruksi pengguna, setelah status/diff diperiksa. Tidak di-push. Implementasi FE-10 selanjutnya berada di working tree. Frontend tetap tanpa autentikasi/backend jaringan; tidak membuka simulator.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm run check` | Lulus: typecheck, lint, 61 tes domain/service; 12 skenario FE-10 memakai SQLite sebenarnya in-memory, migration/seed dan adapter bersama |
+| `npx expo export --platform android --output-dir /private/tmp/vetlink-fe10-export-final` | Lulus: 743 modul, bundle 2,3 MB. Export JS/Hermes, bukan APK baru atau bukti interaksi |
+| Native APK | APK development FE-09 yang sudah terpasang dipakai kembali dengan Metro offline port 8102. Tidak ada dependency/config native baru; Gradle build/install baru tidak dijalankan untuk FE-10 |
+| Xiaomi fisik | ADB melihat `WOGYXS4THUQ8H6UO`, model `2311DRK48G`; USB reverse/deep link membuka bundle terbaru sampai Pilih Peran. [Screenshot startup](reference/android/fe10-ui-startup-metro.png) diperiksa; inset layar awal terlihat, gear Tools berasal dari development client. Ini smoke startup terbatas |
+| Database perangkat | Salinan baca DB+WAL setelah force-stop: integrity_check=ok, foreign_key_check kosong, 66 entitas/87 relasi; marker fixture_consultations_version=fe10-v1, request baru requested dan payment succeeded. Satu bookingDraft existing tetap ada; tidak menghapus/reset data perangkat. Bukti diperlukan karena ekstensi fixture baru, bukan pengulangan seluruh FE-02 |
+| Input Android | Tap pada peran Dokter ditolak, exit 255: `java.lang.SecurityException: Injecting input events requires the caller (or the source of the instrumentation, if any) to have the INJECT_EVENTS permission.` Tidak mengubah keamanan MIUI atau bypass batas tersebut |
+| Figma | Context dan screenshot node nyata Requests 46:8 pada file utama gagal izin edit; context dan screenshot root nyata 93:7181 link terbaru gagal kuota Starter. Error persis ada di FIGMA_MAPPING; tool MCP tersedia, bukan Unknown tool atau bukti auth gagal |
+
+Tes FE-10 membuktikan:
+
+- List/detail scoped sesuai owner/assignment, peran salah/akun asing dan Dokter membuka booking unpaid ditolak; histori tidak dibatasi ringkasan dashboard.
+- Accept atomik menghasilkan scheduled dan Visit scheduled sekali; retry dua instance tidak menggandakan audit/visit. Reuse operationKey untuk keputusan berbeda dan versi stale ditolak.
+- Penulisan memeriksa ulang trusted verification, payment succeeded dengan payable/owner/amount yang cocok, waktu future, jam praktik dan konflik blocked slot.
+- Reject wajib alasan; reject/cancel berbayar hanya menandai refund_needed. Payment dan ledger tidak dianggap sudah direfund atau berubah. Pembatalan awaiting_payment tidak menghasilkan refund palsu.
+- Propose mempertahankan waktu lama dan reservasinya. Decline memulihkan requested/scheduled. Approve memeriksa konflik kembali sebelum mengganti waktu; tarif snapshot tetap sama.
+- Proposal fixture lama pada scheduled ditanggapi tanpa reset; kunjungan yang sudah en_route tidak dapat dibatalkan/dijadwalkan ulang. Cancel menyupersede usulan pending.
+- Kegagalan penulisan audit rollback status dan Visit; retry berhasil. Draft tetap tersedia pada instance baru, version conflict ditolak, discard tersimpan; bootstrap tidak menimpa keputusan sebelumnya.
+- Availability off mempertahankan layanan assigned, dashboard menjaga accepted appointment selama proposal pending. Lampiran harus tertaut dan milik owner/context booking submitted; URI asing/remote dan file yang removed tidak dibuka.
+- Ekstensi fixture gagal di Payment me-rollback request dan marker, lalu retry berhasil tanpa duplikasi.
+
+Penerimaan UI FE-10 **Belum diuji/terblokir**: tabs/search/status/ID, membuka detail, accept/reject/reason, slot proposal, konfirmasi terima/tolak usulan lintas peran, pembatalan, foto/error viewer, draft setelah cold restart perangkat, modal/back Android, keyboard/scroll, font besar/teks panjang dan visual 390 × 844/viewport kecil. Tes service di atas tidak membuktikan sentuhan UI. Video belum mempunyai playback. Payment-success → requested dari booking baru **Belum dapat diuji** sampai FE-19; request pra-bayar fiktif FE-10 hanya menyediakan data awal, bukan tombol mengubah status. Editor availability tetap FE-11.
+
+| Fase | Status QA setelah FE-10 |
+| --- | --- |
+| FE-00/02 | Bukti sebelumnya tetap berlaku; pemeriksaan ekstensi fixture dilakukan karena perubahan baru |
+| FE-01 | Perbandingan visual Android/Figma, viewport kecil dan font besar produk masih tertunda |
+| FE-03 | Auth tidak aktif sesuai arahan frontend; QA daftar/masuk/reset/logout/sesi ditunda |
+| FE-04 | Edit profil/farm/alamat, picker, penyimpanan lewat form, status verifikasi dan guard UI belum diuji |
+| FE-05 | Service/dashboard tetap diuji; interaksi kedua dashboard, CTA, empty/availability belum diuji |
+| FE-06 | UI sudah tersedia; search/filter/form/foto/edit/akses asing di Android belum diuji |
+| FE-07 | UI riwayat/pasien tersedia; interaksi/filter/form/viewer di Android belum diuji |
+| FE-08 | UI direktori/profil tersedia; interaksi/filter/slot/visual Android belum diuji |
+| FE-09 | UI booking tersedia; form/media/review/draft Android dan dependensi FE-11/19 belum diterima |
+| FE-10 | UI dan 12 tes baru tersedia; QA interaksi/visual Android serta integrasi pembayaran FE-19 belum diterima |
+
+FE-01/03–10 tetap **Sedang dikerjakan**. Tidak menaikkan status fase berdasarkan screenshot startup. Untuk review manual: Dokter → Konsultasi → request VL-V-106 → terima/tolak/usulkan; Peternak → Konsultasi saya → layanan yang sama → respons usulan. Waktu fixture 7 Oktober 2026 11:00–12:00 Asia/Jakarta sengaja tidak digeser otomatis; setelah lewat, permintaan tidak dapat diterima, sesuai guard stale.

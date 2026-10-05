@@ -236,3 +236,29 @@ Tool MCP tersedia; file utama gagal izin edit, link terbaru gagal kuota Starter.
 Referensi lokal lama [farmer-booking.png](reference/figma/screenshots/farmer-booking.png) (390 × 844) sudah ditinjau: header cokelat, pilihan layanan, tanggal/jam, ternak, keluhan/media, biaya dan tombol lanjut pembayaran. PNG itu membantu memahami struktur layar, bukan pemeriksaan ulang desain terkini dan bukan asset UI. Sesuai izin fallback pengguna, form dan review FE-09 dirancang mandiri menggunakan cream/brown/gold, Inter, Lucide, kartu, area sentuh minimal 44 dp, teks membungkus, scroll, inset shell/Modal dan keyboard avoidance shell.
 
 Selisih fungsi/visual: waktu berasal dari slot nyata dalam repository, bukan chips waktu statis; ternak dibatasi owner/farm serta species yang dilayani; kunjungan mewajibkan alamat; review biaya dipisah agar dapat ditinjau sebelum penulisan. Tombol prototype lanjut pembayaran menjadi Tinjau biaya → Konfirmasi booking karena pembayaran FE-19 belum tersedia. Hasil hanya awaiting_payment, tidak melompati requested/scheduled/chat. Draft tersimpan dan dialog tiga pilihan ditambahkan sesuai kontrak PRD. Video memakai glyph Lucide file-text sebagai penanda berkas; foto ditampilkan sebagai thumbnail. Belum ada playback video dalam form. Pixel-match, visual form Android 390 × 844, viewport kecil dan font besar belum dibuktikan; input ADB Xiaomi ditolak MIUI.
+
+## Implementasi FE-10: permintaan, jadwal dan riwayat
+
+Skill wajib `figma-design-to-code` dibaca sebelum get_design_context dengan screenshot diminta. Node nyata pada mapping file utama: Requests `46:8`, Request Detail `46:9`, Schedule `46:10`, Appointment Detail `46:13`, History `46:26`/`46:27`, serta riwayat Peternak `12:2459`/`12:2497`/`12:3225`/`12:2545`. Node tersebut relevan untuk FE-10; belum ditemukan frame khusus respons usulan Peternak. Context `46:8` pada `f1WBeG5S1OGXlPXyVEHjuW` gagal persis:
+
+```text
+Looks like you don't have edit access to this file. The file owner can share it with you and make you an editor.Figma Debug UUID: ada51865-c6a7-405f-a618-adf1d6416ac3
+```
+
+Screenshot langsung node tersebut juga gagal:
+
+```text
+Looks like you don't have edit access to this file. The file owner can share it with you and make you an editor.Figma Debug UUID: 990bcc4f-6342-40c7-b56f-4266c4ea4b2e
+```
+
+Context dan screenshot link terbaru memakai root nyata yang diberikan pengguna `93:7181`, bukan menebak ID child FE-10. Keduanya gagal persis:
+
+```text
+You've reached the Figma MCP tool call limit on the Starter plan. Upgrade your plan for more tool calls: https://www.figma.com/files/team/1688904264667270127/all-projects?upgrade=mcp_rate_limit_paywall
+```
+
+Respons berkode `INVALID_ARGUMENT`; pesan menunjukkan izin file utama dan kuota link terbaru. Tool MCP tersedia, bukan `-32001: Unknown tool` dan tidak ada bukti kegagalan autentikasi. Status akun terakhir yang berhasil diperiksa tetap Starter/seat View; tidak beralih ke akun lain. Konteks/screenshot FE-10 terbaru tidak diperoleh dan lokasi frame pada link terbaru belum dapat dipastikan.
+
+Sesuai izin pengguna, FE-10 dirancang mandiri memakai tokens Inter/cream/brown/gold, radius masing-masing peran, Lucide arrow-left, kartu, tombol minimal 44 dp dan scrolling. Tab Permintaan/Jadwal/Riwayat mencakup seluruh data scoped, termasuk booking awaiting_payment hanya untuk Peternak. Form alasan dan waktu baru, konfirmasi nyata, draft/back tiga pilihan, respons usulan, alasan pembatalan/penolakan dan timeline status ditambahkan sesuai fungsi PRD. Jadwal lama tidak berubah sampai Peternak menyetujui; pembayaran/refund tidak diberi tombol untuk melompati status. Foto dapat dibuka dengan pemeriksaan akses ulang; video dilabeli berkas dengan playback belum tersedia.
+
+Ini implementasi mandiri, bukan klaim pixel-match. [Screenshot Xiaomi](reference/android/fe10-ui-startup-metro.png) hanya menunjukkan layar Pilih Peran/inset shell; gear Tools adalah Expo development client. Daftar/detail/form/modal FE-10, viewport 390 × 844, ukuran kecil, font besar dan pembandingan visual belum diuji akibat penolakan input MIUI.

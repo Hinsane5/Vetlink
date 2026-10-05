@@ -69,6 +69,8 @@ export const fixtureIds = {
   chatPaymentSucceeded: id(63),
   visitPaymentSucceeded: id(64),
   yudaReview: id(65),
+  visitRequest: id(66),
+  visitRequestPayment: id(67),
 } as const;
 
 function entity(
@@ -252,3 +254,15 @@ link(ids.yudaReview, 'veterinarian', ids.vetZero);
 link(ids.yudaReview, 'farmer', ids.sari);
 
 export const fixtureSeedVersion = 'fe02-v1';
+
+// Extension FE-10: fictitious pre-paid request, independent of live FE-09 bookings.
+export const consultationFixtureEntities: DomainEntity[] = [
+  entity('consultation', ids.visitRequest, { displayCode: 'VL-V-106', farmerId: ids.budi, vetId: ids.vetZero, animalId: ids.cow, type: 'visit', status: 'requested', complaint: 'Pemeriksaan kondisi ternak di kandang.', startsAt: '2026-10-07T04:00:00.000Z', endsAt: '2026-10-07T05:00:00.000Z', feeSnapshot: 150000, commissionSnapshot: 15000, visitAddressSnapshot: 'Kandang Budi, Bogor' }, ids.budi),
+  entity('payment', ids.visitRequestPayment, { ownerId: ids.budi, payableType: 'consultation', payableId: ids.visitRequest, method: 'bank_transfer', amount: 150000, status: 'succeeded', operationKey: 'fixture-fe10-visit-request-paid' }, ids.budi),
+];
+export const consultationFixtureRelations: EntityRelation[] = [
+  { sourceId: ids.visitRequest, targetId: ids.budi, relationship: 'farmer' },
+  { sourceId: ids.visitRequest, targetId: ids.vetZero, relationship: 'veterinarian' },
+  { sourceId: ids.visitRequest, targetId: ids.cow, relationship: 'animal' },
+  { sourceId: ids.visitRequestPayment, targetId: ids.visitRequest, relationship: 'payable' },
+];

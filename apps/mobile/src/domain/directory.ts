@@ -51,7 +51,7 @@ export function projectDirectorySlots(
   const occupied = commitments.filter((item) => {
     if (item.kind === 'blockedTime') return true;
     if (item.kind === 'followUp') return item.payload.status === 'scheduled';
-    return ['awaiting_payment', 'requested', 'scheduled', 'in_progress'].includes(String(item.payload.status));
+    return ['awaiting_payment', 'requested', 'scheduled', 'reschedule_pending', 'in_progress'].includes(String(item.payload.status));
   });
   const slots = new Map<string, DirectorySlot>();
   for (let day = 0; day < 7; day += 1) {

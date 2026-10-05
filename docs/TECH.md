@@ -153,3 +153,9 @@ Pertanyaan ini tidak menghambat penyusunan dokumen atau adapter lokal. Catat jaw
 ## Realisasi FE-09: booking
 
 Tidak ada dependency atau kode Kotlin aplikasi baru. Photo/video memakai `expo-image-picker` yang sudah terpasang; file disalin lewat adapter `expo-file-system`. `SelectedAsset` kini mengenal video untuk booking, sedangkan validator foto profil/ternak dan dokumen verifikasi tetap membatasi jenis sebelumnya. Booking memakai React Native ScrollView/TextInput/Modal, tokens Inter/Lucide, safe-area provider Modal dan keyboard avoidance shell aktif. Penyimpanan draft/quote/consultation memakai adapter SQLite tunggal; tes integrasi transaksi menggunakan `node:sqlite` in-memory, bukan SQLite mock yang menggantikan SQL. Status/perintah pemeriksaan aktual ada di Testing.
+
+## Realisasi FE-10 dan iterasi cepat
+
+FE-10 memakai ConsultationService/ConsultationFlow, domain projection, dan adapter SQLite yang sudah ada; tanpa package/config native baru. Shared transaction queue menghindari nested exclusive transaction. Status, Proposal, Visit dan ConsultationAction disimpan atomik; audit append-only dan versi/operationKey menjaga retry. Draft usulan merupakan data domain lokal. UI menggunakan Inter/Lucide/tokens, native Modal, ScrollView/TextInput, safe area shell/viewer/dialog back serta keyboard avoidance shell.
+
+Pemeriksaan TypeScript/lint dan 61 tes SQLite/domain lulus; export Android 743 modul/2,3 MB lulus. Iterasi FE-10 memakai APK development FE-09 dan Metro offline 8102, tidak menjalankan Gradle assembleDebug baru. Build native hanya diulang saat dependency/config native berubah; cache Gradle dipertahankan. Ini bukan APK mandiri FE-10 untuk dibagikan. QA Android dan keterbatasan MIUI/Figma dicatat di Testing.

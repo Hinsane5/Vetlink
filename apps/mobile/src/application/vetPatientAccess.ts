@@ -4,6 +4,7 @@ import type { DomainRepository } from './ports/DomainRepository';
 const patientConsultationStatuses = new Set([
   'requested',
   'scheduled',
+  'reschedule_pending',
   'en_route',
   'arrived',
   'examining',

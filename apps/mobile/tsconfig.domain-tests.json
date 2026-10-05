@@ -30,6 +30,7 @@
     "src/domain/dashboard.ts",
     "src/domain/livestock.ts",
     "src/application/BookingService.ts",
+    "src/application/ConsultationService.ts",
     "src/data/local/sqlite/SqliteBookingRepository.ts"
   ]
 }

@@ -5,7 +5,7 @@ import { isEntityKind, type DomainEntity, type EntityKind, type EntityRelation }
 import { assertClinicalNoteFinalizable } from '../../../domain/policies';
 import { columnsForAlias, entityColumns, insertEntity, insertRelations, toDomainEntity, type EntityRow } from './entitySql';
 
-const immutableKinds = new Set<EntityKind>(['ledgerEntry', 'paymentAttempt', 'review']);
+const immutableKinds = new Set<EntityKind>(['ledgerEntry', 'paymentAttempt', 'review', 'consultationAction']);
 
 export class SqliteDomainRepository implements DomainRepository {
   constructor(private readonly database: SQLiteDatabase, private readonly inTransaction = false) {}
