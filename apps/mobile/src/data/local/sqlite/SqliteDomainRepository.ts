@@ -95,6 +95,7 @@ export class SqliteDomainRepository implements DomainRepository {
           throw new DomainError('IMMUTABLE_RECORD', 'Catatan klinis final tidak dapat diubah.');
         }
       }
+      if (entity.kind === 'recommendationItem') await assertRecommendationItemEditable(transaction, entity.id);
       assertValidFinalNote(entity);
       const result = await transaction.runAsync(
         `UPDATE entities
@@ -122,6 +123,25 @@ export class SqliteDomainRepository implements DomainRepository {
         await transaction.runAsync('DELETE FROM entity_relations WHERE source_id = ?', entity.id);
         await insertRelations(transaction, relations);
       }
+    });
+  }
+
+  async delete(kind: EntityKind, id: string, expectedVersion: number): Promise<void> {
+    if (kind !== 'recommendationItem') {
+      throw new DomainError('INVALID_STATE', 'Penghapusan record ini belum tersedia.');
+    }
+    await this.write(async (transaction) => {
+      const current = await transaction.getFirstAsync<{ version: number }>(
+        'SELECT version FROM entities WHERE id = ? AND kind = ?', id, kind,
+      );
+      if (!current) throw new DomainError('NOT_FOUND', 'Item rekomendasi tidak ditemukan.');
+      if (current.version !== expectedVersion) throw new DomainError('VERSION_CONFLICT', 'Item rekomendasi sudah berubah. Muat ulang sebelum menghapus.');
+      await assertRecommendationItemEditable(transaction, id);
+      await transaction.runAsync('DELETE FROM entity_relations WHERE source_id = ? OR target_id = ?', id, id);
+      const result = await transaction.runAsync(
+        'DELETE FROM entities WHERE id = ? AND kind = ? AND version = ?', id, kind, expectedVersion,
+      );
+      if (result.changes !== 1) throw new DomainError('VERSION_CONFLICT', 'Item rekomendasi sudah berubah. Muat ulang sebelum menghapus.');
     });
   }
 
@@ -167,4 +187,17 @@ function assertValidFinalNote(entity: DomainEntity): void {
 
 export function isKnownStoredKind(kind: string): kind is EntityKind {
   return isEntityKind(kind);
+}
+
+async function assertRecommendationItemEditable(database: SQLiteDatabase, id: string): Promise<void> {
+  const links = await database.getAllAsync<{ target_id: string }>(
+    'SELECT target_id FROM entity_relations WHERE source_id = ? AND relationship = ?', id, 'recommendation',
+  );
+  if (links.length !== 1) throw new DomainError('INVALID_STATE', 'Relasi item rekomendasi tidak valid.');
+  const parent = await database.getFirstAsync<{ payload_json: string }>(
+    'SELECT payload_json FROM entities WHERE id = ? AND kind = ?', links[0].target_id, 'recommendation',
+  );
+  if (!parent) throw new DomainError('INVALID_STATE', 'Rekomendasi induk tidak ditemukan.');
+  const payload = JSON.parse(parent.payload_json) as Record<string, unknown>;
+  if (payload.status === 'sent') throw new DomainError('IMMUTABLE_RECORD', 'Rekomendasi yang sudah terkirim hanya dapat dibaca.');
 }

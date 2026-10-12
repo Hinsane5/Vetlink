@@ -128,6 +128,12 @@ Alamat/farm editor, respons proposal jadwal, riwayat pembayaran, dan form lapora
 | Notifikasi V-17 | notifications `46:33` | `/vet/notifications` | NotificationRow | events, unread/read, context destination |
 | Pengaturan V-18 | settings `46:36`, help `46:37` | `/vet/settings`, `/vet/help` | SettingsRow, Dialog | preferences, help, logout |
 
+## Implementasi FE-15: rekomendasi
+
+UI Dokter tersedia dari detail konsultasi dan detail agenda setelah ClinicalNote final. Satu Recommendation draft per konsultasi berisi RecommendationItem terpisah; item menyimpan teks aktual, instruksi, catatan tambahan, posisi, dan `productId` opsional. Pemilih produk membaca produk aktif dari katalog lokal. Tinjau memakai snapshot draft yang benar-benar disimpan; pengiriman mengubah status menjadi sent secara transaksional dan idempoten. Peternak hanya membaca rekomendasi sent pada detail layanan, termasuk nama/tautan produk dari relasi item→Product. Tidak ada aksi cart atau checkout pada peran Dokter. Detail produk/marketplace Peternak berada pada FE-17.
+
+Referensi lokal yang ditinjau: inventory `46:22` (Dokter · recommendations) dan `46:12` (Dokter · products), termasuk variant `81:8086` (default), `81:8120` (empty), `81:8146` (sent), `81:8180` (edited), `81:8214` (edit), `81:8255` (delete), `81:8291` (review), `81:8326` (emptyError), serta `81:8354` (products); prototype links juga menghubungkan hasil final ke review, edit, hapus, katalog dan follow-up. Cache `docs/reference/figma/screenshots` tidak memiliki screenshot khusus rekomendasi/produk. Sesuai scope FE-15 tidak ada panggilan Figma MCP; QA visual Android, scroll/form/modal/back, ukuran 390 × 844, layar kecil dan font besar masih tertunda. Implementasi mengikuti tokens/komponen lokal; pixel-match belum diklaim.
+
 ### Implementasi awal FE-04: profil dan verifikasi
 
 Pemetaan profil tetap memakai node yang telah tercatat: Profil Peternak `12:3066` dan Edit `12:3103`; Profil Dokter `46:34`, Edit `46:35`, serta Verifikasi Dokter `46:5`. Sebelum implementasi, permintaan `get_design_context` terbaru untuk node profil `12:3066` dan `46:34` ditolak Figma MCP dengan pesan batas panggilan Starter plan. UI FE-04 karena itu menggunakan tokens/komponen FE-01 dan susunan field sesuai data model; screenshot high-fidelity dan perbandingan visual Android belum diverifikasi. Selisih ini dicatat untuk review saat kuota tersedia.
