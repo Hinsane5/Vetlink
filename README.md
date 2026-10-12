@@ -2,7 +2,7 @@
 
 Aplikasi mobile berbahasa Indonesia untuk pengelolaan kesehatan ternak, konsultasi dokter hewan, kunjungan, dan pembelian produk kesehatan hewan.
 
-**Fokus mobile tetap flow frontend Android lokal.** Aplikasi membuka “Pilih Peran” dan memakai data fiktif persisten. FE-06–16 mencakup ternak, pasien, direktori dokter, booking, respons layanan, jadwal, chat, kunjungan, catatan klinis, rekomendasi, serta tindak lanjut dan laporan perkembangan. FE-00/02 selesai; FE-01/03–16 masih memerlukan penerimaan visual/interaksi Android. Backend NestJS/PostgreSQL memiliki fondasi BE-00 dan autentikasi internal BE-01 (register/login/logout/refresh/reset, bearer `/me`, role guard, rate limit). Mobile belum terhubung ke API; route domain backend lain belum dibuat. [Catatan Testing](docs/TESTING.md) memisahkan bukti pemeriksaan lokal dari QA Android yang tertunda.
+**Fokus mobile tetap flow frontend Android lokal.** Aplikasi membuka “Pilih Peran” dan memakai data fiktif persisten. FE-06–17 mencakup ternak, pasien, direktori dokter, booking, respons layanan, jadwal, chat, kunjungan, catatan klinis, rekomendasi, tindak lanjut, laporan perkembangan, dan Marketplace. FE-00/02 selesai; FE-01/03–17 masih memerlukan penerimaan visual/interaksi Android. `npm run check` FE-17 lulus dengan 99 tes; build Android saat ini terhalang SDK/ADB yang tidak tersedia. Backend NestJS/PostgreSQL memiliki fondasi BE-00 dan autentikasi internal BE-01 (register/login/logout/refresh/reset, bearer `/me`, role guard, rate limit). Mobile belum terhubung ke API; route domain backend lain belum dibuat. [Catatan Testing](docs/TESTING.md) memisahkan bukti pemeriksaan lokal dari QA Android yang tertunda.
 
 ## Arah yang telah dipilih
 
@@ -65,7 +65,7 @@ Untuk APK standalone lokal dengan JavaScript tertanam, jalankan `./gradlew assem
 
 Persyaratan build lokal: Android Studio, Android SDK dan Platform Tools terpasang, `ANDROID_HOME` atau `ANDROID_SDK_ROOT` menunjuk ke direktori SDK yang ada, JDK yang kompatibel dengan Android Gradle Plugin, serta emulator aktif atau perangkat Android dengan USB debugging. Belum ada file `.env` yang dibutuhkan.
 
-SDK tersedia di mount `/Volumes/HowSSD/AndroidStudio/SDK/sdk`. ADB mendeteksi HP Xiaomi `2311DRK48G` melalui USB; simulator tetap tertutup sesuai permintaan. [Screenshot smoke test FE-00](docs/reference/android/fe00-phone-launch.png) dan hasil pemeriksaan rinci tersedia di [catatan pengujian](docs/TESTING.md).
+Pada smoke test FE-00/14, mount SDK `/Volumes/HowSSD/AndroidStudio/SDK/sdk` tersedia dan ADB mendeteksi HP Xiaomi `2311DRK48G`. Pada pemeriksaan FE-17, path tersebut tidak ada dan `adb` tidak ditemukan, sehingga native build/interaksi FE-17 belum dapat dilakukan. [Screenshot smoke test FE-00](docs/reference/android/fe00-phone-launch.png) dan batas pemeriksaan terbaru tersedia di [catatan pengujian](docs/TESTING.md).
 
 Saat aplikasi terbuka, pilih Peternak atau Dokter Hewan lalu tekan “Lanjut”. Peternak memakai profil fiktif Budi dan Dokter memakai profil fiktif Yuda; keduanya membaca penyimpanan lokal yang sama. Tidak diperlukan credential atau layanan backend. Data yang diubah lewat form tersimpan pada SQLite perangkat. Implementasi FE-03 lama masih berada di source untuk riwayat pekerjaan, tetapi tidak digunakan oleh alur aplikasi aktif. Perintah reset database belum disediakan.
 
@@ -90,6 +90,8 @@ Untuk melihat FE-14: buka detail layanan yang sedang berlangsung. Dokter membuka
 Untuk melihat FE-15: Dokter buka **Konsultasi → Jadwal → VL-C-107**, finalisasi catatan pemeriksaan bila belum ada, lalu pilih **Buat Rekomendasi**. Tambahkan item dengan teks dan instruksi; produk katalog dapat ditautkan secara opsional. **Tinjau sebelum dikirim** menampilkan teks aktual, lalu **Kirim rekomendasi** menyimpan status `sent`. Peternak Budi membuka layanan yang sama untuk membaca rekomendasi terkirim; draft tidak ditampilkan kepadanya. Dokter tidak memperoleh cart atau checkout. QA interaksi dan perbandingan visual layar masih tertunda.
 
 Untuk melihat FE-16: pada detail layanan dengan catatan final, Dokter membuka **Tindak lanjut & pengingat** untuk menjadwalkan pemeriksaan ulang atau membuat pengingat; agenda recheck tampil di **Jadwal** dalam timezone Dokter. Peternak membuka detail layanan yang sama untuk membaca tindak lanjut, mengirim laporan perkembangan, dan melihat pengingat. Dari **Beranda → Lihat pengingat** atau area tindak lanjut, Peternak dapat mengonfirmasi perawatan dilakukan; status pengiriman pengingat tetap terpisah dan konfirmasi menambahkan satu catatan pada riwayat kesehatan. QA interaksi/visual Android masih tertunda.
+
+Untuk melihat FE-17: Dokter Yuda buka layanan yang berlangsung, finalisasi catatan bila perlu, lalu buat dan kirim rekomendasi dengan produk katalog tertaut. Beralih ke Peternak Budi dan buka layanan yang sama; **Lihat Produk** membuka detail produk dengan konteks ID rekomendasi dan layanan. **Buka Marketplace** menampilkan katalog aktif, tempat pencarian dapat digabung dengan filter kategori dan jenis ternak. Harga dan informasi dibaca dari Product SQLite; produk inactive/ID tidak dikenal memberi pesan error. FE-17 belum menambah cart atau checkout. QA interaksi dan visual Android masih tertunda.
 
 Data fiktif FE-08 disimpan pada SQLite yang sama. Instalasi dengan seed `fe02-v1` mendapat ekstensi `fe08-v1` satu kali: hanya field profil/jadwal yang belum ada ditambahkan, disertai satu ulasan fiktif atas konsultasi selesai. Nilai yang sudah disimpan, termasuk availability off, daftar kosong yang sengaja disimpan, dan lokasi hasil edit, dipertahankan. Tidak ada akun atau layanan jaringan baru.
 
@@ -118,8 +120,8 @@ Urutan baca: PRD → Features → Figma mapping → Data model → Architecture 
 
 1. FE-00 selesai; FE-01 sedang dikerjakan untuk tokens, font/icon, dan komponen UI reusable. Interaksi dasar komponen telah diuji di HP; pemeriksaan ukuran layar dan visual Figma yang tepat masih tersisa.
 2. FE-02 selesai: domain, ports, SQLite/repository/event, seed dan cold-restart check lulus. FE-03/04/05 sedang dikerjakan untuk akun/sesi, profil/media, dan dashboard; FE-04 APK sudah terpasang namun QA interaksi menunggu layar HP dibuka.
-3. FE-06–16, FE-19, FE-23: ternak, booking, flow Dokter A–D, catatan, tindak lanjut, pembayaran dan ledger lokal.
-4. FE-17/18/20/21/22 dan FE-24: seluruh fitur lokal, acceptance Android dan visual.
+3. FE-06–17, FE-19, FE-23: ternak, booking, flow Dokter A–D, catatan, tindak lanjut, Marketplace, pembayaran dan ledger lokal.
+4. FE-18/20/21/22 dan FE-24: fitur lokal tersisa, acceptance Android dan visual.
 5. BE-00/01 menyediakan fondasi backend dan auth; endpoint domain serta integrasi mobile menyusul sesuai [backlog backend](docs/backlog/BACKEND.md).
 
 Semua fitur Peternak dan Dokter tetap termasuk baseline. Urutan milestone bukan penghapusan scope.

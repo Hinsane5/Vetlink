@@ -19,7 +19,7 @@ import { colors, fonts, radii, roleTokens, spacing } from '../theme/tokens';
 
 type Form = { action: 'propose' | 'reject' | 'cancel'; input: ProposalInput; saved: ProposalInput; draft: DomainEntity | null; schedule: DirectorySchedule | null };
 type Tab = 'requests' | 'appointments' | 'history';
-export function ConsultationFlow({ store, session, initialId, initialTab = 'requests', onExit, onOpenAnimal, onOpenChat, onOpenClinicalNote, onOpenRecommendation, onOpenCare }: { store: LocalStore; session: SessionSnapshot; initialId?: string; initialTab?: Tab; onExit: () => void; onOpenAnimal: (id: string) => void; onOpenChat: (id: string) => void; onOpenClinicalNote: (id: string) => void; onOpenRecommendation: (id: string) => void; onOpenCare: (id: string) => void }) {
+export function ConsultationFlow({ store, session, initialId, initialTab = 'requests', onExit, onOpenAnimal, onOpenChat, onOpenClinicalNote, onOpenRecommendation, onOpenCare, onOpenMarketplace }: { store: LocalStore; session: SessionSnapshot; initialId?: string; initialTab?: Tab; onExit: () => void; onOpenAnimal: (id: string) => void; onOpenChat: (id: string) => void; onOpenClinicalNote: (id: string) => void; onOpenRecommendation: (id: string) => void; onOpenCare: (id: string) => void; onOpenMarketplace?: (context: { recommendationId: string; consultationId: string; productId?: string }) => void }) {
   const role = session.activeRole;
   const [selectedId, setSelectedId] = useState(initialId ?? '');
   const [items, setItems] = useState<ConsultationDetail[]>([]);
@@ -171,11 +171,15 @@ export function ConsultationFlow({ store, session, initialId, initialTab = 'requ
           <Text style={styles.heading}>Rekomendasi dokter</Text>
           {recommendation.items.map((item, index) => <View key={item.id} style={styles.history}>
             <Line label={`Rekomendasi ${index + 1}`} value={item.titleSnapshot} />
-            {item.productId ? <Line label="Produk terkait" value={`${item.productName ?? 'Produk katalog'}${item.productUnitPrice !== null ? ` · ${rupiah(item.productUnitPrice)}` : ''}`} /> : null}
+            {item.productId ? <>
+              <Line label="Produk terkait" value={`${item.productName ?? 'Produk katalog'}${item.productUnitPrice !== null ? ` · ${rupiah(item.productUnitPrice)}` : ''}`} />
+              <Button role="farmer" variant="secondary" disabled={busy} label="Lihat Produk" onPress={() => onOpenMarketplace?.({ recommendationId: recommendation.record.id, consultationId: detail.record.id, productId: item.productId ?? undefined })} />
+            </> : null}
             <Line label="Instruksi" value={item.instructions} />
             {item.note ? <Line label="Catatan tambahan" value={item.note} /> : null}
           </View>)}
           {!recommendation.items.length ? <InlineFeedback message="Belum ada item rekomendasi yang dapat ditampilkan." /> : null}
+          <Button role="farmer" variant="secondary" disabled={busy} label="Buka Marketplace" onPress={() => onOpenMarketplace?.({ recommendationId: recommendation.record.id, consultationId: detail.record.id })} />
         </View> : null}
         {detail.attachments.length ? <View style={styles.card}><Text style={styles.heading}>Lampiran keluhan</Text>{detail.attachments.map((item) => <View key={item.id} style={styles.card}>
           <Text style={styles.body}>{item.filename}</Text>{item.kind === 'image' ? <Pressable accessibilityRole="button" accessibilityLabel={`Buka ${item.filename}`} disabled={busy} onPress={() => openPhoto(item.id)} style={styles.media}><Image source={{ uri: item.localUri }} style={styles.thumbnail} resizeMode="contain" onError={() => setError('Foto lokal tidak dapat dibuka.')} /></Pressable> : <Text style={styles.body}>Pemutaran video belum tersedia.</Text>}

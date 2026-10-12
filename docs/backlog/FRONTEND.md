@@ -1,6 +1,6 @@
 # Backlog frontend / mobile Android
 
-Status keseluruhan saat ini: **FE-00 Selesai, FE-01 Sedang dikerjakan, FE-02 Selesai, FE-03/04/05/06/07/08/09/10/11/12/13/14/15/16 Sedang dikerjakan**; FE-17–FE-25 **Belum mulai**. Tahap aktif mengikuti arahan pengguna: flow frontend tanpa autentikasi dan tanpa backend jaringan. Acceptance autentikasi FE-03 ditunda; implementasi historisnya tidak dipasang pada aplikasi aktif. Data fiktif lokal tetap dipakai agar screen dapat menampilkan perubahan yang konsisten.
+Status keseluruhan saat ini: **FE-00 Selesai, FE-01 Sedang dikerjakan, FE-02 Selesai, FE-03/04/05/06/07/08/09/10/11/12/13/14/15/16/17 Sedang dikerjakan**; FE-18–FE-25 **Belum mulai**. Tahap aktif mengikuti arahan pengguna: flow frontend tanpa autentikasi dan tanpa backend jaringan. Acceptance autentikasi FE-03 ditunda; implementasi historisnya tidak dipasang pada aplikasi aktif. Data fiktif lokal tetap dipakai agar screen dapat menampilkan perubahan yang konsisten.
 
 Status setiap tiket: **Selesai** berarti seluruh acceptance criteria terpenuhi dan buktinya dicatat; **Sedang dikerjakan** berarti ada progres tetapi acceptance belum lengkap; **Belum mulai** berarti implementasi belum dimulai.
 
@@ -67,7 +67,7 @@ FE-08/09 bergantung availability dari FE-11; kerjakan FE-11 lebih awal dalam sli
 
 | ID | Status | P | Pekerjaan / keluaran | Dependensi | Acceptance criteria |
 | --- | --- | --- | --- | --- | --- |
-| FE-17 | Belum mulai | P1 | Marketplace search/filter/details, recommendation entry | FE-01/02/15 | Produk/price/info dari catalog; query/filter kombinasi; link recommendation ID benar; produk inactive/unknown error jelas |
+| FE-17 | Sedang dikerjakan | P1 | Marketplace search/filter/details, recommendation entry | FE-01/02/15 | Produk/price/info dari catalog; query/filter kombinasi; link recommendation ID benar; produk inactive/unknown error jelas |
 | FE-18 | Belum mulai | P1 | Cart quantities/remove, address, quote, checkout | FE-04/17 | Qty integer positif; remove/empty; totals + ongkir akurat; address required; order price/address snapshot; doctor access ditolak |
 | FE-19 | Belum mulai | P0 | Payment method, submit, pending/failed/success, history | FE-02; context FE-09 dan FE-18 | Tap method tidak membayar; service result persisten; pending bukan paid; retry/idempotency; consultation/order dipisahkan; riwayat dapat dibuka kembali |
 | FE-20 | Belum mulai | P1 | Orders active/done/details/shipment timeline | FE-18/19 | Paid hanya dari payment sukses; delivery status dari adapter; jumlah/harga sesuai snapshot; gagal kirim tidak ditampilkan delivered |
@@ -155,3 +155,11 @@ Pengingat tersimpan dengan status pengiriman `pending` dan status perawatan `sch
 Pemeriksaan domain/repository membuktikan tanggal lokal `Asia/Jakarta` → UTC, agenda kalender, retry jadwal, laporan tidak menjadi HealthEvent, scope pembaca Dokter, status pengiriman sent tanpa care done, dan tepat satu HealthEvent pada care completion. Hasil lengkap beserta batas bukti ada di [Testing](../TESTING.md). FE-16 tetap **Sedang dikerjakan**: form tanggal/jam berupa input teks lokal, attachment foto pada laporan belum tersedia, dan QA interaksi/visual Android belum selesai.
 
 Referensi lokal yang digunakan ada pada [Figma mapping](../FIGMA_MAPPING.md); tidak ada panggilan Figma MCP. Implementasi belum dibandingkan pada perangkat. Script `npm run android` tersedia tetapi gagal sebelum build karena `ANDROID_HOME` menunjuk SDK yang tidak ada (`/Volumes/HowSSD/AndroidStudio/SDK/sdk`) dan `adb` tidak tersedia. Perubahan FE-16 dikomit secara lokal setelah pemeriksaan akhir; belum di-push.
+
+## Progres FE-17
+
+`CatalogService` membaca entity `product` dari repository SQLite yang sama dengan rekomendasi, memvalidasi harga sebagai integer rupiah, serta membatasi layar Marketplace ke akun Peternak. Dari rekomendasi `sent`, tautan produk membawa `recommendationId` entity Recommendation, `consultationId`, dan `productId` secara terpisah; service memeriksa layanan milik Peternak, status rekomendasi terkirim, dan relasi RecommendationItem → Product sebelum memuat detail. Pencarian dapat digabung dengan kategori dan jenis ternak; detail produk inactive dan ID yang tidak dikenal menghasilkan pesan domain berbeda. Tidak ada cart/checkout baru dan pemilih produk Dokter tetap hanya menautkan produk ke rekomendasi.
+
+Koordinasi kontrak melalui Orca menyepakati port katalog read-only dengan adapter lokal. `GET /products` dan `GET /products/{id}` pada [kontrak API](../API_CONTRACT.md) tetap usulan untuk integrasi berikutnya; lane frontend tidak mengubah kontrak backend.
+
+`npm run check` dari `apps/mobile` lulus: typecheck, lint, dan 99 tes domain/repository, termasuk empat tes FE-17 untuk filter gabungan, konteks/relasi ID rekomendasi, akses Peternak, serta produk inactive/unknown. `npm run android` dicoba tetapi berhenti sebelum build karena `ANDROID_HOME` menunjuk direktori SDK yang tidak ada dan `adb` tidak ditemukan. QA sentuh/back/keyboard/scroll serta visual Android 390 × 844, layar kecil, font besar dan pixel-match **Belum diuji**; node lokal dan keterbatasan referensi dicatat di [Figma mapping](../FIGMA_MAPPING.md) dan [Testing](../TESTING.md).

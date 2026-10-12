@@ -1,4 +1,5 @@
 import type { AccountRole } from '../domain/auth';
+import { toCatalogProduct } from '../domain/catalog';
 import type { DomainEntity, EntityRelation } from '../domain/entities';
 import { DomainError } from '../domain/errors';
 import {
@@ -40,7 +41,7 @@ export class RecommendationService {
     return products
       .filter((product) => product.payload.active === true && Number.isSafeInteger(product.payload.unitPrice)
         && (product.payload.unitPrice as number) >= 0 && (product.payload.currency === undefined || product.payload.currency === 'IDR'))
-      .map(toProduct)
+      .map(toCatalogProduct)
       .sort((left, right) => left.name.localeCompare(right.name, 'id'));
   }
 
@@ -300,11 +301,10 @@ export class RecommendationService {
 
   private async activeProduct(unit: BookingUnit, id: string): Promise<RecommendationProduct> {
     const entity = await unit.repository.findById('product', id);
-    if (!entity || entity.kind !== 'product' || entity.payload.active !== true || !Number.isSafeInteger(entity.payload.unitPrice)
-      || (entity.payload.unitPrice as number) < 0 || (entity.payload.currency !== undefined && entity.payload.currency !== 'IDR')) {
+    if (!entity || entity.kind !== 'product' || entity.payload.active !== true) {
       throw new DomainError('NOT_FOUND', 'Produk katalog tidak tersedia untuk rekomendasi.');
     }
-    return toProduct(entity);
+    return toCatalogProduct(entity);
   }
 
   private async actionFor(unit: BookingUnit, operationKey: string): Promise<DomainEntity | null> {
@@ -333,16 +333,6 @@ function itemRelations(item: DomainEntity): EntityRelation[] {
 
 function sameItem(record: DomainEntity, fields: Record<string, unknown>): boolean {
   return ['productId', 'titleSnapshot', 'instructions', 'note', 'position'].every((key) => record.payload[key] === fields[key]);
-}
-
-function toProduct(entity: DomainEntity): RecommendationProduct {
-  return {
-    id: entity.id,
-    name: stringValue(entity.payload.name),
-    category: stringValue(entity.payload.category),
-    description: stringValue(entity.payload.description),
-    unitPrice: entity.payload.unitPrice as number,
-  };
 }
 
 function stringValue(value: unknown): string { return typeof value === 'string' ? value.trim() : ''; }
