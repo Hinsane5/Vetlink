@@ -1,0 +1,72 @@
+export const domainStatusSchemas = {
+  UserRole: {
+    type: 'string',
+    enum: ['farmer', 'vet'],
+    description: 'Membership role. Changing role does not grant additional resource access.',
+  },
+  VetVerificationStatus: {
+    type: 'string',
+    enum: ['not_submitted', 'pending', 'verified', 'revision_required'],
+    description: 'Only a trusted reviewer may write a verified result.',
+  },
+  ConsultationStatus: {
+    type: 'string',
+    enum: [
+      'draft',
+      'awaiting_payment',
+      'requested',
+      'scheduled',
+      'reschedule_pending',
+      'in_progress',
+      'completed',
+      'rejected',
+      'cancelled',
+    ],
+    description: 'A status value is not an instruction to change state; action endpoints validate transitions.',
+  },
+  ScheduleProposalStatus: {
+    type: 'string',
+    enum: ['pending', 'accepted', 'declined', 'superseded'],
+  },
+  VisitStage: {
+    type: 'string',
+    enum: ['scheduled', 'en_route', 'arrived', 'examining', 'completed'],
+    description: 'Valid visit sequence is scheduled → en_route → arrived → examining → completed.',
+  },
+  ClinicalNoteStatus: {
+    type: 'string',
+    enum: ['draft', 'final'],
+    description: 'Final clinical notes are immutable and finalization does not complete a consultation.',
+  },
+  RecommendationStatus: { type: 'string', enum: ['draft', 'sent'] },
+  FollowUpStatus: { type: 'string', enum: ['scheduled', 'completed', 'cancelled'] },
+  ReminderCareStatus: { type: 'string', enum: ['scheduled', 'done'] },
+  DeliveryStatus: { type: 'string', enum: ['pending', 'sent', 'failed'] },
+  PaymentStatus: { type: 'string', enum: ['pending', 'succeeded', 'failed', 'expired'] },
+  OrderStatus: {
+    type: 'string',
+    enum: ['awaiting_payment', 'paid', 'processing', 'shipped', 'delivered'],
+  },
+  EarningStatus: { type: 'string', enum: ['pending', 'available'] },
+  LedgerEntryKind: {
+    type: 'string',
+    enum: [
+      'earn_pending',
+      'release_pending',
+      'credit_available',
+      'reserve_withdrawal',
+      'release_withdrawal',
+      'payout_paid',
+    ],
+  },
+  WithdrawalStatus: {
+    type: 'string',
+    enum: ['submitted', 'processing', 'paid', 'rejected', 'failed'],
+    description: 'Submitted means funds are reserved; it does not mean funds have been received.',
+  },
+  AdapterOutcome: {
+    type: 'string',
+    enum: ['pending', 'succeeded', 'failed'],
+    description: 'A caller must persist the adapter result before reporting success.',
+  },
+};

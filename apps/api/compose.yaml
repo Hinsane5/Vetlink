@@ -1,0 +1,19 @@
+services:
+  db:
+    image: postgres:17.4-alpine
+    environment:
+      POSTGRES_DB: ${DATABASE_NAME:-vetlink}
+      POSTGRES_USER: ${DATABASE_USER:-vetlink}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-local-only-not-a-secret}
+    ports:
+      - "127.0.0.1:${DATABASE_PORT:-5432}:5432"
+    volumes:
+      - vetlink-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER:-vetlink} -d ${DATABASE_NAME:-vetlink}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  vetlink-postgres-data:

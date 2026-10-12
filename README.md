@@ -2,15 +2,15 @@
 
 Aplikasi mobile berbahasa Indonesia untuk pengelolaan kesehatan ternak, konsultasi dokter hewan, kunjungan, dan pembelian produk kesehatan hewan.
 
-**Fokus saat ini: flow frontend Android tanpa autentikasi dan tanpa backend jaringan.** Aplikasi membuka “Pilih Peran”, lalu langsung menampilkan data fiktif lokal untuk Peternak atau Dokter. FE-06 menyediakan pengelolaan ternak; FE-07 riwayat kesehatan dan pasien; FE-08 direktori/profil dokter, pencarian, filter, tarif, jadwal 7 hari, dan ulasan; FE-09 booking chat/kunjungan, draft, media dan review biaya; FE-10 respons layanan, usulan jadwal, dan riwayat; FE-11 editor ketersediaan/tarif/blok serta kalender harian/mingguan; FE-12 chat dua peran dengan pesan/media lokal; FE-13 progres kunjungan bertahap; FE-14 catatan pemeriksaan, hasil Peternak, finalisasi, dan konfirmasi selesai. FE-00/02 selesai; FE-01/03/04/05/06/07/08/09/10/11/12/13/14 masih dikerjakan karena acceptance visual/interaksi Android belum lengkap. Untuk FE-14, `npm run check` lulus (typecheck, lint, 89 tes), export Android lulus (752 modul), dan APK release 76 MB berhasil dipasang serta dibuka di Xiaomi tanpa Metro. [Screenshot startup standalone](docs/reference/android/fe14-standalone-startup.png) membuktikan layar “Pilih Peran”; alur layar FE-14 belum diuji interaktif. Lihat [catatan Testing](docs/TESTING.md) untuk bukti serta batas QA.
+**Fokus mobile tetap flow frontend Android lokal.** Aplikasi membuka “Pilih Peran”, lalu menampilkan data fiktif lokal untuk Peternak atau Dokter. Backend kini memiliki fondasi BE-00 NestJS/PostgreSQL dengan healthcheck, migrasi, seed, dan OpenAPI; auth serta endpoint domain belum diimplementasikan dan mobile belum terhubung ke API. FE-06 menyediakan pengelolaan ternak; FE-07 riwayat kesehatan dan pasien; FE-08 direktori/profil dokter, pencarian, filter, tarif, jadwal 7 hari, dan ulasan; FE-09 booking chat/kunjungan, draft, media dan review biaya; FE-10 respons layanan, usulan jadwal, dan riwayat; FE-11 editor ketersediaan/tarif/blok serta kalender harian/mingguan; FE-12 chat dua peran dengan pesan/media lokal; FE-13 progres kunjungan bertahap; FE-14 catatan pemeriksaan, hasil Peternak, finalisasi, dan konfirmasi selesai. FE-00/02 selesai; FE-01/03/04/05/06/07/08/09/10/11/12/13/14 masih dikerjakan karena acceptance visual/interaksi Android belum lengkap. Untuk FE-14, `npm run check` lulus (typecheck, lint, 89 tes), export Android lulus (752 modul), dan APK release 76 MB berhasil dipasang serta dibuka di Xiaomi tanpa Metro. [Screenshot startup standalone](docs/reference/android/fe14-standalone-startup.png) membuktikan layar “Pilih Peran”; alur layar FE-14 belum diuji interaktif. Lihat [catatan Testing](docs/TESTING.md) untuk bukti serta batas QA.
 
 ## Arah yang telah dipilih
 
 - Mobile: React Native + Expo + TypeScript; target pertama Android. Kode aplikasi tidak menggunakan Kotlin.
-- Tahap frontend memakai persona fixture lokal melalui “Pilih Peran”. Layar daftar/masuk/reset/keluar FE-03 tidak dipasang pada alur aktif; backend jaringan belum dibuat.
+- Tahap frontend memakai persona fixture lokal melalui “Pilih Peran”. Layar daftar/masuk/reset/keluar FE-03 tidak dipasang pada alur aktif; backend belum melayani fitur domain.
 - Sumber data awal lokal persisten memakai `expo-sqlite`; backend menyusul melalui kontrak repository yang sama.
 - Chat disimpan ke SQLite lokal yang sama untuk kedua persona pada satu instalasi; tidak ada backend, realtime lintas perangkat, atau pengiriman jaringan. Pembayaran, pengiriman, notifikasi, dan pencairan tetap memakai layanan lokal.
-- Framework backend, hosting, provider produksi, versi backend, dan dependency backend belum ditetapkan.
+- Backend: NestJS + PostgreSQL modular monolith. Hosting, auth/payment/media provider produksi belum dipilih. [Cara menjalankan backend](apps/api/README.md).
 - Figma utama terdokumentasi: [VetLink](https://www.figma.com/design/f1WBeG5S1OGXlPXyVEHjuW/Untitled), halaman `01 · VetLink / Prototype` (`0:1`). Untuk inspeksi FE-07 digunakan link terbaru yang diberikan pengguna: [VetLink — referensi FE-07](https://www.figma.com/design/TPG6qZunK9EY4z1Vy0GKDx/Untitled?node-id=93-7181&t=hYv9JEpqvZmEonSz-), khusus node daftar/detail pasien Dokter. Bukti dan pemetaan ada di [Figma mapping](docs/FIGMA_MAPPING.md).
 
 ## Versi mobile dan development build
@@ -25,11 +25,22 @@ Aplikasi mobile berbahasa Indonesia untuk pengelolaan kesehatan ternak, konsulta
 | Crypto FE-03 | `expo-crypto ~57.0.3` |
 | Credential/sesi FE-03 | `expo-secure-store ~57.0.4` |
 | Foto, dokumen, file lokal FE-04 | `expo-image-picker ~57.0.20`, `expo-document-picker ~57.0.3`, `expo-file-system ~57.0.7` |
-| Node.js / npm di lingkungan pengerjaan | `24.1.0` / `11.3.0` |
+| Node.js / npm pada FE-00 | `24.1.0` / `11.3.0` |
 | Package manager / lockfile | npm / `apps/mobile/package-lock.json` |
 | Safe area FE-08 | `react-native-safe-area-context ~5.7.0` |
 | Font/icon FE-01 | `expo-font ~57.0.4`, Inter lokal (OFL), `@react-native-vector-icons/lucide ^13.1.4` |
 | Android application ID | `com.vetlink.mobile` (sementara untuk build lokal; belum ID rilis) |
+
+## Versi backend BE-00
+
+| Bagian | Versi / konfigurasi |
+| --- | --- |
+| Node.js / npm | `24.15.0` / `11.6.0` (BE-00) |
+| NestJS / Nest CLI | `12.1.3` / `12.0.8` |
+| TypeScript / PostgreSQL driver | `6.0.3` / `pg 8.23.1` |
+| PostgreSQL lokal / CI | `17.4` (`postgres:17.4-alpine`) |
+| API | REST JSON `/v1`, OpenAPI 3.0, routes domain belum aktif |
+| ORM | Tidak dipilih; akses SQL lewat `pg`, migrasi SQL eksplisit |
 
 Expo SDK 57 mensyaratkan Node.js 22.13 atau lebih baru. Periksa [panduan Expo](https://docs.expo.dev/versions/latest/) dan gunakan versi Node LTS yang didukung. Native project Android dihasilkan Expo saat prebuild dan diabaikan Git; tidak ada kode Kotlin aplikasi buatan tangan. Komponen memakai satu keluarga ikon Lucide; glyph Figma akan dipetakan bertahap saat screen dibangun.
 
@@ -58,6 +69,10 @@ SDK tersedia di mount `/Volumes/HowSSD/AndroidStudio/SDK/sdk`. ADB mendeteksi HP
 
 Saat aplikasi terbuka, pilih Peternak atau Dokter Hewan lalu tekan “Lanjut”. Peternak memakai profil fiktif Budi dan Dokter memakai profil fiktif Yuda; keduanya membaca penyimpanan lokal yang sama. Tidak diperlukan credential atau layanan backend. Data yang diubah lewat form tersimpan pada SQLite perangkat. Implementasi FE-03 lama masih berada di source untuk riwayat pekerjaan, tetapi tidak digunakan oleh alur aplikasi aktif. Perintah reset database belum disediakan.
 
+## Menjalankan backend BE-00
+
+Backend dijalankan terpisah dan belum digunakan oleh aplikasi mobile. Jalankan perintah di [panduan backend](apps/api/README.md); urutannya memakai Node `.nvmrc`, `.env.example`, PostgreSQL Compose, migrasi eksplisit, seed fiktif, lalu NestJS. Route aktif hanya healthcheck. Seed tidak menghapus atau menimpa record. Tidak ada payment/provider nyata atau deployment.
+
 Untuk melihat FE-07: sebagai Peternak buka **Ternak → detail ternak → Riwayat Kesehatan**; sebagai Dokter buka tab **Pasien → detail pasien**. Menu pada beranda kedua peran menyediakan **Ganti Peran**.
 
 Untuk melihat FE-08: pilih **Peternak → Konsultasi → pilih dokter**. Pencarian nama dan filter jenis ternak/layanan/lokasi/availability/tarif maksimum dapat digabungkan. Detail memakai ID dokter yang dipilih; layanan, tarif aktif, badge verifikasi, pengalaman, dan ulasan berasal dari record lokal. Jadwal membaca aturan mingguan dalam zona waktu dokter dan menghindari konsultasi, blocked time, serta tindak lanjut yang terjadwal. Tombol Booking konsultasi membuka FE-09 untuk dokter terverifikasi yang menerima permintaan. Tombol **Konsultasi saya** pada beranda tetap membuka layanan milik Peternak.
@@ -80,11 +95,11 @@ Data fiktif FE-08 disimpan pada SQLite yang sama. Instalasi dengan seed `fe02-v1
 | --- | --- |
 | [PRD](docs/PRD.md) | Sasaran, scope, perjalanan pengguna, aturan produk |
 | [Features](docs/FEATURES.md) | Seluruh 20 fitur Peternak dan 18 fitur Dokter |
-| [Architecture](docs/ARCHITECTURE.md) | Lapisan mobile, repository lokal, rancangan backend |
-| [Tech](docs/TECH.md) | Stack mobile, dependency aktual FE-00–02, kandidat backend, keputusan terbuka |
+| [Architecture](docs/ARCHITECTURE.md) | Lapisan mobile dan modular monolith backend |
+| [Tech](docs/TECH.md) | Stack mobile dan realisasi backend BE-00 |
 | [Figma mapping](docs/FIGMA_MAPPING.md) | Fitur → node → route → komponen → state; selisih referensi |
 | [Data model](docs/DATA_MODEL.md) | Entitas, relasi, status, invariant, fixture |
-| [API contract](docs/API_CONTRACT.md) | Kontrak usulan untuk integrasi backend berikutnya |
+| [API contract](docs/API_CONTRACT.md) | Kontrak domain dan OpenAPI executable BE-00 |
 | [Frontend backlog](docs/backlog/FRONTEND.md) | Pekerjaan mobile dan acceptance criteria |
 | [Backend backlog](docs/backlog/BACKEND.md) | Pekerjaan backend, dependensi, acceptance criteria |
 | [Testing](docs/TESTING.md) | Skenario penerimaan dan hasil pemeriksaan aktual |
@@ -101,7 +116,7 @@ Urutan baca: PRD → Features → Figma mapping → Data model → Architecture 
 2. FE-02 selesai: domain, ports, SQLite/repository/event, seed dan cold-restart check lulus. FE-03/04/05 sedang dikerjakan untuk akun/sesi, profil/media, dan dashboard; FE-04 APK sudah terpasang namun QA interaksi menunggu layar HP dibuka.
 3. FE-06–16, FE-19, FE-23: ternak, booking, flow Dokter A–D, catatan, tindak lanjut, pembayaran dan ledger lokal.
 4. FE-17/18/20/21/22 dan FE-24: seluruh fitur lokal, acceptance Android dan visual.
-5. Backend dimulai hanya setelah stack disepakati; lihat [backlog frontend](docs/backlog/FRONTEND.md) dan [backend](docs/backlog/BACKEND.md).
+5. BE-00 menyediakan fondasi backend; endpoint domain dan integrasi mobile menyusul sesuai [backlog backend](docs/backlog/BACKEND.md).
 
 Semua fitur Peternak dan Dokter tetap termasuk baseline. Urutan milestone bukan penghapusan scope.
 

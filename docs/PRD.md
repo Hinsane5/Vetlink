@@ -79,6 +79,6 @@ Label “Pilih Peran” dan “Ganti Peran”. Hilangkan kontrol “demo”, “
 
 Dokumentasi saat ini → fondasi lokal → flow klinis/keuangan → seluruh fitur Peternak/Dokter → acceptance Android → backend. Urutan rinci di backlog; tidak ada estimasi tanggal yang disepakati.
 
-Masih perlu keputusan: framework backend/database final, hosting, verifikator profesi produksi, komisi, kebijakan bayar nanti/refund, batas media, SLA, dan target iOS. Keputusan tersebut dicatat sebagai terbuka, bukan diasumsikan sebagai integrasi yang tersedia.
+Framework backend dan database dipilih melalui DEC-10: NestJS + PostgreSQL modular monolith. BE-00 baru menyediakan fondasi lokal; hosting, verifikator profesi produksi, komisi, kebijakan bayar nanti/refund, batas media, SLA, provider dan target iOS tetap terbuka. Pilihan stack tidak menandakan layanan/API domain tersedia.
 
 Kriteria ukur dan bukti: [Success criteria](SUCCESS_CRITERIA.md). Rencana pengujian: [Testing](TESTING.md).
