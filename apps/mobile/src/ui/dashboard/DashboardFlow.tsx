@@ -12,18 +12,21 @@ import {
 import type { LocalStore } from '../../data/local/sqlite/LocalStore';
 import type { AccountRole, SessionSnapshot } from '../../domain/auth';
 import type { DashboardConsultationItem, DashboardContextDetail, DashboardSnapshot, FarmerDashboardSnapshot, VetDashboardSnapshot } from '../../domain/dashboard';
+import type { ReminderSnapshot } from '../../domain/careCoordination';
 import { DomainError } from '../../domain/errors';
 import { AppointmentRow } from '../components/AppointmentRow';
 import { Button } from '../components/Button';
 import { EmptyState, ErrorState, InlineFeedback, LoadingState } from '../components/Feedback';
 import { Icon, type IconName } from '../components/Icon';
 import { StatusBadge, type StatusTone } from '../components/StatusBadge';
+import { ConfirmationDialog } from '../components/ConfirmationDialog';
 import { LivestockFlow, type LivestockRoute } from '../livestock/LivestockFlow';
 import { PatientFlow } from '../patients/PatientFlow';
 import { VetScheduleFlow } from '../availability/VetScheduleFlow';
 import { ConsultationFlow } from '../consultations/ConsultationFlow';
 import { ClinicalNoteFlow } from '../consultations/ClinicalNoteFlow';
 import { RecommendationFlow } from '../consultations/RecommendationFlow';
+import { CareCoordinationFlow } from '../consultations/CareCoordinationFlow';
 import { ChatFlow } from '../chat/ChatFlow';
 import { BookingFlow } from '../booking/BookingFlow';
 import { VetDirectoryFlow } from '../directory/VetDirectoryFlow';
@@ -36,6 +39,7 @@ type DashboardRoute =
   | { type: 'chat'; consultationId: string }
   | { type: 'clinicalNote'; consultationId: string }
   | { type: 'recommendation'; consultationId: string }
+  | { type: 'care'; consultationId: string }
   | { type: 'patients'; patientId?: string }
   | { type: 'doctors'; vetId?: string }
   | { type: 'booking'; vetId: string }
@@ -106,7 +110,7 @@ export function DashboardFlow({ store, session, onOpenProfile, onSwitchRole, onL
         setRoute(route.vetId ? { type: 'doctors' } : { type: 'home' });
         return true;
       }
-      if (route.type === 'livestock' || route.type === 'booking' || route.type === 'list' || route.type === 'recommendation' || (route.type === 'detail' && route.kind === 'consultation')) return false;
+      if (route.type === 'livestock' || route.type === 'booking' || route.type === 'list' || route.type === 'recommendation' || route.type === 'care' || (route.type === 'detail' && route.kind === 'consultation')) return false;
       if (route.type !== 'home') {
         setRoute({ type: 'home' });
         return true;
@@ -150,12 +154,14 @@ export function DashboardFlow({ store, session, onOpenProfile, onSwitchRole, onL
         <ClinicalNoteFlow key={route.consultationId} store={store} session={session} consultationId={route.consultationId} onExit={() => setRoute({ type: 'detail', kind: 'consultation', id: route.consultationId })} />
       ) : route.type === 'recommendation' ? (
         <RecommendationFlow key={route.consultationId} store={store} session={session} consultationId={route.consultationId} onExit={() => setRoute({ type: 'detail', kind: 'consultation', id: route.consultationId })} />
+      ) : route.type === 'care' ? (
+        <CareCoordinationFlow key={route.consultationId} store={store} session={session} consultationId={route.consultationId} onExit={() => setRoute({ type: 'detail', kind: 'consultation', id: route.consultationId })} />
       ) : route.type === 'chat' ? (
         <ChatFlow key={route.consultationId} store={store} session={session} consultationId={route.consultationId} onExit={() => setRoute({ type: 'detail', kind: 'consultation', id: route.consultationId })} />
       ) : route.type === 'schedule' ? (
         <VetScheduleFlow store={store} session={session} onExit={() => { setRoute({ type: 'home' }); void reload(); }} />
       ) : route.type === 'list' || (route.type === 'detail' && route.kind === 'consultation') ? (
-        <ConsultationFlow key={route.type === 'detail' ? route.id : route.kind} store={store} session={session} initialId={route.type === 'detail' ? route.id : undefined} initialTab={route.type === 'list' && route.kind === 'appointments' ? 'appointments' : 'requests'} onExit={() => { setRoute({ type: 'home' }); void reload(); }} onOpenAnimal={(id) => setRoute(role === 'vet' ? { type: 'patients', patientId: id } : { type: 'livestock', screen: 'detail', livestockId: id })} onOpenChat={(consultationId) => setRoute({ type: 'chat', consultationId })} onOpenClinicalNote={(consultationId) => setRoute({ type: 'clinicalNote', consultationId })} onOpenRecommendation={(consultationId) => setRoute({ type: 'recommendation', consultationId })} />
+        <ConsultationFlow key={route.type === 'detail' ? route.id : route.kind} store={store} session={session} initialId={route.type === 'detail' ? route.id : undefined} initialTab={route.type === 'list' && route.kind === 'appointments' ? 'appointments' : 'requests'} onExit={() => { setRoute({ type: 'home' }); void reload(); }} onOpenAnimal={(id) => setRoute(role === 'vet' ? { type: 'patients', patientId: id } : { type: 'livestock', screen: 'detail', livestockId: id })} onOpenChat={(consultationId) => setRoute({ type: 'chat', consultationId })} onOpenClinicalNote={(consultationId) => setRoute({ type: 'clinicalNote', consultationId })} onOpenRecommendation={(consultationId) => setRoute({ type: 'recommendation', consultationId })} onOpenCare={(consultationId) => setRoute({ type: 'care', consultationId })} />
       ) : route.type === 'booking' ? (
         <BookingFlow store={store} userId={session.userId} vetId={route.vetId} onBack={() => setRoute({ type: 'doctors', vetId: route.vetId })} onComplete={(id) => { void reload(); openContext('consultation', id); }} />
       ) : route.type === 'livestock' ? (
@@ -183,10 +189,14 @@ export function DashboardFlow({ store, session, onOpenProfile, onSwitchRole, onL
         ) : null}
         {route.type === 'detail' ? (
           <DashboardDetail
+            key={`${route.kind}:${route.id}`}
+            store={store}
+            userId={session.userId}
             role={role}
             detail={detail}
             loading={detailLoading}
             error={detailError}
+            onCareCompleted={() => { void reload(); }}
             onBack={() => setRoute({ type: 'home' })}
             onRetry={() => {
               setDetail(null);
@@ -207,7 +217,7 @@ export function DashboardFlow({ store, session, onOpenProfile, onSwitchRole, onL
         ) : null}
       </ScrollView>
       )}
-      {route.type !== 'booking' && route.type !== 'schedule' && route.type !== 'list' && route.type !== 'chat' && route.type !== 'clinicalNote' && route.type !== 'recommendation' && !(route.type === 'detail' && route.kind === 'consultation') && !(route.type === 'patients' && route.patientId) && !(route.type === 'livestock' && route.screen !== 'list') && !(route.type === 'doctors' && route.vetId) ? (
+      {route.type !== 'booking' && route.type !== 'schedule' && route.type !== 'list' && route.type !== 'chat' && route.type !== 'clinicalNote' && route.type !== 'recommendation' && route.type !== 'care' && !(route.type === 'detail' && route.kind === 'consultation') && !(route.type === 'patients' && route.patientId) && !(route.type === 'livestock' && route.screen !== 'list') && !(route.type === 'doctors' && route.vetId) ? (
         <BottomNavigation role={role} route={route} onSelect={(next) => setRoute(next)} onOpenProfile={onOpenProfile} />
       ) : null}
       <AccountMenu
@@ -407,14 +417,41 @@ function VetAgendaRow({ item, onPress }: { item: DashboardConsultationItem; onPr
   );
 }
 
-function DashboardDetail({ role, detail, loading, error, onBack, onRetry }: {
+function DashboardDetail({ store, userId, role, detail, loading, error, onBack, onRetry, onCareCompleted }: {
+  store: LocalStore;
+  userId: string;
   role: AccountRole;
   detail: DashboardContextDetail | null;
   loading: boolean;
   error: string;
   onBack: () => void;
   onRetry: () => void;
+  onCareCompleted: () => void;
 }) {
+  const [reminderResult, setReminderResult] = useState<{ id: string; reminder: ReminderSnapshot | null; error: string }>({ id: '', reminder: null, error: '' });
+  const [careBusy, setCareBusy] = useState(false);
+  const [confirmCare, setConfirmCare] = useState(false);
+  useEffect(() => {
+    if (role !== 'farmer' || detail?.kind !== 'reminder') return;
+    let mounted = true;
+    store.careCoordination.getReminder(userId, detail.id).then((next) => {
+      if (mounted) setReminderResult({ id: detail.id, reminder: next, error: '' });
+    }).catch((cause: unknown) => {
+      if (mounted) setReminderResult({ id: detail.id, reminder: null, error: messageFor(cause) });
+    });
+    return () => { mounted = false; };
+  }, [detail?.id, detail?.kind, role, store, userId]);
+  const reminder = reminderResult.id === detail?.id ? reminderResult.reminder : null;
+  const reminderError = reminderResult.id === detail?.id ? reminderResult.error : '';
+  const completeCare = async () => {
+    if (!reminder || careBusy) return;
+    setCareBusy(true);
+    try {
+      const completed = await store.careCoordination.completeCare(userId, reminder.record.id);
+      setReminderResult({ id: detail?.id ?? reminder.record.id, reminder: completed, error: '' }); setConfirmCare(false); onCareCompleted();
+    } catch (cause) { setReminderResult({ id: detail?.id ?? reminder.record.id, reminder, error: messageFor(cause) }); }
+    finally { setCareBusy(false); }
+  };
   return (
     <View style={styles.listScreen}>
       <View style={styles.routeHeader}>
@@ -434,11 +471,21 @@ function DashboardDetail({ role, detail, loading, error, onBack, onRetry }: {
           <DetailLine label="Ternak" value={detail.animalName} />
           {detail.dateLabel ? <DetailLine label={detail.kind === 'reminder' ? 'Jatuh tempo' : 'Waktu layanan'} value={formatDateTime(detail.dateLabel)} /> : null}
           <DetailLine label={detail.kind === 'reminder' ? 'Instruksi' : 'Keluhan'} value={detail.description || 'Belum ada keterangan.'} />
+          {detail.kind === 'reminder' && role === 'farmer' ? <>
+            {reminderError ? <InlineFeedback message={reminderError} tone="error" /> : null}
+            {reminder ? <>
+              <DetailLine label="Status pengiriman" value={reminder.deliveryStatus === 'sent' ? 'Terkirim' : reminder.deliveryStatus === 'failed' ? 'Gagal' : 'Belum terkirim'} />
+              <DetailLine label="Status perawatan" value={reminder.careStatus === 'done' ? `Dilakukan${reminder.completedAt ? ` · ${formatDateTime(reminder.completedAt)}` : ''}` : 'Belum dikonfirmasi'} />
+              {reminder.deliveryStatus === 'sent' && reminder.careStatus === 'scheduled' ? <InlineFeedback message="Pengingat terkirim; perawatan belum dinyatakan dilakukan." /> : null}
+              {reminder.kind === 'care' && reminder.careStatus === 'scheduled' ? <Button role={role} label="Tandai perawatan dilakukan" variant="secondary" disabled={careBusy} onPress={() => setConfirmCare(true)} /> : null}
+            </> : null}
+          </> : null}
           {detail.feeAmount !== undefined ? <DetailLine label="Biaya layanan" value={formatRupiah(detail.feeAmount)} /> : null}
           {detail.status === 'awaiting_payment' ? <InlineFeedback message="Menunggu pembayaran. Booking belum menjadi janji diterima dan chat belum dibuka." /> : null}
           {detail.visitAddress ? <DetailLine label="Alamat kunjungan" value={detail.visitAddress} /> : null}
         </View>
       ) : null}
+      <ConfirmationDialog visible={confirmCare} role={role} title="Konfirmasi perawatan" message="Tandai perawatan sebagai dilakukan? Status pengiriman pengingat tetap terpisah; satu catatan perawatan akan ditambahkan ke riwayat kesehatan." confirmLabel="Tandai dilakukan" loading={careBusy} onCancel={() => setConfirmCare(false)} onConfirm={() => { void completeCare(); }} />
     </View>
   );
 }
@@ -494,7 +541,7 @@ function BottomNavigation({ role, route, onSelect, onOpenProfile }: {
   onSelect: (route: DashboardRoute) => void;
   onOpenProfile: () => void;
 }) {
-  const active = route.type === 'home' || route.type === 'chat' || route.type === 'clinicalNote' || route.type === 'recommendation' ? 'home' : route.type === 'schedule' ? 'appointments' : route.type === 'patients' ? 'patients' : route.type === 'livestock' ? 'livestock' : route.type === 'doctors' || route.type === 'booking' ? 'consultations' : route.type === 'detail' ? 'home' : route.kind;
+  const active = route.type === 'home' || route.type === 'chat' || route.type === 'clinicalNote' || route.type === 'recommendation' || route.type === 'care' ? 'home' : route.type === 'schedule' ? 'appointments' : route.type === 'patients' ? 'patients' : route.type === 'livestock' ? 'livestock' : route.type === 'doctors' || route.type === 'booking' ? 'consultations' : route.type === 'detail' ? 'home' : route.kind;
   const tabs: { key: string; label: string; icon: IconName; route?: DashboardRoute; action?: () => void; disabled?: boolean }[] = role === 'farmer'
     ? [
       { key: 'home', label: 'Beranda', icon: 'house', route: { type: 'home' } },
