@@ -1,6 +1,6 @@
 # Strategi pengujian VetLink
 
-Status QA per 6 Oktober 2026: bukti FE-00/02 sebelumnya tetap berlaku. Tahap aktif memakai frontend tanpa autentikasi/backend jaringan; Pilih Peran membuka persona lokal. UI FE-06–13 tersedia, termasuk chat dan progres kunjungan lokal. `npm run check` terbaru lulus typecheck, lint dan 84 tes domain/service; export Android lulus pada 749 modul. Xiaomi fisik membuka aplikasi sampai Pilih Peran; ada jendela mengambang aplikasi lain, sehingga screenshot yang layak tidak disimpan. Layar produk, form, filter, picker, kalender, chat, kunjungan, keyboard/dialog/back/scroll, cold restart draft perangkat, viewport kecil/font besar dan pembandingan visual 390 × 844 belum terbukti. Figma visit yang dicoba sebelumnya gagal izin edit pada file sumber; sesuai arahan terbaru, tidak ada pemanggilan Figma berikutnya.
+Status QA ringkas per 13 Oktober 2026: tahap aktif tetap frontend lokal tanpa autentikasi/backend jaringan. UI FE-06–17 tersedia; pemeriksaan terbaru `npm run check` lulus typecheck, lint, dan 99 tes domain/repository. `npm run android` untuk FE-17 berhenti sebelum native build karena Android SDK pada `ANDROID_HOME` tidak ditemukan dan `adb` tidak tersedia. QA perangkat dan visual FE-17 belum dilakukan; rincian per fitur di bawah, dengan keterbatasan Figma dicatat tanpa pemanggilan MCP baru.
 
 ## Level pengujian
 
@@ -482,3 +482,16 @@ FE-15 **Sedang dikerjakan** sampai acceptance interaksi dan visual Android seles
 | Interaksi/visual Android | **Belum diuji**: detail konsultasi, kalender dengan FollowUp baru, input tanggal/jam, konfirmasi care, submit/baca lintas persona, keyboard/scroll/Back, viewport 390 × 844, layar kecil, font besar, dan pixel-match. |
 
 Perbandingan terhadap node terbaru tidak dilakukan karena scope melarang Figma MCP; input tanggal/jam saat ini berupa teks lokal `YYYY-MM-DD HH:mm`, bukan overlay date/time picker di prototype, dan attachment foto ProgressReport belum tersedia. Gunakan [Figma mapping](FIGMA_MAPPING.md) untuk selisih fungsi/visual yang dicatat. QA Android masih tertunda karena SDK/ADB tidak ada; build JS/domain tidak membuktikan alur native.
+
+## Hasil pemeriksaan FE-17 — 13 Oktober 2026
+
+`CatalogService` membaca Product aktif dari repository lokal yang sama dengan rekomendasi. `MarketplaceFlow` dibuka melalui rekomendasi Peternak; daftar menggabungkan pencarian nama/kategori/deskripsi/jenis ternak dengan filter kategori dan species. Detail menampilkan nama, informasi, jenis ternak, serta harga Rupiah integer dari record katalog. Buka detail melalui rekomendasi membawa ID Recommendation, Consultation, dan Product secara terpisah; service memastikan Peternak memiliki layanan, rekomendasi berstatus `sent`, dan relasi item rekomendasi menunjuk produk yang sama. Produk inactive memberi error bahwa produk tidak aktif, sedangkan ID tidak dikenal memberi error not found.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm run check` dari `apps/mobile` | **Lulus**: typecheck, Expo lint, dan 99 tes domain/repository. Empat tes FE-17 mencakup sumber katalog/harga, filter query+category+species, marketplace hanya untuk Peternak, status inactive/unknown, status sent, ownership, pemisahan ID recommendation/consultation, dan tautan item → product. |
+| `npm run android` dari `apps/mobile` | **Gagal sebelum native build**: `ANDROID_HOME` menunjuk `/Volumes/HowSSD/AndroidStudio/SDK/sdk` yang tidak ada; `adb` tidak ditemukan (`spawn adb ENOENT`). Tidak ada APK atau pemasangan perangkat. |
+| Referensi desain lokal | Inventory dan prototype-links untuk Marketplace `12:2681`, Product `12:2777`, serta Added `12:2738` ditinjau. PNG Marketplace/detail tidak tersedia pada cache lokal; tidak ada pemanggilan Figma MCP. `Added` tidak diimplementasikan karena add-to-cart adalah FE-18. |
+| Interaksi/visual Android | **Belum diuji**: rekomendasi terkirim → Marketplace, pencarian, kombinasi filter, detail, error product inactive/unknown, Back Android, keyboard, scroll, viewport 390 × 844, layar kecil, font besar, dan pixel-match. |
+
+FE-17 tetap **Sedang dikerjakan** sampai QA interaksi dan visual Android tersedia. Kontrak lokal read-only disepakati melalui Orca; `GET /products` dan `GET /products/{id}` tetap endpoint usulan pada `docs/API_CONTRACT.md`, tanpa perubahan dari lane frontend.

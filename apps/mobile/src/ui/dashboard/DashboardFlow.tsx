@@ -30,6 +30,7 @@ import { CareCoordinationFlow } from '../consultations/CareCoordinationFlow';
 import { ChatFlow } from '../chat/ChatFlow';
 import { BookingFlow } from '../booking/BookingFlow';
 import { VetDirectoryFlow } from '../directory/VetDirectoryFlow';
+import { MarketplaceFlow, type MarketplaceRoute } from '../marketplace/MarketplaceFlow';
 import { colors, fonts, layout, radii, roleTokens, spacing, typeScale } from '../theme/tokens';
 
 type DashboardRoute =
@@ -44,6 +45,7 @@ type DashboardRoute =
   | { type: 'doctors'; vetId?: string }
   | { type: 'booking'; vetId: string }
   | { type: 'schedule' }
+  | MarketplaceRoute
   | LivestockRoute;
 
 type Props = {
@@ -110,7 +112,7 @@ export function DashboardFlow({ store, session, onOpenProfile, onSwitchRole, onL
         setRoute(route.vetId ? { type: 'doctors' } : { type: 'home' });
         return true;
       }
-      if (route.type === 'livestock' || route.type === 'booking' || route.type === 'list' || route.type === 'recommendation' || route.type === 'care' || (route.type === 'detail' && route.kind === 'consultation')) return false;
+      if (route.type === 'livestock' || route.type === 'booking' || route.type === 'list' || route.type === 'recommendation' || route.type === 'marketplace' || route.type === 'care' || (route.type === 'detail' && route.kind === 'consultation')) return false;
       if (route.type !== 'home') {
         setRoute({ type: 'home' });
         return true;
@@ -154,6 +156,8 @@ export function DashboardFlow({ store, session, onOpenProfile, onSwitchRole, onL
         <ClinicalNoteFlow key={route.consultationId} store={store} session={session} consultationId={route.consultationId} onExit={() => setRoute({ type: 'detail', kind: 'consultation', id: route.consultationId })} />
       ) : route.type === 'recommendation' ? (
         <RecommendationFlow key={route.consultationId} store={store} session={session} consultationId={route.consultationId} onExit={() => setRoute({ type: 'detail', kind: 'consultation', id: route.consultationId })} />
+      ) : route.type === 'marketplace' ? (
+        <MarketplaceFlow key={`${route.recommendationId}:${route.productId ?? 'catalog'}`} store={store} session={session} route={route} onExit={() => setRoute({ type: 'detail', kind: 'consultation', id: route.consultationId })} />
       ) : route.type === 'care' ? (
         <CareCoordinationFlow key={route.consultationId} store={store} session={session} consultationId={route.consultationId} onExit={() => setRoute({ type: 'detail', kind: 'consultation', id: route.consultationId })} />
       ) : route.type === 'chat' ? (
@@ -161,7 +165,7 @@ export function DashboardFlow({ store, session, onOpenProfile, onSwitchRole, onL
       ) : route.type === 'schedule' ? (
         <VetScheduleFlow store={store} session={session} onExit={() => { setRoute({ type: 'home' }); void reload(); }} />
       ) : route.type === 'list' || (route.type === 'detail' && route.kind === 'consultation') ? (
-        <ConsultationFlow key={route.type === 'detail' ? route.id : route.kind} store={store} session={session} initialId={route.type === 'detail' ? route.id : undefined} initialTab={route.type === 'list' && route.kind === 'appointments' ? 'appointments' : 'requests'} onExit={() => { setRoute({ type: 'home' }); void reload(); }} onOpenAnimal={(id) => setRoute(role === 'vet' ? { type: 'patients', patientId: id } : { type: 'livestock', screen: 'detail', livestockId: id })} onOpenChat={(consultationId) => setRoute({ type: 'chat', consultationId })} onOpenClinicalNote={(consultationId) => setRoute({ type: 'clinicalNote', consultationId })} onOpenRecommendation={(consultationId) => setRoute({ type: 'recommendation', consultationId })} onOpenCare={(consultationId) => setRoute({ type: 'care', consultationId })} />
+        <ConsultationFlow key={route.type === 'detail' ? route.id : route.kind} store={store} session={session} initialId={route.type === 'detail' ? route.id : undefined} initialTab={route.type === 'list' && route.kind === 'appointments' ? 'appointments' : 'requests'} onExit={() => { setRoute({ type: 'home' }); void reload(); }} onOpenAnimal={(id) => setRoute(role === 'vet' ? { type: 'patients', patientId: id } : { type: 'livestock', screen: 'detail', livestockId: id })} onOpenChat={(consultationId) => setRoute({ type: 'chat', consultationId })} onOpenClinicalNote={(consultationId) => setRoute({ type: 'clinicalNote', consultationId })} onOpenRecommendation={(consultationId) => setRoute({ type: 'recommendation', consultationId })} onOpenCare={(consultationId) => setRoute({ type: 'care', consultationId })} onOpenMarketplace={(context) => setRoute({ type: 'marketplace', ...context, entry: context.productId ? 'recommendation' : 'catalog' })} />
       ) : route.type === 'booking' ? (
         <BookingFlow store={store} userId={session.userId} vetId={route.vetId} onBack={() => setRoute({ type: 'doctors', vetId: route.vetId })} onComplete={(id) => { void reload(); openContext('consultation', id); }} />
       ) : route.type === 'livestock' ? (
@@ -217,7 +221,7 @@ export function DashboardFlow({ store, session, onOpenProfile, onSwitchRole, onL
         ) : null}
       </ScrollView>
       )}
-      {route.type !== 'booking' && route.type !== 'schedule' && route.type !== 'list' && route.type !== 'chat' && route.type !== 'clinicalNote' && route.type !== 'recommendation' && route.type !== 'care' && !(route.type === 'detail' && route.kind === 'consultation') && !(route.type === 'patients' && route.patientId) && !(route.type === 'livestock' && route.screen !== 'list') && !(route.type === 'doctors' && route.vetId) ? (
+      {route.type !== 'booking' && route.type !== 'schedule' && route.type !== 'list' && route.type !== 'chat' && route.type !== 'clinicalNote' && route.type !== 'recommendation' && route.type !== 'marketplace' && route.type !== 'care' && !(route.type === 'detail' && route.kind === 'consultation') && !(route.type === 'patients' && route.patientId) && !(route.type === 'livestock' && route.screen !== 'list') && !(route.type === 'doctors' && route.vetId) ? (
         <BottomNavigation role={role} route={route} onSelect={(next) => setRoute(next)} onOpenProfile={onOpenProfile} />
       ) : null}
       <AccountMenu
@@ -541,7 +545,7 @@ function BottomNavigation({ role, route, onSelect, onOpenProfile }: {
   onSelect: (route: DashboardRoute) => void;
   onOpenProfile: () => void;
 }) {
-  const active = route.type === 'home' || route.type === 'chat' || route.type === 'clinicalNote' || route.type === 'recommendation' || route.type === 'care' ? 'home' : route.type === 'schedule' ? 'appointments' : route.type === 'patients' ? 'patients' : route.type === 'livestock' ? 'livestock' : route.type === 'doctors' || route.type === 'booking' ? 'consultations' : route.type === 'detail' ? 'home' : route.kind;
+  const active = route.type === 'home' || route.type === 'chat' || route.type === 'clinicalNote' || route.type === 'recommendation' || route.type === 'care' ? 'home' : route.type === 'marketplace' ? 'consultations' : route.type === 'schedule' ? 'appointments' : route.type === 'patients' ? 'patients' : route.type === 'livestock' ? 'livestock' : route.type === 'doctors' || route.type === 'booking' ? 'consultations' : route.type === 'detail' ? 'home' : route.kind;
   const tabs: { key: string; label: string; icon: IconName; route?: DashboardRoute; action?: () => void; disabled?: boolean }[] = role === 'farmer'
     ? [
       { key: 'home', label: 'Beranda', icon: 'house', route: { type: 'home' } },
