@@ -13,7 +13,7 @@ Tanggal baseline: 5 Oktober 2026. “Dipilih” berarti berasal dari jawaban/ins
 | DEC-07 | SQLite untuk data lokal + repository pengganti API | Diterapkan untuk adapter lokal FE-02; API/backend tetap belum dipilih | Memenuhi persistence dan satu sumber data; `expo-sqlite ~57.0.3`, migration, seed, repository, dan events diuji pada Android |
 | DEC-08 | StyleSheet + design tokens, Inter lokal, satu keluarga ikon Lucide; Expo Router | UI FE-01 diterapkan; Expo Router tetap usulan | Framework mobile terpilih, aturan ikon, dan hasil inspeksi Figma; versi library tercatat di Tech |
 | DEC-09 | Satu app dengan shell Peternak/Dokter, session role guard | Usulan | Mengikuti Pilih/Ganti Peran tanpa bypass izin |
-| DEC-10 | NestJS + PostgreSQL, modular monolith | Terbuka | Kandidat utama backend; belum ada backend dalam folder |
+| DEC-10 | NestJS + PostgreSQL, modular monolith | Dipilih | Instruksi pengguna 13 Oktober 2026; mulai BE-00–16 secara lokal, tanpa memilih provider produksi atau melakukan deploy |
 | DEC-11 | Dokter hanya menerima request berbayar sukses pada milestone lokal | Usulan | Mencegah payment method langsung membuka chat; bayar nanti di Figma belum didefinisikan |
 | DEC-12 | Refund otomatis dan pay-later belum diaktifkan pada milestone lokal | Usulan | Jangan klaim refund/dana nyata; status refund_needed disimpan untuk ditangani pada fase backend |
 | DEC-13 | Komisi 10% hanya fixture, rate disnapshot per layanan | Usulan | Tidak menyatakan tarif komersial platform |
@@ -29,7 +29,7 @@ Tanggal baseline: 5 Oktober 2026. “Dipilih” berarti berasal dari jawaban/ins
 | DEC-23 | Fokus sekarang pada flow frontend tanpa autentikasi dan backend jaringan | Dipilih | Instruksi pengguna 5 Oktober 2026; `FrontendFlow` memilih persona fixture lokal, sedangkan layar daftar/masuk/reset/keluar tidak dipasang pada runtime aktif |
 | DEC-24 | Jika node Figma tidak dapat diakses, desain layar mandiri dengan UI/UX aman dan sesuai fungsi | Dipilih | Instruksi pengguna 5 Oktober 2026; FE-06, riwayat Peternak FE-07, direktori/profil FE-08, serta booking FE-09 memakai tokens/aturan fitur, dengan keterbatasan pixel-match dicatat di Figma mapping |
 
-DEC-01 mencatat keadaan tahap dokumentasi sebelum pengguna meminta implementasi. DEC-19 memulai implementasi; DEC-23/24 menetapkan fokus frontend aktif. Keputusan backend lain tetap terbuka.
+DEC-01 mencatat keadaan tahap dokumentasi sebelum pengguna meminta implementasi. DEC-19 memulai implementasi; DEC-23/24 menetapkan fokus frontend aktif. DEC-10 kini menetapkan stack backend; FE-03 tetap ditunda sesuai DEC-23. Keputusan provider dan operasi produksi tetap terbuka.
 
 Untuk mengubah keputusan, tambah tanggal, alasan dan dampak pada PRD, model status, API, backlog dan acceptance criteria. Jangan menghapus riwayat keputusan pengguna tanpa mencatat penggantinya.
 

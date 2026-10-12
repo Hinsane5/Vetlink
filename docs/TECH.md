@@ -132,16 +132,15 @@ Paket Expo yang benar-benar terpasang dan keterkaitannya dengan FE-01–04 dicat
 | Supabase + PostgreSQL | Kandidat layanan terkelola untuk auth/database/storage; aturan akses dan transaksi tetap harus dirancang | Ketergantungan layanan; operasi finansial/penyelesaian klinis harus ditempatkan pada boundary server yang tepat |
 | FastAPI + PostgreSQL | Kandidat jika tim lebih nyaman Python | Dua bahasa; berbagi tipe perlu melalui OpenAPI |
 
-**Usulan utama: NestJS + PostgreSQL**, karena VetLink memiliki banyak aturan status lintas modul dan kebutuhan transaksi. Ini penilaian untuk kebutuhan project, bukan keputusan pengguna. Nest menyediakan kerangka server Node.js dengan dukungan TypeScript; PostgreSQL menyediakan mekanisme isolasi transaksi yang relevan untuk konflik booking dan reservasi saldo. [NestJS](https://docs.nestjs.com/), [PostgreSQL transaction isolation](https://www.postgresql.org/docs/current/transaction-iso.html).
+**Dipilih pengguna 13 Oktober 2026: NestJS + PostgreSQL** untuk backend modular monolith BE-00–16. Nest menyediakan kerangka server Node.js dengan dukungan TypeScript; PostgreSQL menyediakan mekanisme isolasi transaksi yang relevan untuk konflik booking dan reservasi saldo. Pilihan ini belum menetapkan provider produksi, hosting, atau izin deploy. [NestJS](https://docs.nestjs.com/), [PostgreSQL transaction isolation](https://www.postgresql.org/docs/current/transaction-iso.html).
 
 Pemilihan ORM (misalnya Prisma), provider auth, penyimpanan media, realtime, queue, hosting dan provider produksi dilakukan setelah backend dipilih. Modular monolith diusulkan untuk awal; microservices belum dibutuhkan oleh scope ini.
 
-## Hal yang dibahas sebelum backend
+## Hal yang masih terbuka untuk backend
 
-1. Apakah backend memakai NestJS + PostgreSQL atau layanan terkelola?
-2. Siapa peninjau dokumen dokter; apakah perlu tooling admin terpisah?
-3. Kapan simulasi diganti provider nyata, serta aturan bayar nanti/refund/komisi?
-4. Target hosting, kebutuhan backup, biaya operasional dan target iOS.
+1. Siapa peninjau dokumen dokter; apakah perlu tooling admin terpisah?
+2. Kapan simulasi diganti provider nyata, serta aturan bayar nanti/refund/komisi?
+3. Target hosting, kebutuhan backup, biaya operasional dan target iOS.
 
 Pertanyaan ini tidak menghambat penyusunan dokumen atau adapter lokal. Catat jawabannya di [Decisions](DECISIONS.md); jangan memaksakan stack backend dari usulan ini.
 
