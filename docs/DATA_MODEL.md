@@ -9,7 +9,10 @@ Entitas memiliki `id`, `createdAt`, `updatedAt`; entitas mutable memiliki `versi
 | Entitas | Field minimum / relasi |
 | --- | --- |
 | User | nama, email ternormalisasi unik, role memberships, status akun; credential ditangani AuthService |
-| Session | userId, activeRole, local session expiry (30 hari), status active/revoked; session ID di secure storage |
+| UserCredential | userId, password hash `scrypt` dengan salt acak, skema hash, updatedAt/version; raw password tidak disimpan |
+| Session | userId, activeRole harus terdaftar sebagai membership, access hash/expiry, refresh hash, expiry sesi absolut 30 hari, status active/revoked; token hanya dikembalikan saat issue/rotate dan hash disimpan di backend |
+| RefreshTokenHistory | sessionId, hash refresh yang telah dipakai, consumedAt; replay mencabut sesi |
+| PasswordResetRequest | userId, token hash, adapter delivery status/operationId, expiresAt, deliveredAt/consumedAt; token hanya dapat dipakai satu kali setelah delivery succeeded |
 | FarmerProfile | userId, photoAttachmentId, farmId |
 | Farm | ownerId, nama, species[], lokasi, visitAddressId |
 | Address | ownerId, label, penerima, telepon, alamat, kota/provinsi/kode pos, optional koordinat |
@@ -56,7 +59,9 @@ Relasi utama: Peternak → Farm → Livestock → Consultation ← Dokter. Consu
 
 SQLite menggunakan schema version `2` pada `vetlink.db`. Migrasi v2 menambah unique index untuk email user yang dinormalisasi dan mengabaikan kapitalisasi/spasi tepi. Baris `entities` menyimpan envelope (`id`, `kind`, owner/context IDs, payload JSON, timestamps, version, dan key deduplikasi); `entity_relations` menyimpan hubungan dengan foreign key; `domain_events` dan `event_effects` menyimpan hasil event atomik; `app_metadata` dan `schema_migrations` melacak versi. Repository bersama membatasi query lewat `kind`, `owner_id` dan relasi, menggunakan update dengan expected version, dan menolak edit catatan klinis yang sudah final.
 
-Pada adapter FE-03, AuthService menyimpan verifier kata sandi bersalt di `expo-secure-store`, terpisah dari SQLite; fixture seed tidak mempunyai credential. Ini hanya verifier SHA-256 untuk simulasi lokal dan bukan KDF/password auth produksi. Session ID serta verifier tidak dikirim ke server; reset lokal tidak mengirim email dan hanya berlaku pada credential lokal yang sudah ada.
+Adapter FE-03 historis menyimpan verifier lokal di `expo-secure-store`; alur UI autentikasi itu tidak aktif sesuai DEC-23. BE-01 memakai auth internal PostgreSQL: password `scrypt` (salt 16 byte, derived key 64 byte, parameter N=16384/r=8/p=1), token opaque acak dengan SHA-256 hash, access 15 menit, dan refresh/session 30 hari absolut. Refresh token sebelumnya disimpan sebagai hash di riwayat replay. Logout mencabut satu sesi; reset sukses mencabut semua sesi. Fixture seed tidak memiliki credential login.
+
+BE-01 tidak memilih provider email/OTP produksi. Reset request selalu menghasilkan 202 generik; adapter lokal yang aktif mengembalikan `failed`, tidak mengirim pesan atau membuka token. PasswordResetRequest baru dapat dikonfirmasi setelah adapter terpilih mengembalikan `succeeded`. Rate limit saat ini in-memory per proses dan harus diganti shared store sebelum runtime multi-instance.
 
 FE-04 menambahkan `ProfileDraft` sebagai entity fleksibel pada envelope SQLite v2; tidak diperlukan perubahan tabel. `ProfileService` memvalidasi form, sedangkan `SqliteProfileRepository` menyimpan user/profile/farm/alamat/submission melalui exclusive transaction dan optimistic version. Lampiran dimiliki user, menyimpan metadata serta URI lokal, dan file disalin ke direktori dokumen privat aplikasi; isi file tidak disimpan base64 atau dikirim jaringan. Picker membatasi dokumen verifikasi ke PDF/gambar. `uploadStatus=local` berarti hanya tersimpan pada perangkat.
 

@@ -1,6 +1,6 @@
 # Teknologi dan bahan diskusi
 
-Status per 13 Oktober 2026: FE-00/02 selesai; FE-01/03–14 masih dikerjakan; BE-00 selesai. Mobile tetap memakai persona lokal tanpa autentikasi/backend jaringan. Backend memiliki scaffold NestJS + PostgreSQL, migrasi, seed, OpenAPI healthcheck, CI dan config lokal; autentikasi serta endpoint domain belum tersedia. Bukti BE-00 ada di [Testing](TESTING.md). QA visual/interaksi Android FE-14 sebelumnya belum terverifikasi karena MIUI menolak tap ADB (`INJECT_EVENTS`).
+Status per 13 Oktober 2026: FE-00/02 selesai; FE-01/03–14 masih dikerjakan; BE-00/01 selesai. Mobile tetap memakai persona lokal tanpa autentikasi/backend jaringan. Backend memiliki scaffold NestJS + PostgreSQL, migrasi, seed, OpenAPI healthcheck/auth, CI, dan config lokal; endpoint domain selain auth belum tersedia. Bukti backend ada di [Testing](TESTING.md). QA visual/interaksi Android FE-14 sebelumnya belum terverifikasi karena MIUI menolak tap ADB (`INJECT_EVENTS`).
 
 ## Keputusan mobile
 
@@ -80,7 +80,7 @@ Lucide dimuat sebelum shell dirender bersama Inter agar glyph ikon tersedia saat
 | Session expiry | Sesi lokal kedaluwarsa setelah 30 hari dan diverifikasi kembali saat bootstrap |
 | Pemeriksaan | Empat tes AuthService lulus; build Android lulus dan layar Mulai terbuka. Uji tap/form di HP menunggu akses input MIUI; screenshot Figma FE-03 tertahan oleh batas MCP |
 
-Kode autentikasi FE-03 tidak dipakai pada alur aktif. Jika kelak dipakai kembali, SHA-256 bersalt bukan KDF password produksi; tidak ada verifikasi email, proteksi percobaan login/rate limit server, pemulihan identitas, atau otoritas lintas perangkat. Adapter verifier/session harus diganti dengan implementasi tepercaya saat auth server/provider dipilih dan BE-01 dijalankan. Akun fixture sengaja tidak dapat diklaim lewat reset karena tidak memiliki verifier lokal.
+Kode autentikasi FE-03 tidak dipakai pada alur aktif. Verifier SHA-256 bersalt pada adapter lokal historis bukan KDF password produksi; backend BE-01 terpisah memakai `scrypt` dan limiter auth per proses. Mobile belum terhubung ke backend, verifikasi email/reset delivery provider belum dipilih, dan fixture sengaja tidak dapat diklaim lewat reset karena tidak memiliki credential.
 
 ## Realisasi awal FE-04: profil, farm, alamat, dan verifikasi
 
@@ -124,7 +124,7 @@ Harness diagnostik FE-02 hanya tampil saat development dengan `EXPO_PUBLIC_FE02_
 
 Paket Expo yang benar-benar terpasang dan keterkaitannya dengan FE-01–04 dicatat di README. Form/test framework dan seluruh kandidat lain tetap usulan; tidak ada kewajiban menginstall semua kandidat state/form/test sekaligus.
 
-## Pilihan backend dan realisasi BE-00
+## Pilihan backend dan realisasi BE-00/01
 
 | Kandidat | Kesesuaian untuk VetLink | Tradeoff yang perlu dibahas |
 | --- | --- | --- |
@@ -132,9 +132,9 @@ Paket Expo yang benar-benar terpasang dan keterkaitannya dengan FE-01–04 dicat
 | Supabase + PostgreSQL | Kandidat layanan terkelola untuk auth/database/storage; aturan akses dan transaksi tetap harus dirancang | Ketergantungan layanan; operasi finansial/penyelesaian klinis harus ditempatkan pada boundary server yang tepat |
 | FastAPI + PostgreSQL | Kandidat jika tim lebih nyaman Python | Dua bahasa; berbagi tipe perlu melalui OpenAPI |
 
-**Dipilih pengguna 13 Oktober 2026: NestJS + PostgreSQL** untuk backend modular monolith BE-00–16. Versi baseline BE-00 yang benar-benar diuji: Node.js 24.15.0, NestJS 12.1.3, Nest CLI 12.0.8, TypeScript 6.0.3, driver `pg` 8.23.1, dan PostgreSQL 17.4. PostgreSQL 18.x dicatat sebagai upgrade gate sebelum integrasi berikutnya. Nest memakai ESM; project memakai NodeNext. Database diakses lewat port infrastructure dan SQL eksplisit, belum memilih ORM. Migrasi berjalan eksplisit dengan advisory lock, checksum, dan transaksi; seed fiktif hanya insert conflict-do-nothing. Stack ini belum menetapkan provider produksi, hosting, atau izin deploy. Lihat [panduan backend](../apps/api/README.md), [NestJS](https://docs.nestjs.com/), dan [kebijakan versi PostgreSQL](https://www.postgresql.org/support/versioning/).
+**Dipilih pengguna 13 Oktober 2026: NestJS + PostgreSQL** untuk backend modular monolith BE-00–16. Baseline stack memilih Node.js 24.15.0, NestJS 12.1.3, Nest CLI 12.0.8, TypeScript 6.0.3, driver `pg` 8.23.1, dan PostgreSQL 17.4. PostgreSQL 18.x dicatat sebagai upgrade gate sebelum integrasi berikutnya. Nest memakai ESM; project memakai NodeNext. Database diakses lewat port infrastructure dan SQL eksplisit, belum memilih ORM. Migrasi berjalan eksplisit dengan advisory lock, checksum, dan transaksi; seed fiktif hanya insert conflict-do-nothing. BE-01 memilih password auth internal `scrypt`, hash token opaque di PostgreSQL, dan role guard; email reset gagal tertutup tanpa adapter/provider terpilih. BE-01 check lokal berjalan pada Node 24.10 karena Node 24.15 tidak tersedia di shell, lihat [Testing](TESTING.md). Hosting dan izin deploy tetap belum dipilih. Lihat [panduan backend](../apps/api/README.md), [NestJS](https://docs.nestjs.com/), dan [kebijakan versi PostgreSQL](https://www.postgresql.org/support/versioning/).
 
-Port HTTP aktual memakai adapter Express NestJS; module pertama adalah Health, dengan route live/ready. Module domain akan mengikuti boundary use case/repository pada API masing-masing. Shared error response dan status domain sudah ada di OpenAPI; endpoint business belum aktif. Provider auth, penyimpanan media, realtime, queue, hosting dan provider produksi tetap belum dipilih. Modular monolith dipakai untuk awal; microservices belum dibutuhkan oleh scope ini.
+Port HTTP aktual memakai adapter Express NestJS; module Health dan Auth menyediakan healthcheck, auth, bearer `/me`, serta role membership guard. Module domain akan mengikuti boundary use case/repository pada API masing-masing. Shared error response dan status domain sudah ada di OpenAPI; endpoint business selain auth belum aktif. Provider credential eksternal, reset delivery, penyimpanan media, realtime, queue, hosting dan provider produksi tetap belum dipilih. Modular monolith dipakai untuk awal; microservices belum dibutuhkan oleh scope ini.
 
 ## Hal yang masih terbuka untuk backend
 

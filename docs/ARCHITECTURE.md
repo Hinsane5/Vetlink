@@ -1,6 +1,6 @@
 # Arsitektur VetLink
 
-Status: mobile tetap memakai alur Android lokal tanpa autentikasi dan tanpa koneksi backend. `FrontendFlow` memilih persona fixture lokal; FE-05–14 membaca SQLite lewat service/repository. BE-00 kini menyediakan modular monolith NestJS + PostgreSQL dengan Health module, migrasi SQL, seed fiktif, dan OpenAPI; feature modules belum ada. Mobile belum diarahkan ke API. Backend tidak mengubah aturan akses, status, atau keuangan sampai use case domain pada tiket berikutnya tersedia.
+Status: mobile tetap memakai alur Android lokal tanpa autentikasi dan tanpa koneksi backend. `FrontendFlow` memilih persona fixture lokal; FE-05–14 membaca SQLite lewat service/repository. BE-00/01 menyediakan modular monolith NestJS + PostgreSQL dengan Health dan Auth modules, migrasi SQL, seed fiktif, dan OpenAPI. Mobile belum diarahkan ke API; backend belum menyediakan domain use case untuk data ternak, layanan, pembayaran, atau keuangan.
 
 ## Boundary aplikasi
 
@@ -118,13 +118,13 @@ Service port mengembalikan `operationId`, hasil/status, waktu, dan error bila ga
 
 Pengiriman notifikasi atau reminder dicatat sebagai `sent` hanya bila adapter delivery memberi hasil berhasil. Ini adalah keberhasilan adapter lokal, bukan konfirmasi push/email/provider produksi. Tidak ada tombol pengujian dalam layar produk.
 
-## Backend BE-00 dan batas implementasi
+## Backend BE-00/01 dan batas implementasi
 
-Stack yang dipilih adalah modular monolith NestJS, REST JSON `/v1`, PostgreSQL, dan driver SQL `pg` lewat boundary infrastructure. Implementasi BE-00 hanya healthcheck dan schema fondasi untuk identity/farm/livestock/consultation/payment/idempotency; API domain belum tersedia. Database readiness menguji koneksi aktual; liveness tidak bergantung pada PostgreSQL. Error envelope menambahkan request ID dan tidak mengirim stack trace.
+Stack yang dipilih adalah modular monolith NestJS, REST JSON `/v1`, PostgreSQL, dan driver SQL `pg` lewat boundary infrastructure. BE-00 menyediakan healthcheck dan schema fondasi; BE-01 menambahkan password auth internal, sesi/token opaque hashed, rotasi/replay refresh, logout/reset revoke, request reset enumeration-safe, rate limit auth, bearer `/me`, serta role membership guard. Guard pemilik/assignment untuk endpoint domain akan dipasang bersama setiap domain module; sampai itu tersedia, endpoint domain belum dibuka. Database readiness menguji koneksi aktual; liveness tidak bergantung pada PostgreSQL. Error envelope menambahkan request ID dan tidak mengirim stack trace.
 
-Migrations memakai file SQL berchecksum, advisory lock serta transaksi. Seed tidak berjalan saat server start; row fixture ditambahkan secara eksplisit, semua data sepenuhnya fiktif, vet fixture `not_submitted`, tanpa password atau hasil pembayaran. Tidak ada provider produksi atau layanan uang nyata.
+Migrations memakai file SQL berchecksum, advisory lock serta transaksi. Seed tidak berjalan saat server start; row fixture ditambahkan secara eksplisit, semua data sepenuhnya fiktif, vet fixture `not_submitted`, tanpa password atau hasil pembayaran. Password di-hash `scrypt`; database menyimpan hash access/refresh/reset token saja. Adapter delivery reset lokal gagal tertutup dan tidak mengirim pesan; provider produksi belum dipilih. Tidak ada layanan uang nyata.
 
-Tiket berikutnya akan membangun otorisasi, konflik jadwal, catatan final, ledger, outbox, media privat dan adapter provider hasil layanan yang dapat gagal. Callback provider tidak akan diterima sampai signature, reference, amount dan duplicate event tervalidasi.
+Tiket berikutnya akan membangun owner/assignment resource scope, konflik jadwal, catatan final, ledger, outbox, media privat dan adapter provider hasil layanan yang dapat gagal. Callback provider tidak akan diterima sampai signature, reference, amount dan duplicate event tervalidasi.
 
 WebSocket/realtime dapat ditambahkan untuk chat setelah basic message API/persistence berhasil. Retry tetap memakai client message ID. Queue/worker dipilih saat delivery/push/provider nyata diperlukan, bukan dipasang hanya untuk milestone lokal.
 

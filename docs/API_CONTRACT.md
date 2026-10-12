@@ -1,35 +1,66 @@
 # Kontrak integrasi backend v1
 
-Status: fondasi OpenAPI executable tersedia sejak BE-00. Runtime NestJS saat ini hanya mengimplementasikan healthcheck; kelompok route domain pada dokumen ini tetap kontrak target untuk tiket berikutnya. Aplikasi mobile belum memakai backend jaringan.
+Status: OpenAPI executable memuat healthcheck dan auth BE-01 (`/v1/auth/*`, `/v1/me`). Route domain lain tetap kontrak target untuk tiket berikutnya. Aplikasi mobile belum memakai backend jaringan.
 
 ## Konvensi
 
-Prefix `/v1`, JSON, ID stabil, timestamp ISO-8601 UTC, integer IDR, paginasi cursor untuk daftar. Auth session/backend memakai bearer credential sesuai provider nanti; token tidak menjadi query parameter. Error berbentuk `{code, message, fieldErrors?, requestId}` tanpa isi rahasia/stack trace. Client menerjemahkan pesan teknis ke bahasa Indonesia.
+Prefix `/v1`, JSON, ID stabil, timestamp ISO-8601 UTC, integer IDR, paginasi cursor untuk daftar. Auth memakai bearer credential opaque; token tidak menjadi query parameter. Error berbentuk `{code, message, fieldErrors?, requestId}` tanpa isi rahasia/stack trace. Client menerjemahkan pesan teknis ke bahasa Indonesia.
 
 Mutasi concurrency-sensitive menerima `expectedVersion`. Mutasi pembayaran, order, pencairan, finalisasi dan completion menerima `Idempotency-Key`; key sama/payload sama mengembalikan hasil sebelumnya, payload berbeda ditolak. Status HTTP standar: 400 validation, 401 session, 403 role/access, 404 resource tersembunyi, 409 status/version/slot conflict, 422 rule, 429 rate limit, 503 dependency unavailable, dan 500 internal error.
 
 Gunakan action endpoint untuk transisi yang membutuhkan syarat; jangan menyediakan PATCH umum yang membolehkan client mengatur `verified`, `completed`, `paid`, `balance`, atau `finalizedAt`.
 
-## OpenAPI executable BE-00
+## OpenAPI executable BE-00/01
 
-NestJS melayani Swagger UI di `/docs` dan JSON di `/openapi.json`. Endpoint runtime yang tersedia saat ini:
+NestJS melayani Swagger UI di `/docs` dan JSON di `/openapi.json`. Endpoint runtime yang tersedia:
 
 | Method / path | Request | Response sukses | Error yang didokumentasikan |
 | --- | --- | --- | --- |
 | `GET /v1/health/live` | Tanpa body atau parameter | `LivenessResponse` (`status`, `service`, `timestamp`, `requestId`) | 500 `ApiErrorResponse` |
 | `GET /v1/health/ready` | Tanpa body atau parameter | `ReadinessResponse` (`status`, pemeriksaan database, `timestamp`, `requestId`) | 503 jika PostgreSQL tidak tersedia; 500 internal |
+| `POST /v1/auth/register` | Email, nama, password, role | Sesi baru dan token | 400/409/429/500 |
+| `POST /v1/auth/login` | Email, password, active role | Sesi baru dan token | 400/401/403/429/500 |
+| `POST /v1/auth/logout` | Refresh token | 204 | 400/429; idempotent |
+| `POST /v1/auth/refresh` | Refresh token | Token baru | 400/401/429/500 |
+| `POST /v1/auth/password-reset` | Email | 202 generik | 400/429; tidak membocorkan keberadaan akun |
+| `POST /v1/auth/password-reset/confirm` | Reset token, password baru | 204 | 400/429 |
+| `GET /v1/me` | Bearer access token | Akun aktif dan memberships | 401/403 |
 
 Error menggunakan `{code, message, fieldErrors?, requestId}`. `fieldErrors` adalah object dari nama field ke daftar pesan; exception filter tidak mengirim stack trace. Setiap response juga mengirim header `X-Request-Id`. Shared error code/status, request pagination (`cursor`, `limit` 1–100), base `expectedVersion`, dan parameter header `Idempotency-Key` terdokumentasi sebagai schema/response reusable. `AdapterOperationResult` memiliki outcome `pending/succeeded/failed`; outcome gagal membawa `{code, message, retryable}`, dan pemanggil harus menyimpan hasil adapter sebelum memberi respons sukses.
 
 Komponen enum status domain di OpenAPI diturunkan dari [Data model](DATA_MODEL.md): role, verifikasi dokter, siklus konsultasi, proposal jadwal, tahap kunjungan, catatan klinis, rekomendasi, follow-up/reminder/delivery, payment, order, earning, ledger, withdrawal, dan outcome adapter. Enum tersebut mendeskripsikan nilai kontrak; route domain belum diimplementasikan dan komponen ini tidak membuka akses atau mengubah status. Sebelum tiap tiket domain selesai, request/response endpoint-nya harus ditambahkan ke OpenAPI lalu direview bersama mobile.
 
+BE-01 menambahkan bearer scheme `bearer` dan operation untuk register, login, logout, refresh, reset kata sandi, dan `/me`. Detail payload auth ada di bagian berikut. Route domain lain belum diimplementasikan.
+
 Untuk menjalankan server lokal, migrasi, seed, dan smoke check, ikuti [panduan backend](../apps/api/README.md).
+
+## Auth BE-01
+
+Credential memakai provider password internal VetLink. Kata sandi di-hash dengan `scrypt` dan salt acak; database hanya menyimpan verifier. Access dan refresh credential berupa token opaque acak, database hanya menyimpan SHA-256 hash. Access berlaku 15 menit; refresh berotasi sekali pakai dan sesi memiliki expiry absolut 30 hari. Replay refresh yang sudah dipakai mencabut sesi. Logout menerima refresh token dan idempotent; reset sukses mengubah password serta mencabut semua sesi akun dalam satu transaksi.
+
+Semua endpoint auth dibatasi per proses: register 5/IP/jam; login 20/IP/15 menit dan 5/email/15 menit; reset request 10/IP/jam dan 3/email/jam; reset confirm 10/IP/jam dan 5 token/jam; refresh/logout 30/IP/menit. Identifier dibatasi memakai HMAC dengan pepper acak proses dan tidak disimpan sebagai bucket mentah. Limiter ini sesuai proses backend lokal tunggal; deployment multi-instance memerlukan store rate-limit bersama.
+
+| Method / path | Request | Response sukses | Error / aturan |
+| --- | --- | --- | --- |
+| `POST /v1/auth/register` | `email`, `fullName`, `password`, `role` (`farmer`/`vet`) | 201 `AuthSessionResponse` dengan token, peran, akun, dan expiry | 400 validasi; 409 email sudah digunakan; buat membership/profile awal/sesi atomik |
+| `POST /v1/auth/login` | `email`, `password`, `activeRole` | 200 `AuthSessionResponse` | 400 validasi; 401 email/password tidak cocok atau akun nonaktif; 403 role tidak dimiliki |
+| `POST /v1/auth/logout` | `refreshToken` | 204 | Mencabut sesi yang diketahui; token tak dikenal tetap 204 agar retry logout aman |
+| `POST /v1/auth/refresh` | `refreshToken` | 200 `AuthSessionResponse` baru | 400 validasi; 401 token invalid/expired/replay; refresh lama dan access sebelumnya dicabut saat rotasi |
+| `POST /v1/auth/password-reset` | `email` | 202 `{message}` | Status/body generik tanpa token untuk akun ada/tidak ada dan kegagalan dependency; 429 rate limit |
+| `POST /v1/auth/password-reset/confirm` | `token`, `newPassword` | 204 | Token sekali pakai, berlaku 1 jam, hanya aktif setelah adapter melaporkan `succeeded`; sukses mencabut seluruh sesi |
+| `GET /v1/me` | `Authorization: Bearer <accessToken>` | 200 identitas, memberships, active role, session ID | 401 session; 403 role guard; identitas selalu diambil dari token, bukan ID client |
+
+`AuthSessionResponse` mengembalikan `accessToken`, `refreshToken`, `tokenType`, `accessExpiresAt`, `sessionExpiresAt`, `sessionId`, `activeRole`, dan ringkasan user. Client menyimpan token di secure storage. Ganti peran harus memilih membership yang sudah ada; auth tidak menambah membership atau memberikan hak akses resource. Role guard memeriksa active role dan membership pada backend.
+
+Adapter reset bernama `PasswordResetDeliveryAdapter` mengembalikan `pending/succeeded/failed`; token reset hanya dapat dikonfirmasi bila hasil persisted adalah `succeeded`. Adapter BE-01 yang aktif `UnconfiguredPasswordResetDeliveryAdapter` selalu gagal tertutup dan tidak mengirim pesan, mengembalikan token, atau mencatat token/password. Karena belum ada provider pengiriman yang dipilih, alur permintaan reset aman dan siap disambungkan, tetapi reset yang dapat digunakan pengguna menunggu adapter pengiriman berikutnya. Hasil gagal tetap mendapat response generik 202 untuk mencegah account enumeration.
+
+Body request/response tidak pernah ditulis ke log. Error menggunakan envelope standar tanpa nilai request, token, password atau stack. Endpoint jaringan pada deployment wajib memakai HTTPS; konfigurasi proxy dan distributed rate-limit tetap keputusan operasional sebelum multi-instance.
 
 ## Kelompok endpoint
 
 | Modul | Endpoint usulan | Otorisasi / hasil |
 | --- | --- | --- |
-| Auth | POST `/auth/register`, `/auth/login`, `/auth/logout`, `/auth/password-reset`, `/auth/refresh`; GET `/me` | Session user; reset tidak membocorkan ada/tidaknya akun |
+| Auth | POST `/auth/register`, `/auth/login`, `/auth/logout`, `/auth/refresh`, `/auth/password-reset`, `/auth/password-reset/confirm`; GET `/me` | Session user; reset tidak membocorkan ada/tidaknya akun |
 | Profil | GET/PATCH `/me/farmer`, `/me/vet`; CRUD `/me/addresses` | Owner; vet verified field tidak dapat diubah lewat profile |
 | Verifikasi | POST `/me/vet/verification-submissions`; GET `/me/vet/verification` | Dokter submit/revisi; hasil review hanya trusted reviewer |
 | Ternak | GET/POST `/livestock`; GET/PATCH `/livestock/{id}` | Peternak own CRUD; dokter read sesuai assignment |
@@ -83,4 +114,4 @@ Payload event minimal: eventId, aggregateId, actorId, occurredAt, version. Efek 
 
 Jalankan suite yang sama terhadap repository lokal dan API: scope ownership, verified guard, slot conflicts, final-note immutability, complete guard, sequence visit, computed totals, earning once, withdrawal reservation/retry, notification recipient. Perbedaan teknis error harus dinormalisasi ke domain error yang sama.
 
-OpenAPI BE-00 executable tetapi cakupannya baru healthcheck dan shared contract components; tabel endpoint usulan di atas tidak menandakan route tersebut tersedia. Request/response dan validation constraints untuk tiap domain tetap harus diturunkan dari Data model serta direview bersama mobile sebelum implementasi endpoint.
+OpenAPI BE-00/01 executable memuat healthcheck, auth dan `/me`; endpoint domain lain pada tabel masih usulan dan belum tersedia. Request/response serta validation constraints untuk tiap domain tetap harus diturunkan dari Data model dan direview bersama mobile sebelum implementasi.

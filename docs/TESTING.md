@@ -15,6 +15,19 @@ Status QA per 6 Oktober 2026: bukti FE-00/02 sebelumnya tetap berlaku. Tahap akt
 
 Framework tes domain/UI dan E2E pada [Tech](TECH.md) belum dipasang. Jalankan script yang benar-benar tersedia dari manifest; saat ini `npm run check` dan build Android tersedia, tetapi tidak ada script `npm test`.
 
+## Bukti BE-01 (13 Oktober 2026)
+
+Pemeriksaan backend dijalankan dari `apps/api`:
+
+- `npm run check` — **Lulus**: `tsc --noEmit` dan `nest build`.
+- `npm run api:smoke` — **Lulus** dengan nilai placeholder lokal dari `.env.example`. Smoke memeriksa health live/ready, OpenAPI memuat endpoint auth dan `/me`, `/me` tanpa bearer ditolak 401, login dibatasi setelah lima percobaan per email (429), password uji tidak muncul di output proses, serta password-reset menghasilkan response 202 generik tanpa token.
+- PostgreSQL readiness pada run ini mengembalikan 503; login mengembalikan 503 sebelum dibatasi karena database/skema lokal belum siap. Smoke tetap memeriksa envelope 503. Migrasi auth dan alur register/login/refresh/logout/reset dengan database tidak dijalankan.
+- Runtime yang tersedia adalah Node `v24.10.0` / npm `11.6.0`; `.nvmrc` meminta Node `24.15.0`, dan `nvm` tidak tersedia pada shell ini. Typecheck/build lulus pada runtime yang tersedia, tetapi belum diverifikasi pada versi Node yang ditetapkan.
+- Tidak ada test runner backend pada manifest. Hanya limiter login dan jalur auth negatif tanpa sesi valid yang diuji smoke; rotasi/replay token dengan DB, revoke session, role guard dengan sesi valid, dan adapter reset `succeeded` belum diuji runtime.
+- Adapter reset aktif mengembalikan `failed`, tidak mengirim pesan, dan tidak mengungkap token. Tidak ada credential fixture, provider eksternal, secret, migrasi database lokal, transaksi finansial, atau deployment yang dijalankan.
+
+Smoke tanpa konfigurasi env awalnya berhenti sebelum startup karena `DATABASE_HOST` wajib. Run final memakai nilai placeholder lokal yang sama dengan `.env.example`; hasil tersebut tidak mengubah database.
+
 ## Fixture dan kondisi
 
 Seed deterministik FE-02: Budi/Sari, dokter verified/pending, sapi/kambing milik berbeda, konsultasi request/chat/visit/completed, proposal, draft/final note, reminder pending/sent/done, produk fiktif tanpa dosis, cart kosong/berisi, pembayaran pending/failed/succeeded, order/shipment, dan ledger. Ledger menghasilkan tersedia Rp88.000, pending Rp81.000, reserved Rp20.000 untuk Yuda; Rani bernilai Rp0 karena belum memiliki ledger. Skenario media/delivery failure menjadi fixture service saat slice terkait dibuat. Tanggal UI harus berasal dari data/clock, bukan hardcoded.

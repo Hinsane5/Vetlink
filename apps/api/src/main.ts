@@ -48,9 +48,10 @@ async function bootstrap(): Promise<void> {
   const openApiConfig = new DocumentBuilder()
     .setTitle('VetLink API')
     .setDescription(
-      'BE-00 foundation contract. Only the health routes are implemented; domain routes are delivered by their backend tickets.',
+      'BE-00/BE-01 contract. Health and first-party authentication routes are implemented; domain routes are delivered by their backend tickets.',
     )
     .setVersion('1.0.0')
+    .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'Opaque token' }, 'bearer')
     .build();
   const document = SwaggerModule.createDocument(app, openApiConfig);
   document.components = {

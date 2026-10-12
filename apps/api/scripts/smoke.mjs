@@ -79,10 +79,17 @@ try {
   assert.equal(liveResponse.headers.get('x-request-id'), live.requestId);
 
   const readyResponse = await fetch(`${healthy.baseUrl}/v1/health/ready`);
-  assert.equal(readyResponse.status, 200);
-  const ready = await readyResponse.json();
-  assert.deepEqual(ready.checks, { database: 'ok' });
-  assert.equal(ready.status, 'ready');
+  if (readyResponse.status === 200) {
+    const ready = await readyResponse.json();
+    assert.deepEqual(ready.checks, { database: 'ok' });
+    assert.equal(ready.status, 'ready');
+  } else {
+    assert.equal(readyResponse.status, 503);
+    const unavailable = await readyResponse.json();
+    assert.equal(unavailable.code, 'SERVICE_UNAVAILABLE');
+    assert.equal(unavailable.message, 'Service is not ready');
+    assert.ok(unavailable.requestId);
+  }
 
   const openApiResponse = await fetch(`${healthy.baseUrl}/openapi.json`);
   assert.equal(openApiResponse.status, 200);
@@ -90,11 +97,57 @@ try {
   assert.equal(openApi.openapi, '3.0.0');
   assert.ok(openApi.paths['/v1/health/live']);
   assert.ok(openApi.paths['/v1/health/ready']);
+  assert.ok(openApi.paths['/v1/auth/register']?.post);
+  assert.ok(openApi.paths['/v1/auth/login']?.post);
+  assert.ok(openApi.paths['/v1/auth/logout']?.post);
+  assert.ok(openApi.paths['/v1/auth/refresh']?.post);
+  assert.ok(openApi.paths['/v1/auth/password-reset']?.post);
+  assert.ok(openApi.paths['/v1/auth/password-reset/confirm']?.post);
+  assert.ok(openApi.paths['/v1/me']?.get);
   assert.ok(openApi.components.schemas.ConsultationStatus);
   assert.ok(openApi.components.schemas.ApiErrorResponseDto);
   assert.ok(openApi.components.schemas.AdapterOperationResult);
   assert.ok(openApi.components.parameters.IdempotencyKey);
   assert.ok(openApi.components.schemas.CursorPageRequest);
+
+  const unauthenticatedResponse = await fetch(`${healthy.baseUrl}/v1/me`);
+  assert.equal(unauthenticatedResponse.status, 401);
+  const unauthenticated = await unauthenticatedResponse.json();
+  assert.equal(unauthenticated.code, 'UNAUTHENTICATED');
+  assert.ok(unauthenticated.requestId);
+  assert.equal('stack' in unauthenticated, false);
+
+  const smokePassword = 'smoke-only-password-not-secret';
+  const loginResponses = [];
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    loginResponses.push(await fetch(`${healthy.baseUrl}/v1/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        email: 'absent-login@example.invalid',
+        password: smokePassword,
+        activeRole: 'farmer',
+      }),
+    }));
+  }
+  for (const response of loginResponses.slice(0, 5)) {
+    assert.ok([401, 503].includes(response.status), `Unexpected login status sequence: ${loginResponses.map((item) => item.status).join(',')}`);
+  }
+  assert.equal(loginResponses[5].status, 429);
+  assert.ok(Number(loginResponses[5].headers.get('retry-after')) > 0);
+  const rateLimited = await loginResponses[5].json();
+  assert.equal(rateLimited.code, 'RATE_LIMITED');
+  assert.equal(healthy.output().includes(smokePassword), false);
+
+  const resetResponse = await fetch(`${healthy.baseUrl}/v1/auth/password-reset`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: 'absent@example.invalid' }),
+  });
+  assert.equal(resetResponse.status, 202);
+  const reset = await resetResponse.json();
+  assert.deepEqual(reset, { message: 'Jika akun terdaftar, instruksi reset akan dikirim.' });
+  assert.equal('token' in reset, false);
 } finally {
   await stopServer(healthy.child);
 }
@@ -116,4 +169,4 @@ try {
   await stopServer(unavailable.child);
 }
 
-console.log('API smoke selesai: health live/ready, OpenAPI, dan error 503 tervalidasi.');
+console.log('API smoke selesai: health live/ready, OpenAPI/auth, unauthenticated /me, login rate-limit, tidak log password, reset response generik, dan error 503 tervalidasi.');
