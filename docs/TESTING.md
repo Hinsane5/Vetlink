@@ -15,6 +15,21 @@ Status QA per 6 Oktober 2026: bukti FE-00/02 sebelumnya tetap berlaku. Tahap akt
 
 Framework tes domain/UI dan E2E pada [Tech](TECH.md) belum dipasang. Jalankan script yang benar-benar tersedia dari manifest; saat ini `npm run check` dan build Android tersedia, tetapi tidak ada script `npm test`.
 
+## Bukti BE-01 (13 Oktober 2026)
+
+Pemeriksaan backend dijalankan dari `apps/api`:
+
+Review koordinator setelah commit `0a9f9e9`: Compose PostgreSQL `17.4-alpine` lokal dijalankan pada port `54329`; migrasi `20261013_000001_initial_schema.sql` dan `20261013_000002_auth.sql` berhasil. API lokal pada port `33318` membuktikan register 201, `/me` dengan bearer 200, penolakan login peran tanpa membership 403, login 200, refresh 200, replay refresh lama 401 yang mencabut sesi (access token baru menjadi 401), logout 204 yang mencabut access token, serta respons reset 202 yang sama untuk email terdaftar dan tidak terdaftar. Percobaan skrip pertama berhenti karena ekspektasi uji salah (mengharapkan login 201); controller mendokumentasikan 200 dan skrip koreksi lulus. Database/container/volume uji lalu dihentikan dan dihapus; tidak ada provider eksternal yang dipakai. Jalur reset dengan adapter pengiriman sukses tetap belum diuji karena adapter lokal sengaja gagal tertutup.
+
+- `npm run check` — **Lulus**: `tsc --noEmit` dan `nest build`.
+- `npm run api:smoke` — **Lulus** dengan nilai placeholder lokal dari `.env.example`. Smoke memeriksa health live/ready, OpenAPI memuat endpoint auth dan `/me`, `/me` tanpa bearer ditolak 401, login dibatasi setelah lima percobaan per email (429), password uji tidak muncul di output proses, serta password-reset menghasilkan response 202 generik tanpa token.
+- Pada run awal worker, PostgreSQL readiness mengembalikan 503 dan login 503 sebelum dibatasi karena database/skema lokal belum siap. Smoke memeriksa envelope 503. Migrasi dan alur sesi dengan database kemudian diperiksa pada review koordinator di atas.
+- Runtime yang tersedia adalah Node `v24.10.0` / npm `11.6.0`; `.nvmrc` meminta Node `24.15.0`, dan `nvm` tidak tersedia pada shell ini. Typecheck/build lulus pada runtime yang tersedia, tetapi belum diverifikasi pada versi Node yang ditetapkan.
+- Tidak ada test runner backend pada manifest. Smoke worker menguji limiter login dan jalur auth negatif; review koordinator menambahkan pemeriksaan runtime sesi, rotasi/replay, revoke, dan role guard dengan PostgreSQL. Adapter reset `succeeded` belum diuji runtime.
+- Adapter reset aktif mengembalikan `failed`, tidak mengirim pesan, dan tidak mengungkap token. Tidak ada credential fixture, provider eksternal, secret, migrasi database lokal, transaksi finansial, atau deployment yang dijalankan.
+
+Smoke tanpa konfigurasi env awalnya berhenti sebelum startup karena `DATABASE_HOST` wajib. Run final memakai nilai placeholder lokal yang sama dengan `.env.example`; hasil tersebut tidak mengubah database.
+
 ## Fixture dan kondisi
 
 Seed deterministik FE-02: Budi/Sari, dokter verified/pending, sapi/kambing milik berbeda, konsultasi request/chat/visit/completed, proposal, draft/final note, reminder pending/sent/done, produk fiktif tanpa dosis, cart kosong/berisi, pembayaran pending/failed/succeeded, order/shipment, dan ledger. Ledger menghasilkan tersedia Rp88.000, pending Rp81.000, reserved Rp20.000 untuk Yuda; Rani bernilai Rp0 karena belum memiliki ledger. Skenario media/delivery failure menjadi fixture service saat slice terkait dibuat. Tanggal UI harus berasal dari data/clock, bukan hardcoded.
