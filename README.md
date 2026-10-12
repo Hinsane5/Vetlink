@@ -89,6 +89,8 @@ Untuk melihat FE-14: buka detail layanan yang sedang berlangsung. Dokter membuka
 
 Untuk melihat FE-15: Dokter buka **Konsultasi → Jadwal → VL-C-107**, finalisasi catatan pemeriksaan bila belum ada, lalu pilih **Buat Rekomendasi**. Tambahkan item dengan teks dan instruksi; produk katalog dapat ditautkan secara opsional. **Tinjau sebelum dikirim** menampilkan teks aktual, lalu **Kirim rekomendasi** menyimpan status `sent`. Peternak Budi membuka layanan yang sama untuk membaca rekomendasi terkirim; draft tidak ditampilkan kepadanya. Dokter tidak memperoleh cart atau checkout. QA interaksi dan perbandingan visual layar masih tertunda.
 
+Untuk melihat FE-16: pada detail layanan dengan catatan final, Dokter membuka **Tindak lanjut & pengingat** untuk menjadwalkan pemeriksaan ulang atau membuat pengingat; agenda recheck tampil di **Jadwal** dalam timezone Dokter. Peternak membuka detail layanan yang sama untuk membaca tindak lanjut, mengirim laporan perkembangan, dan melihat pengingat. Dari **Beranda → Lihat pengingat** atau area tindak lanjut, Peternak dapat mengonfirmasi perawatan dilakukan; status pengiriman pengingat tetap terpisah dan konfirmasi menambahkan satu catatan pada riwayat kesehatan. QA interaksi/visual Android masih tertunda.
+
 Data fiktif FE-08 disimpan pada SQLite yang sama. Instalasi dengan seed `fe02-v1` mendapat ekstensi `fe08-v1` satu kali: hanya field profil/jadwal yang belum ada ditambahkan, disertai satu ulasan fiktif atas konsultasi selesai. Nilai yang sudah disimpan, termasuk availability off, daftar kosong yang sengaja disimpan, dan lokasi hasil edit, dipertahankan. Tidak ada akun atau layanan jaringan baru.
 
 ## Panduan dokumen

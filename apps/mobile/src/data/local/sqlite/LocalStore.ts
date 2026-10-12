@@ -12,6 +12,7 @@ import { HealthRecordService } from '../../../application/HealthRecordService';
 import { PatientService } from '../../../application/PatientService';
 import { FrontendPreviewService } from '../../../application/FrontendPreviewService';
 import { AvailabilityService } from '../../../application/AvailabilityService';
+import { CareCoordinationService } from '../../../application/CareCoordinationService';
 import { ChatService } from '../../../application/ChatService';
 import { ConsultationService } from '../../../application/ConsultationService';
 import { ClinicalNoteService } from '../../../application/ClinicalNoteService';
@@ -41,6 +42,7 @@ export interface LocalStore {
   recommendations: RecommendationService;
   chat: ChatService;
   availability: AvailabilityService;
+  careCoordination: CareCoordinationService;
   authStore: ExpoSecureAuthStore;
   schemaVersion: number;
   fixtureSeedVersion: string | null;
@@ -95,6 +97,7 @@ async function createLocalStore(): Promise<LocalStore> {
   const recommendations = new RecommendationService(bookingRepository, new ExpoIdFactory());
   const chat = new ChatService(bookingRepository, attachmentMedia, new ExpoIdFactory());
   const availability = new AvailabilityService(bookingRepository, attachmentMedia, new ExpoIdFactory());
+  const careCoordination = new CareCoordinationService(bookingRepository);
   const counts = await repositories.countAll();
 
   if (__DEV__) {
@@ -104,5 +107,5 @@ async function createLocalStore(): Promise<LocalStore> {
     );
   }
 
-  return { database, repositories, events, auth, profiles, dashboard, livestock, healthRecords, patients, preview, vetDirectory, booking, consultations, clinicalNotes, recommendations, chat, availability, authStore, schemaVersion, fixtureSeedVersion, seedResult };
+  return { database, repositories, events, auth, profiles, dashboard, livestock, healthRecords, patients, preview, vetDirectory, booking, consultations, clinicalNotes, recommendations, chat, availability, careCoordination, authStore, schemaVersion, fixtureSeedVersion, seedResult };
 }

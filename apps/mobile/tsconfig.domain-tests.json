@@ -35,6 +35,7 @@
     "src/application/RecommendationService.ts",
     "src/application/ChatService.ts",
     "src/application/AvailabilityService.ts",
+    "src/application/CareCoordinationService.ts",
     "src/data/local/sqlite/SqliteEventStore.ts",
     "src/data/local/sqlite/SqliteBookingRepository.ts"
   ]

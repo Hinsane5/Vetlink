@@ -19,7 +19,7 @@ import { colors, fonts, radii, roleTokens, spacing } from '../theme/tokens';
 
 type Form = { action: 'propose' | 'reject' | 'cancel'; input: ProposalInput; saved: ProposalInput; draft: DomainEntity | null; schedule: DirectorySchedule | null };
 type Tab = 'requests' | 'appointments' | 'history';
-export function ConsultationFlow({ store, session, initialId, initialTab = 'requests', onExit, onOpenAnimal, onOpenChat, onOpenClinicalNote, onOpenRecommendation }: { store: LocalStore; session: SessionSnapshot; initialId?: string; initialTab?: Tab; onExit: () => void; onOpenAnimal: (id: string) => void; onOpenChat: (id: string) => void; onOpenClinicalNote: (id: string) => void; onOpenRecommendation: (id: string) => void }) {
+export function ConsultationFlow({ store, session, initialId, initialTab = 'requests', onExit, onOpenAnimal, onOpenChat, onOpenClinicalNote, onOpenRecommendation, onOpenCare }: { store: LocalStore; session: SessionSnapshot; initialId?: string; initialTab?: Tab; onExit: () => void; onOpenAnimal: (id: string) => void; onOpenChat: (id: string) => void; onOpenClinicalNote: (id: string) => void; onOpenRecommendation: (id: string) => void; onOpenCare: (id: string) => void }) {
   const role = session.activeRole;
   const [selectedId, setSelectedId] = useState(initialId ?? '');
   const [items, setItems] = useState<ConsultationDetail[]>([]);
@@ -164,6 +164,7 @@ export function ConsultationFlow({ store, session, initialId, initialTab = 'requ
           {role === 'farmer' && canShowClinicalResult ? <Button role={role} variant="secondary" label="Hasil pemeriksaan" onPress={() => onOpenClinicalNote(detail.record.id)} /> : null}
           {role === 'vet' && canShowClinicalResult && status !== 'in_progress' ? <Button role={role} variant="secondary" label="Lihat catatan final" onPress={() => onOpenClinicalNote(detail.record.id)} /> : null}
           {canOpenRecommendation ? <Button role={role} variant="secondary" label={recommendation?.status === 'sent' ? 'Lihat Rekomendasi Terkirim' : recommendation?.status === 'draft' ? 'Lanjutkan Rekomendasi' : 'Buat Rekomendasi'} disabled={busy} onPress={() => onOpenRecommendation(detail.record.id)} /> : null}
+          {canShowClinicalResult ? <Button role={role} variant="secondary" label={role === 'vet' ? 'Tindak lanjut & pengingat' : 'Tindak lanjut & laporan'} disabled={busy} onPress={() => onOpenCare(detail.record.id)} /> : null}
           {role === 'farmer' || !['rejected', 'cancelled'].includes(status) ? <Button role={role} variant="secondary" label={role === 'vet' ? 'Riwayat pasien' : 'Lihat ternak'} onPress={() => onOpenAnimal(String(detail.record.payload.animalId))} /> : null}
         </View>
         {role === 'farmer' && recommendation?.status === 'sent' ? <View style={styles.card}>
