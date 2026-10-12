@@ -15,6 +15,7 @@ import { AvailabilityService } from '../../../application/AvailabilityService';
 import { ChatService } from '../../../application/ChatService';
 import { ConsultationService } from '../../../application/ConsultationService';
 import { ClinicalNoteService } from '../../../application/ClinicalNoteService';
+import { RecommendationService } from '../../../application/RecommendationService';
 import { BookingService } from '../../../application/BookingService';
 import { SqliteBookingRepository } from './SqliteBookingRepository';
 import { VetDirectoryService } from '../../../application/VetDirectoryService';
@@ -37,6 +38,7 @@ export interface LocalStore {
   booking: BookingService;
   consultations: ConsultationService;
   clinicalNotes: ClinicalNoteService;
+  recommendations: RecommendationService;
   chat: ChatService;
   availability: AvailabilityService;
   authStore: ExpoSecureAuthStore;
@@ -90,6 +92,7 @@ async function createLocalStore(): Promise<LocalStore> {
   const booking = new BookingService(bookingRepository, attachmentMedia, new ExpoIdFactory());
   const consultations = new ConsultationService(bookingRepository, attachmentMedia, new ExpoIdFactory());
   const clinicalNotes = new ClinicalNoteService(bookingRepository, new ExpoIdFactory());
+  const recommendations = new RecommendationService(bookingRepository, new ExpoIdFactory());
   const chat = new ChatService(bookingRepository, attachmentMedia, new ExpoIdFactory());
   const availability = new AvailabilityService(bookingRepository, attachmentMedia, new ExpoIdFactory());
   const counts = await repositories.countAll();
@@ -101,5 +104,5 @@ async function createLocalStore(): Promise<LocalStore> {
     );
   }
 
-  return { database, repositories, events, auth, profiles, dashboard, livestock, healthRecords, patients, preview, vetDirectory, booking, consultations, clinicalNotes, chat, availability, authStore, schemaVersion, fixtureSeedVersion, seedResult };
+  return { database, repositories, events, auth, profiles, dashboard, livestock, healthRecords, patients, preview, vetDirectory, booking, consultations, clinicalNotes, recommendations, chat, availability, authStore, schemaVersion, fixtureSeedVersion, seedResult };
 }

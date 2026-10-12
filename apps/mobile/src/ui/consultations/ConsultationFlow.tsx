@@ -5,6 +5,7 @@ import type { LocalStore } from '../../data/local/sqlite/LocalStore';
 import type { SessionSnapshot } from '../../domain/auth';
 import type { DomainEntity } from '../../domain/entities';
 import type { ClinicalNoteSnapshot } from '../../domain/clinicalNotes';
+import type { RecommendationSnapshot } from '../../domain/recommendations';
 import type { DirectorySchedule } from '../../domain/directory';
 import { actionLabels, consultationLabel, consultationTab, emptyProposalInput, type ConsultationAction, type ConsultationCommand, type ConsultationDetail, type ProposalInput, type VisitAction } from '../../domain/consultations';
 import { DomainError } from '../../domain/errors';
@@ -18,12 +19,13 @@ import { colors, fonts, radii, roleTokens, spacing } from '../theme/tokens';
 
 type Form = { action: 'propose' | 'reject' | 'cancel'; input: ProposalInput; saved: ProposalInput; draft: DomainEntity | null; schedule: DirectorySchedule | null };
 type Tab = 'requests' | 'appointments' | 'history';
-export function ConsultationFlow({ store, session, initialId, initialTab = 'requests', onExit, onOpenAnimal, onOpenChat, onOpenClinicalNote }: { store: LocalStore; session: SessionSnapshot; initialId?: string; initialTab?: Tab; onExit: () => void; onOpenAnimal: (id: string) => void; onOpenChat: (id: string) => void; onOpenClinicalNote: (id: string) => void }) {
+export function ConsultationFlow({ store, session, initialId, initialTab = 'requests', onExit, onOpenAnimal, onOpenChat, onOpenClinicalNote, onOpenRecommendation }: { store: LocalStore; session: SessionSnapshot; initialId?: string; initialTab?: Tab; onExit: () => void; onOpenAnimal: (id: string) => void; onOpenChat: (id: string) => void; onOpenClinicalNote: (id: string) => void; onOpenRecommendation: (id: string) => void }) {
   const role = session.activeRole;
   const [selectedId, setSelectedId] = useState(initialId ?? '');
   const [items, setItems] = useState<ConsultationDetail[]>([]);
   const [detail, setDetail] = useState<ConsultationDetail | null>(null);
   const [clinicalNote, setClinicalNote] = useState<ClinicalNoteSnapshot | null>(null);
+  const [recommendation, setRecommendation] = useState<RecommendationSnapshot | null>(null);
   const [tab, setTab] = useState<Tab>(initialTab);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -42,13 +44,14 @@ export function ConsultationFlow({ store, session, initialId, initialTab = 'requ
     setError(''); setLoading(true);
     try {
       if (selectedId) {
-        const [nextDetail, nextNote] = await Promise.all([
+        const [nextDetail, nextNote, nextRecommendation] = await Promise.all([
           store.consultations.detail(session.userId, role, selectedId),
           store.clinicalNotes.load(session.userId, role, selectedId),
+          store.recommendations.load(session.userId, role, selectedId),
         ]);
-        setDetail(nextDetail); setClinicalNote(nextNote);
-      } else { setItems(await store.consultations.list(session.userId, role)); setDetail(null); setClinicalNote(null); }
-    } catch (cause) { setDetail(null); setClinicalNote(null); setItems([]); setError(message(cause)); }
+        setDetail(nextDetail); setClinicalNote(nextNote); setRecommendation(nextRecommendation);
+      } else { setItems(await store.consultations.list(session.userId, role)); setDetail(null); setClinicalNote(null); setRecommendation(null); }
+    } catch (cause) { setDetail(null); setClinicalNote(null); setRecommendation(null); setItems([]); setError(message(cause)); }
     finally { setLoading(false); }
   }, [role, selectedId, session.userId, store]);
   useEffect(() => { const timer = setTimeout(() => { void reload(); }, 0); return () => clearTimeout(timer); }, [reload]);
@@ -123,6 +126,8 @@ export function ConsultationFlow({ store, session, initialId, initialTab = 'requ
     && (detail.record.payload.type !== 'visit' || detail.visit?.payload.stage === 'examining')
     && clinicalNote?.status !== 'final';
   const canShowClinicalResult = clinicalNote?.status === 'final';
+  const canOpenRecommendation = role === 'vet' && canShowClinicalResult && detail
+    && ((status === 'in_progress' && detail.verified && detail.paid) || recommendation?.status === 'sent');
   const photo = detail?.attachments.find((item) => item.id === photoId && item.kind === 'image');
   const shown = items.filter((item) => consultationTab(item.record) === tab && [item.otherPartyName, item.animalName, item.record.payload.displayCode].join(' ').toLocaleLowerCase('id').includes(query.trim().toLocaleLowerCase('id')));
   return <View style={styles.root}>
@@ -158,8 +163,19 @@ export function ConsultationFlow({ store, session, initialId, initialTab = 'requ
           {role === 'vet' && canShowClinicalResult && status === 'in_progress' ? <Button role={role} label="Selesaikan layanan" onPress={() => onOpenClinicalNote(detail.record.id)} /> : null}
           {role === 'farmer' && canShowClinicalResult ? <Button role={role} variant="secondary" label="Hasil pemeriksaan" onPress={() => onOpenClinicalNote(detail.record.id)} /> : null}
           {role === 'vet' && canShowClinicalResult && status !== 'in_progress' ? <Button role={role} variant="secondary" label="Lihat catatan final" onPress={() => onOpenClinicalNote(detail.record.id)} /> : null}
+          {canOpenRecommendation ? <Button role={role} variant="secondary" label={recommendation?.status === 'sent' ? 'Lihat Rekomendasi Terkirim' : recommendation?.status === 'draft' ? 'Lanjutkan Rekomendasi' : 'Buat Rekomendasi'} disabled={busy} onPress={() => onOpenRecommendation(detail.record.id)} /> : null}
           {role === 'farmer' || !['rejected', 'cancelled'].includes(status) ? <Button role={role} variant="secondary" label={role === 'vet' ? 'Riwayat pasien' : 'Lihat ternak'} onPress={() => onOpenAnimal(String(detail.record.payload.animalId))} /> : null}
         </View>
+        {role === 'farmer' && recommendation?.status === 'sent' ? <View style={styles.card}>
+          <Text style={styles.heading}>Rekomendasi dokter</Text>
+          {recommendation.items.map((item, index) => <View key={item.id} style={styles.history}>
+            <Line label={`Rekomendasi ${index + 1}`} value={item.titleSnapshot} />
+            {item.productId ? <Line label="Produk terkait" value={`${item.productName ?? 'Produk katalog'}${item.productUnitPrice !== null ? ` · ${rupiah(item.productUnitPrice)}` : ''}`} /> : null}
+            <Line label="Instruksi" value={item.instructions} />
+            {item.note ? <Line label="Catatan tambahan" value={item.note} /> : null}
+          </View>)}
+          {!recommendation.items.length ? <InlineFeedback message="Belum ada item rekomendasi yang dapat ditampilkan." /> : null}
+        </View> : null}
         {detail.attachments.length ? <View style={styles.card}><Text style={styles.heading}>Lampiran keluhan</Text>{detail.attachments.map((item) => <View key={item.id} style={styles.card}>
           <Text style={styles.body}>{item.filename}</Text>{item.kind === 'image' ? <Pressable accessibilityRole="button" accessibilityLabel={`Buka ${item.filename}`} disabled={busy} onPress={() => openPhoto(item.id)} style={styles.media}><Image source={{ uri: item.localUri }} style={styles.thumbnail} resizeMode="contain" onError={() => setError('Foto lokal tidak dapat dibuka.')} /></Pressable> : <Text style={styles.body}>Pemutaran video belum tersedia.</Text>}
         </View>)}</View> : null}

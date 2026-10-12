@@ -1,6 +1,6 @@
 # Backlog frontend / mobile Android
 
-Status keseluruhan saat ini: **FE-00 Selesai, FE-01 Sedang dikerjakan, FE-02 Selesai, FE-03/04/05/06/07/08/09/10/11/12/13/14 Sedang dikerjakan**; FE-15–FE-25 **Belum mulai**. Tahap aktif mengikuti arahan pengguna: flow frontend tanpa autentikasi dan tanpa backend jaringan. Acceptance autentikasi FE-03 ditunda; implementasi historisnya tidak dipasang pada aplikasi aktif. Data fiktif lokal tetap dipakai agar screen dapat menampilkan perubahan yang konsisten.
+Status keseluruhan saat ini: **FE-00 Selesai, FE-01 Sedang dikerjakan, FE-02 Selesai, FE-03/04/05/06/07/08/09/10/11/12/13/14/15 Sedang dikerjakan**; FE-16–FE-25 **Belum mulai**. Tahap aktif mengikuti arahan pengguna: flow frontend tanpa autentikasi dan tanpa backend jaringan. Acceptance autentikasi FE-03 ditunda; implementasi historisnya tidak dipasang pada aplikasi aktif. Data fiktif lokal tetap dipakai agar screen dapat menampilkan perubahan yang konsisten.
 
 Status setiap tiket: **Selesai** berarti seluruh acceptance criteria terpenuhi dan buktinya dicatat; **Sedang dikerjakan** berarti ada progres tetapi acceptance belum lengkap; **Belum mulai** berarti implementasi belum dimulai.
 
@@ -58,7 +58,7 @@ Catatan FE-07: `HealthRecordService` menggabungkan health event dengan catatan k
 | FE-12 | Sedang dikerjakan | P0 | Chat kedua peran, text/media/viewer, informasi consultation | FE-10 | Send text/media tersimpan di consultation benar; send pending/failed/retry; ketuk ganda/clientMessageId tidak duplikat; sesi lain pada perangkat yang sama melihat pesan; input aman saat keyboard |
 | FE-13 | Sedang dikerjakan | P0 | Visit doctor actions, lokasi/alamat, farmer progress, completion confirmation | FE-10/14 | depart→arrive→examining berurutan; lompatan ditolak; address snapshot; final + confirmation dibutuhkan complete; history/status kedua peran sama |
 | FE-14 | Sedang dikerjakan | P0 | Clinical form/draft/review/final, hasil Peternak dan completion | FE-07/10/12 | Field nyata; draft restart; warning dirty-back; required validation; review version sesuai; final immutable; finalisasi meninggalkan in_progress; cancel complete tidak mengubah status |
-| FE-15 | Belum mulai | P0 | Rekomendasi CRUD item, instruksi, product picker, review/send | FE-14, katalog fixture FE-02 | Edited text benar di review/sent; empty send ditolak; product optional; farmer hanya menerima sent; link ke product benar; doctor tidak memperoleh cart/checkout |
+| FE-15 | Sedang dikerjakan | P0 | Rekomendasi CRUD item, instruksi, product picker, review/send | FE-14, katalog fixture FE-02 | Edited text benar di review/sent; empty send ditolak; product optional; farmer hanya menerima sent; link ke product benar; doctor tidak memperoleh cart/checkout |
 | FE-16 | Belum mulai | P0 | Follow-up/recheck, reminder/care completion, laporan perkembangan | FE-07/14/15 | Date/time benar; follow-up tampil kalender; sent reminder bukan care done; laporan terpisah; completed care mencatat HealthEvent sekali; Peternak submit dan dokter terkait dapat membaca |
 
 FE-08/09 bergantung availability dari FE-11; kerjakan FE-11 lebih awal dalam slice booking walau nomor tiket lebih besar. FE-13 bergantung clinical guards FE-14; baseline action visit dapat dibangun lebih dahulu, completion setelah FE-14. Hindari stub UI yang mengaku flow selesai sebelum dependensi siap.

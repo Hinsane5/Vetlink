@@ -381,8 +381,9 @@ Penerimaan UI FE-11 **Belum diuji/terblokir**: navigasi tab Jadwal, buka/tutup e
 | FE-12 | UI chat/media tersedia; interaksi/chat viewer dan visual belum diuji di Android |
 | FE-13 | UI progres kunjungan tersedia; interaksi tahap/alamat dan visual belum diuji di Android |
 | FE-14 | `npm run check`, export, dan Gradle `assembleRelease` lulus; APK standalone terpasang/dibuka. Interaksi form dan visual selain startup belum diuji |
+| FE-15 | `npm run check` lulus dengan 92 tes; build Android terhalang SDK yang tidak tersedia; interaksi dan visual layar rekomendasi belum diuji |
 
-FE-01 dan FE-03–14 tetap **Sedang dikerjakan**; status backlog mencerminkan bahwa acceptance Android/visual belum lengkap. Pengujian fase lain tidak diulang kecuali check regression yang berjalan bersama suite domain.
+FE-01 dan FE-03–15 tetap **Sedang dikerjakan**; status backlog mencerminkan bahwa acceptance Android/visual belum lengkap. Pengujian fase lain tidak diulang kecuali check regression yang berjalan bersama suite domain.
 
 ## Hasil pemeriksaan FE-12 — 6 Oktober 2026
 
@@ -435,3 +436,19 @@ Penyelesaian layanan merupakan aksi terpisah setelah catatan final. Dialog Batal
 - Draft cold restart, validasi field di UI, versi review, final immutability, cancel/confirm selesai, hasil lintas persona, ukuran 390 × 844, layar kecil, font besar, keyboard/scroll/Back Android — **Belum diuji pada perangkat**. Simulator tidak dibuka.
 
 FE-14 tetap **Sedang dikerjakan** karena interaksi layar dan penerimaan visual selain startup Android belum terverifikasi; belum di-commit. FE-13 sudah di-commit sebagai `c771aac`, tanpa push.
+
+## Hasil pemeriksaan FE-15 — 13 Oktober 2026
+
+FE-15 menambahkan editor Recommendation per konsultasi. Dokter yang ditugaskan dan terverifikasi dapat membuat draft item, mengubah atau menghapus item, menulis instruksi/catatan, memilih produk aktif secara opsional, meninjau teks aktual, lalu mengirimkannya. Pengiriman hanya tersedia saat layanan `in_progress`, pembayaran sesuai, dan catatan klinis sudah final. Peternak hanya membaca status `sent`. Product picker hanya membaca katalog; service ini tidak membuat cart atau checkout.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm run check` dari `apps/mobile` | Lulus: TypeScript typecheck, Expo lint, dan 92 tes domain/repository. Tiga tes FE-15 memeriksa edit/hapus dan teks review/sent, produk opsional serta relasinya, akses Farmer hanya setelah sent, empty-send validation, guard verifikasi/assignment, retry idempoten, tidak ada cart baru, dan rollback saat penyimpanan item gagal |
+| `npm run prebuild:android` | Lulus: Expo menghasilkan proyek Android lokal tanpa mengubah dependency/package.json. Direktori `android/` adalah generated tooling dan tidak dilacak Git |
+| Gradle `assembleDebug` | **Belum lulus**: build pertama berhenti karena direktori default `~/.android` tidak tersedia. Percobaan ulang dengan `ANDROID_USER_HOME=/private/tmp/vetlink-android-user` berlanjut tetapi gagal karena Android SDK tidak ditemukan; mount SDK yang tercatat (`/Volumes/HowSSD/AndroidStudio/SDK/sdk`) tidak tersedia, dan `adb`/`sdkmanager` tidak terpasang. Tidak ada APK yang dibuat/dipasang; emulator tidak dibuka |
+| Figma lokal | Inventory dan prototype-links untuk `46:22`, `46:12`, serta recommendation variants ditinjau. Folder screenshot lokal tidak memiliki screenshot layar recommendation/products. Tidak ada pemanggilan Figma MCP sesuai scope; pixel-match belum diuji |
+| Interaksi/visual Android | **Belum diuji**: detail konsultasi dan kalender Dokter, add/edit/delete, picker/search, review/send, farmer sent-only view, hardware back, keyboard/scroll, 390 × 844, ukuran kecil, serta font besar |
+
+Service/repository tests membuktikan teks hasil edit tetap sama saat reload dan pada snapshot sent, item produk menyimpan `productId` dan relasi ke Product yang sama, item tanpa produk dapat tersimpan, dan Peternak menerima snapshot yang sama setelah terkirim. Layar review memakai snapshot yang baru disimpan, tetapi interaksi tersebut masih menunggu QA Android. Draft tidak tampil ke Peternak; pengiriman kosong ditolak; retry dengan operation key sama tidak menggandakan audit/send; assignment serta verified guard diperiksa kembali di transaksi. Kegagalan menulis RecommendationItem membatalkan Recommendation dan item bersama-sama. Fixtures yang dipakai sepenuhnya fiktif dan tidak menambahkan dosis obat.
+
+FE-15 **Sedang dikerjakan** sampai acceptance interaksi dan visual Android selesai. FE-15 belum di-push; native build belum dapat dilakukan sampai Android SDK tersedia. Kontrak API yang sudah ada pada `docs/API_CONTRACT.md` tetap dipakai: GET/PUT draft Recommendation dan POST send, dengan Product opsional.

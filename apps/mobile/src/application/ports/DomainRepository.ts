@@ -12,4 +12,5 @@ export interface DomainRepository {
     expectedVersion: number,
     relations?: readonly EntityRelation[],
   ): Promise<void>;
+  delete(kind: EntityKind, id: string, expectedVersion: number): Promise<void>;
 }
