@@ -1,6 +1,6 @@
 # Teknologi dan bahan diskusi
 
-Status per 6 Oktober 2026: FE-00/02 selesai; FE-01/03–14 sedang dikerjakan. Runtime aktif memakai persona lokal tanpa autentikasi/backend jaringan, dengan UI ternak, riwayat/pasien, direktori, booking, konsultasi, jadwal dokter, chat, progres kunjungan dan catatan pemeriksaan. FE-14 `npm run check` lulus (typecheck, lint, 89 tes), export Android lulus dengan 752 modul, dan `assembleRelease` berhasil membuat APK standalone yang dipasang di Xiaomi. FE-13/14 tidak menambah dependency native. Tap ADB untuk masuk flow ditolak MIUI (`INJECT_EVENTS`), sehingga interaksi layar belum terverifikasi. Setelah arahan pengguna, tidak ada panggilan Figma lanjutan.
+Status per 13 Oktober 2026: FE-00/02 selesai; FE-01/03–14 masih dikerjakan; BE-00 selesai. Mobile tetap memakai persona lokal tanpa autentikasi/backend jaringan. Backend memiliki scaffold NestJS + PostgreSQL, migrasi, seed, OpenAPI healthcheck, CI dan config lokal; autentikasi serta endpoint domain belum tersedia. Bukti BE-00 ada di [Testing](TESTING.md). QA visual/interaksi Android FE-14 sebelumnya belum terverifikasi karena MIUI menolak tap ADB (`INJECT_EVENTS`).
 
 ## Keputusan mobile
 
@@ -80,7 +80,7 @@ Lucide dimuat sebelum shell dirender bersama Inter agar glyph ikon tersedia saat
 | Session expiry | Sesi lokal kedaluwarsa setelah 30 hari dan diverifikasi kembali saat bootstrap |
 | Pemeriksaan | Empat tes AuthService lulus; build Android lulus dan layar Mulai terbuka. Uji tap/form di HP menunggu akses input MIUI; screenshot Figma FE-03 tertahan oleh batas MCP |
 
-Kode autentikasi FE-03 tidak dipakai pada alur aktif. Jika kelak dipakai kembali, SHA-256 bersalt bukan KDF password produksi; tidak ada verifikasi email, proteksi percobaan login/rate limit server, pemulihan identitas, atau otoritas lintas perangkat. Adapter verifier/session harus diganti dengan provider/server tepercaya ketika backend dipilih. Akun fixture sengaja tidak dapat diklaim lewat reset karena tidak memiliki verifier lokal.
+Kode autentikasi FE-03 tidak dipakai pada alur aktif. Jika kelak dipakai kembali, SHA-256 bersalt bukan KDF password produksi; tidak ada verifikasi email, proteksi percobaan login/rate limit server, pemulihan identitas, atau otoritas lintas perangkat. Adapter verifier/session harus diganti dengan implementasi tepercaya saat auth server/provider dipilih dan BE-01 dijalankan. Akun fixture sengaja tidak dapat diklaim lewat reset karena tidak memiliki verifier lokal.
 
 ## Realisasi awal FE-04: profil, farm, alamat, dan verifikasi
 
@@ -124,7 +124,7 @@ Harness diagnostik FE-02 hanya tampil saat development dengan `EXPO_PUBLIC_FE02_
 
 Paket Expo yang benar-benar terpasang dan keterkaitannya dengan FE-01–04 dicatat di README. Form/test framework dan seluruh kandidat lain tetap usulan; tidak ada kewajiban menginstall semua kandidat state/form/test sekaligus.
 
-## Kandidat backend
+## Pilihan backend dan realisasi BE-00
 
 | Kandidat | Kesesuaian untuk VetLink | Tradeoff yang perlu dibahas |
 | --- | --- | --- |
@@ -132,9 +132,9 @@ Paket Expo yang benar-benar terpasang dan keterkaitannya dengan FE-01–04 dicat
 | Supabase + PostgreSQL | Kandidat layanan terkelola untuk auth/database/storage; aturan akses dan transaksi tetap harus dirancang | Ketergantungan layanan; operasi finansial/penyelesaian klinis harus ditempatkan pada boundary server yang tepat |
 | FastAPI + PostgreSQL | Kandidat jika tim lebih nyaman Python | Dua bahasa; berbagi tipe perlu melalui OpenAPI |
 
-**Dipilih pengguna 13 Oktober 2026: NestJS + PostgreSQL** untuk backend modular monolith BE-00–16. Nest menyediakan kerangka server Node.js dengan dukungan TypeScript; PostgreSQL menyediakan mekanisme isolasi transaksi yang relevan untuk konflik booking dan reservasi saldo. Pilihan ini belum menetapkan provider produksi, hosting, atau izin deploy. [NestJS](https://docs.nestjs.com/), [PostgreSQL transaction isolation](https://www.postgresql.org/docs/current/transaction-iso.html).
+**Dipilih pengguna 13 Oktober 2026: NestJS + PostgreSQL** untuk backend modular monolith BE-00–16. Versi baseline BE-00 yang benar-benar diuji: Node.js 24.15.0, NestJS 12.1.3, Nest CLI 12.0.8, TypeScript 6.0.3, driver `pg` 8.23.1, dan PostgreSQL 17.4. PostgreSQL 18.x dicatat sebagai upgrade gate sebelum integrasi berikutnya. Nest memakai ESM; project memakai NodeNext. Database diakses lewat port infrastructure dan SQL eksplisit, belum memilih ORM. Migrasi berjalan eksplisit dengan advisory lock, checksum, dan transaksi; seed fiktif hanya insert conflict-do-nothing. Stack ini belum menetapkan provider produksi, hosting, atau izin deploy. Lihat [panduan backend](../apps/api/README.md), [NestJS](https://docs.nestjs.com/), dan [kebijakan versi PostgreSQL](https://www.postgresql.org/support/versioning/).
 
-Pemilihan ORM (misalnya Prisma), provider auth, penyimpanan media, realtime, queue, hosting dan provider produksi dilakukan setelah backend dipilih. Modular monolith diusulkan untuk awal; microservices belum dibutuhkan oleh scope ini.
+Port HTTP aktual memakai adapter Express NestJS; module pertama adalah Health, dengan route live/ready. Module domain akan mengikuti boundary use case/repository pada API masing-masing. Shared error response dan status domain sudah ada di OpenAPI; endpoint business belum aktif. Provider auth, penyimpanan media, realtime, queue, hosting dan provider produksi tetap belum dipilih. Modular monolith dipakai untuk awal; microservices belum dibutuhkan oleh scope ini.
 
 ## Hal yang masih terbuka untuk backend
 
@@ -142,7 +142,7 @@ Pemilihan ORM (misalnya Prisma), provider auth, penyimpanan media, realtime, que
 2. Kapan simulasi diganti provider nyata, serta aturan bayar nanti/refund/komisi?
 3. Target hosting, kebutuhan backup, biaya operasional dan target iOS.
 
-Pertanyaan ini tidak menghambat penyusunan dokumen atau adapter lokal. Catat jawabannya di [Decisions](DECISIONS.md); jangan memaksakan stack backend dari usulan ini.
+Pertanyaan ini tidak menghambat pekerjaan fondasi backend. Catat keputusan baru di [Decisions](DECISIONS.md); jangan memilih provider produksi dari kandidat saja.
 
 ## Realisasi FE-08: direktori dan profil dokter
 

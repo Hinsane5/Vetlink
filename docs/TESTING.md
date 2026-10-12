@@ -435,3 +435,20 @@ Penyelesaian layanan merupakan aksi terpisah setelah catatan final. Dialog Batal
 - Draft cold restart, validasi field di UI, versi review, final immutability, cancel/confirm selesai, hasil lintas persona, ukuran 390 × 844, layar kecil, font besar, keyboard/scroll/Back Android — **Belum diuji pada perangkat**. Simulator tidak dibuka.
 
 FE-14 tetap **Sedang dikerjakan** karena interaksi layar dan penerimaan visual selain startup Android belum terverifikasi; belum di-commit. FE-13 sudah di-commit sebagai `c771aac`, tanpa push.
+
+## Hasil pemeriksaan BE-00 — 13 Oktober 2026
+
+Backend BE-00 ditambahkan pada `apps/api` sebagai NestJS modular monolith dengan PostgreSQL, SQL migration runner, seed fiktif non-destruktif, OpenAPI health routes, dan GitHub Actions CI. API ini belum dihubungkan ke mobile dan belum menyediakan authentication atau endpoint domain. Tidak ada provider produksi atau transaksi finansial nyata.
+
+| Pemeriksaan | Hasil |
+| --- | --- |
+| Node/npm | Node `24.15.0`, npm `11.6.0` dipakai untuk install/check/smoke |
+| Dependency install | `npm ci` lulus; npm melaporkan 0 vulnerabilities pada dependency backend |
+| Typecheck/build | `npm run check` lulus (`tsc --noEmit`, `nest build`) |
+| Compose | `docker compose config --quiet` lulus |
+| Migration | Pada Compose `postgres:17.4-alpine` yang baru dibuat, `npm run db:migrate` menerapkan `20261013_000001_initial_schema.sql`; run kedua mendeteksi migration sudah diterapkan dan tidak mengulang DDL |
+| Seed | `npm run db:seed` lulus dua kali. Row `Custom Owner` yang dibuat sebelum seed tetap ada; hasil akhir menunjukkan 3 user, 1 farm, 1 ternak, 1 migration, dan dokter fixture berstatus `not_submitted` |
+| Development server | `PORT=33317 npm run start:dev` compile 0 error; `GET /v1/health/live` dan `/ready` menghasilkan 200 serta `X-Request-Id`; `/openapi.json` menghasilkan 200. Port 3000 dipakai proses lain di mesin uji |
+| API smoke | `npm run api:smoke` lulus untuk live/ready, OpenAPI status/request/response serta adapter result schema, dan envelope 503 saat database port tidak tersedia |
+
+Node, Nest, TypeScript, driver `pg`, serta image Compose/CI PostgreSQL dipin pada versi BE-00 di [panduan API](../apps/api/README.md). Container Compose `postgres:17.4-alpine` dijalankan dan versinya dikonfirmasi dari server; migration, seed, healthcheck, dan smoke test dijalankan terhadap database itu. PostgreSQL 18.x menjadi gate upgrade terpisah sebelum integrasi berikutnya. Workflow CI ditambahkan tetapi belum berjalan pada GitHub. Database pengujian sementara dihentikan dan volume uji serta `.env` lokal dibersihkan setelah pemeriksaan.

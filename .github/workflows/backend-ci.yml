@@ -1,0 +1,59 @@
+name: Backend CI
+
+on:
+  push:
+    paths:
+      - 'apps/api/**'
+      - '.github/workflows/backend-ci.yml'
+      - 'docs/API_CONTRACT.md'
+      - 'docs/DATA_MODEL.md'
+  pull_request:
+    paths:
+      - 'apps/api/**'
+      - '.github/workflows/backend-ci.yml'
+      - 'docs/API_CONTRACT.md'
+      - 'docs/DATA_MODEL.md'
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17.4-alpine
+        env:
+          POSTGRES_DB: vetlink
+          POSTGRES_USER: vetlink
+          POSTGRES_PASSWORD: vetlink-ci-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vetlink -d vetlink"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    defaults:
+      run:
+        working-directory: apps/api
+    env:
+      NODE_ENV: test
+      DATABASE_HOST: 127.0.0.1
+      DATABASE_PORT: 5432
+      DATABASE_NAME: vetlink
+      DATABASE_USER: vetlink
+      DATABASE_PASSWORD: vetlink-ci-only
+      DATABASE_SSL: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: apps/api/.nvmrc
+          cache: npm
+          cache-dependency-path: apps/api/package-lock.json
+      - run: npm ci
+      - run: npm run check
+      - run: npm run db:migrate
+      - run: npm run db:migrate
+      - run: npm run db:seed
+      - run: npm run db:seed
+      - run: npm run api:smoke

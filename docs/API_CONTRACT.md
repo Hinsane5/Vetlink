@@ -1,14 +1,29 @@
-# Kontrak integrasi backend — usulan v1
+# Kontrak integrasi backend v1
 
-Status: rancangan, bukan dokumentasi API yang sudah tersedia. Backend belum dibuat atau dipilih. Milestone lokal memakai use case/repository dengan payload domain yang sama; tidak membutuhkan HTTP server palsu.
+Status: fondasi OpenAPI executable tersedia sejak BE-00. Runtime NestJS saat ini hanya mengimplementasikan healthcheck; kelompok route domain pada dokumen ini tetap kontrak target untuk tiket berikutnya. Aplikasi mobile belum memakai backend jaringan.
 
 ## Konvensi
 
 Prefix `/v1`, JSON, ID stabil, timestamp ISO-8601 UTC, integer IDR, paginasi cursor untuk daftar. Auth session/backend memakai bearer credential sesuai provider nanti; token tidak menjadi query parameter. Error berbentuk `{code, message, fieldErrors?, requestId}` tanpa isi rahasia/stack trace. Client menerjemahkan pesan teknis ke bahasa Indonesia.
 
-Mutasi concurrency-sensitive menerima `expectedVersion`. Mutasi pembayaran, order, pencairan, finalisasi dan completion menerima `Idempotency-Key`; key sama/payload sama mengembalikan hasil sebelumnya, payload berbeda ditolak. Status HTTP usulan: 400 validation, 401 session, 403 role/access, 404 resource tersembunyi, 409 status/version/slot conflict, 422 rule, 429 rate limit, 5xx service error.
+Mutasi concurrency-sensitive menerima `expectedVersion`. Mutasi pembayaran, order, pencairan, finalisasi dan completion menerima `Idempotency-Key`; key sama/payload sama mengembalikan hasil sebelumnya, payload berbeda ditolak. Status HTTP standar: 400 validation, 401 session, 403 role/access, 404 resource tersembunyi, 409 status/version/slot conflict, 422 rule, 429 rate limit, 503 dependency unavailable, dan 500 internal error.
 
 Gunakan action endpoint untuk transisi yang membutuhkan syarat; jangan menyediakan PATCH umum yang membolehkan client mengatur `verified`, `completed`, `paid`, `balance`, atau `finalizedAt`.
+
+## OpenAPI executable BE-00
+
+NestJS melayani Swagger UI di `/docs` dan JSON di `/openapi.json`. Endpoint runtime yang tersedia saat ini:
+
+| Method / path | Request | Response sukses | Error yang didokumentasikan |
+| --- | --- | --- | --- |
+| `GET /v1/health/live` | Tanpa body atau parameter | `LivenessResponse` (`status`, `service`, `timestamp`, `requestId`) | 500 `ApiErrorResponse` |
+| `GET /v1/health/ready` | Tanpa body atau parameter | `ReadinessResponse` (`status`, pemeriksaan database, `timestamp`, `requestId`) | 503 jika PostgreSQL tidak tersedia; 500 internal |
+
+Error menggunakan `{code, message, fieldErrors?, requestId}`. `fieldErrors` adalah object dari nama field ke daftar pesan; exception filter tidak mengirim stack trace. Setiap response juga mengirim header `X-Request-Id`. Shared error code/status, request pagination (`cursor`, `limit` 1–100), base `expectedVersion`, dan parameter header `Idempotency-Key` terdokumentasi sebagai schema/response reusable. `AdapterOperationResult` memiliki outcome `pending/succeeded/failed`; outcome gagal membawa `{code, message, retryable}`, dan pemanggil harus menyimpan hasil adapter sebelum memberi respons sukses.
+
+Komponen enum status domain di OpenAPI diturunkan dari [Data model](DATA_MODEL.md): role, verifikasi dokter, siklus konsultasi, proposal jadwal, tahap kunjungan, catatan klinis, rekomendasi, follow-up/reminder/delivery, payment, order, earning, ledger, withdrawal, dan outcome adapter. Enum tersebut mendeskripsikan nilai kontrak; route domain belum diimplementasikan dan komponen ini tidak membuka akses atau mengubah status. Sebelum tiap tiket domain selesai, request/response endpoint-nya harus ditambahkan ke OpenAPI lalu direview bersama mobile.
+
+Untuk menjalankan server lokal, migrasi, seed, dan smoke check, ikuti [panduan backend](../apps/api/README.md).
 
 ## Kelompok endpoint
 
@@ -68,4 +83,4 @@ Payload event minimal: eventId, aggregateId, actorId, occurredAt, version. Efek 
 
 Jalankan suite yang sama terhadap repository lokal dan API: scope ownership, verified guard, slot conflicts, final-note immutability, complete guard, sequence visit, computed totals, earning once, withdrawal reservation/retry, notification recipient. Perbedaan teknis error harus dinormalisasi ke domain error yang sama.
 
-OpenAPI executable dibuat pada BE-00 setelah stack backend disepakati. Tabel ini belum cukup untuk mengklaim SDK/API dapat digunakan; request/response schemas, enum dan validation constraints harus diturunkan dari Data model dan direview bersama mobile.
+OpenAPI BE-00 executable tetapi cakupannya baru healthcheck dan shared contract components; tabel endpoint usulan di atas tidak menandakan route tersebut tersedia. Request/response dan validation constraints untuk tiap domain tetap harus diturunkan dari Data model serta direview bersama mobile sebelum implementasi endpoint.

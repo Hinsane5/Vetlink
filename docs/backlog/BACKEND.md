@@ -1,6 +1,6 @@
 # Backlog backend
 
-Status keseluruhan saat ini: seluruh tiket backend **Belum mulai**; pemilihan stack dan implementasi menunggu arahan pengguna.
+Status keseluruhan saat ini: BE-00 **Selesai**; BE-01–17 **Belum mulai**. Stack backend dipilih melalui DEC-10 dan fondasi BE-00 dijalankan secara lokal; hosting/provider produksi dan integrasi mobile tetap belum dipilih.
 
 Status setiap tiket: **Selesai** berarti seluruh acceptance criteria terpenuhi dan buktinya dicatat; **Sedang dikerjakan** berarti ada progres tetapi acceptance belum lengkap; **Belum mulai** berarti implementasi belum dimulai.
 
@@ -10,7 +10,7 @@ P0 = fondasi dan aturan kritis integrasi; P1 = kelengkapan fitur backend; P2 = p
 
 | ID | Status | P | Keluaran | Dependensi | Acceptance criteria |
 | --- | --- | --- | --- | --- | --- |
-| BE-00 | Belum mulai | P0 | Pilih backend, scaffold, migration, config, OpenAPI, CI, healthcheck | Keputusan pengguna tentang stack backend | Versi dan run steps diuji; env example tanpa secret; schema status/error/request/response lengkap; seed tidak merusak data |
+| BE-00 | Selesai | P0 | NestJS + PostgreSQL modular monolith; scaffold, migration, config, OpenAPI, CI, healthcheck | DEC-10 | Versi Node/Nest/PostgreSQL dicatat; langkah lokal diverifikasi; `.env.example` hanya memakai nilai lokal terbuka; OpenAPI mendokumentasikan route aktif, error, request/response generik, dan enum status; seed fiktif idempoten/non-destruktif. Bukti run ada di [Testing](../TESTING.md). |
 | BE-01 | Belum mulai | P0 | Register/login/logout/refresh/reset dan authorization | BE-00 | Credentials aman/provider terpilih; revoke session; reset enumeration-safe; role guard; rate-limit auth; tidak log password/token |
 | BE-02 | Belum mulai | P0 | Profil, Farm/Address, upload profesi, review/revision | BE-01/07 media foundation | Owner scoped; dokter tidak self-verify; verified hanya trusted reviewer; alasan revisi tersimpan; alat reviewer minimal internal, bukan toko dokter |
 | BE-03 | Belum mulai | P0 | Livestock CRUD, health timeline, doctor patient scope | BE-01/02 | Semua field/ownership validated; pasien terkait saja; arbitrary ID denied; draft/private media tidak bocor; note klinis terhubung sekali ke history |

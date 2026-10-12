@@ -28,8 +28,11 @@ Tanggal baseline: 5 Oktober 2026. “Dipilih” berarti berasal dari jawaban/ins
 | DEC-22 | Lampiran profil FE-04 dipilih pengguna lalu disalin privat ke storage dokumen aplikasi; tahap lokal tidak mengunggah dokumen atau menerbitkan hasil review | Diterapkan untuk milestone lokal | Metadata/URI disimpan sebagai Attachment; submission dokter hanya menghasilkan pending. Keputusan storage API dan reviewer produksi tetap terbuka |
 | DEC-23 | Fokus sekarang pada flow frontend tanpa autentikasi dan backend jaringan | Dipilih | Instruksi pengguna 5 Oktober 2026; `FrontendFlow` memilih persona fixture lokal, sedangkan layar daftar/masuk/reset/keluar tidak dipasang pada runtime aktif |
 | DEC-24 | Jika node Figma tidak dapat diakses, desain layar mandiri dengan UI/UX aman dan sesuai fungsi | Dipilih | Instruksi pengguna 5 Oktober 2026; FE-06, riwayat Peternak FE-07, direktori/profil FE-08, serta booking FE-09 memakai tokens/aturan fitur, dengan keterbatasan pixel-match dicatat di Figma mapping |
+| DEC-25 | BE-00 memakai Node.js 24.15, NestJS 12, PostgreSQL 17.4; SQL eksplisit melalui `pg` tanpa memilih ORM | Diterapkan | Baseline BE-00 yang benar-benar diuji; upgrade PostgreSQL 18.x menjadi gate terpisah, tanpa memilih hosting/provider produksi |
 
 DEC-01 mencatat keadaan tahap dokumentasi sebelum pengguna meminta implementasi. DEC-19 memulai implementasi; DEC-23/24 menetapkan fokus frontend aktif. DEC-10 kini menetapkan stack backend; FE-03 tetap ditunda sesuai DEC-23. Keputusan provider dan operasi produksi tetap terbuka.
+
+BE-00 pada 13 Oktober 2026 menerapkan DEC-10 dan mencatat pilihan versi/penggerak SQL melalui DEC-25. API runtime hanya menyediakan healthcheck sampai tiket domain menambahkan request/response dan use case terkait.
 
 Untuk mengubah keputusan, tambah tanggal, alasan dan dampak pada PRD, model status, API, backlog dan acceptance criteria. Jangan menghapus riwayat keputusan pengguna tanpa mencatat penggantinya.
 
