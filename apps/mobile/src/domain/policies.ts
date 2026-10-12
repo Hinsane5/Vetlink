@@ -77,9 +77,16 @@ export interface ClinicalNoteFields {
 }
 
 export function assertClinicalNoteFinalizable(fields: ClinicalNoteFields): void {
+  const labels: Record<string, string> = {
+    complaint: 'keluhan',
+    findings: 'temuan pemeriksaan',
+    assessment: 'penilaian dokter',
+    actions: 'tindakan yang dilakukan',
+    careInstructions: 'instruksi perawatan',
+  };
   const missing = Object.entries(fields)
     .filter(([, value]) => value.trim().length === 0)
-    .map(([key]) => key);
+    .map(([key]) => labels[key] ?? key);
   if (missing.length) {
     throw new DomainError('VALIDATION_FAILED', `Catatan belum lengkap: ${missing.join(', ')}.`);
   }

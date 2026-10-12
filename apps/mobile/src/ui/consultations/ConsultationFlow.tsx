@@ -4,6 +4,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import type { LocalStore } from '../../data/local/sqlite/LocalStore';
 import type { SessionSnapshot } from '../../domain/auth';
 import type { DomainEntity } from '../../domain/entities';
+import type { ClinicalNoteSnapshot } from '../../domain/clinicalNotes';
 import type { DirectorySchedule } from '../../domain/directory';
 import { actionLabels, consultationLabel, consultationTab, emptyProposalInput, type ConsultationAction, type ConsultationCommand, type ConsultationDetail, type ProposalInput, type VisitAction } from '../../domain/consultations';
 import { DomainError } from '../../domain/errors';
@@ -17,11 +18,12 @@ import { colors, fonts, radii, roleTokens, spacing } from '../theme/tokens';
 
 type Form = { action: 'propose' | 'reject' | 'cancel'; input: ProposalInput; saved: ProposalInput; draft: DomainEntity | null; schedule: DirectorySchedule | null };
 type Tab = 'requests' | 'appointments' | 'history';
-export function ConsultationFlow({ store, session, initialId, initialTab = 'requests', onExit, onOpenAnimal, onOpenChat }: { store: LocalStore; session: SessionSnapshot; initialId?: string; initialTab?: Tab; onExit: () => void; onOpenAnimal: (id: string) => void; onOpenChat: (id: string) => void }) {
+export function ConsultationFlow({ store, session, initialId, initialTab = 'requests', onExit, onOpenAnimal, onOpenChat, onOpenClinicalNote }: { store: LocalStore; session: SessionSnapshot; initialId?: string; initialTab?: Tab; onExit: () => void; onOpenAnimal: (id: string) => void; onOpenChat: (id: string) => void; onOpenClinicalNote: (id: string) => void }) {
   const role = session.activeRole;
   const [selectedId, setSelectedId] = useState(initialId ?? '');
   const [items, setItems] = useState<ConsultationDetail[]>([]);
   const [detail, setDetail] = useState<ConsultationDetail | null>(null);
+  const [clinicalNote, setClinicalNote] = useState<ClinicalNoteSnapshot | null>(null);
   const [tab, setTab] = useState<Tab>(initialTab);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -39,9 +41,14 @@ export function ConsultationFlow({ store, session, initialId, initialTab = 'requ
   const reload = useCallback(async () => {
     setError(''); setLoading(true);
     try {
-      if (selectedId) { setDetail(await store.consultations.detail(session.userId, role, selectedId)); }
-      else { setItems(await store.consultations.list(session.userId, role)); setDetail(null); }
-    } catch (cause) { setDetail(null); setItems([]); setError(message(cause)); }
+      if (selectedId) {
+        const [nextDetail, nextNote] = await Promise.all([
+          store.consultations.detail(session.userId, role, selectedId),
+          store.clinicalNotes.load(session.userId, role, selectedId),
+        ]);
+        setDetail(nextDetail); setClinicalNote(nextNote);
+      } else { setItems(await store.consultations.list(session.userId, role)); setDetail(null); setClinicalNote(null); }
+    } catch (cause) { setDetail(null); setClinicalNote(null); setItems([]); setError(message(cause)); }
     finally { setLoading(false); }
   }, [role, selectedId, session.userId, store]);
   useEffect(() => { const timer = setTimeout(() => { void reload(); }, 0); return () => clearTimeout(timer); }, [reload]);
@@ -112,6 +119,10 @@ export function ConsultationFlow({ store, session, initialId, initialTab = 'requ
   const cancellable = role === 'farmer' && !started && ['awaiting_payment', 'requested', 'scheduled', 'reschedule_pending'].includes(status);
   const chatPriorStatus = status === 'reschedule_pending' ? String(detail?.record.payload.previousStatus ?? 'scheduled') : status;
   const canOpenChat = detail?.record.payload.type === 'chat' && detail.paid && ['scheduled', 'in_progress', 'completed', 'cancelled'].includes(chatPriorStatus) && !['rejected', 'awaiting_payment'].includes(status);
+  const canWriteClinicalNote = role === 'vet' && detail?.verified && detail.paid && status === 'in_progress'
+    && (detail.record.payload.type !== 'visit' || detail.visit?.payload.stage === 'examining')
+    && clinicalNote?.status !== 'final';
+  const canShowClinicalResult = clinicalNote?.status === 'final';
   const photo = detail?.attachments.find((item) => item.id === photoId && item.kind === 'image');
   const shown = items.filter((item) => consultationTab(item.record) === tab && [item.otherPartyName, item.animalName, item.record.payload.displayCode].join(' ').toLocaleLowerCase('id').includes(query.trim().toLocaleLowerCase('id')));
   return <View style={styles.root}>
@@ -143,6 +154,10 @@ export function ConsultationFlow({ store, session, initialId, initialTab = 'requ
           {detail.record.payload.rejectionReason || detail.record.payload.cancellationReason ? <Line label="Alasan" value={String(detail.record.payload.rejectionReason || detail.record.payload.cancellationReason)} /> : null}
           {detail.record.payload.type === 'visit' && detail.visit ? <VisitProgress role={role} stage={String(detail.visit.payload.stage)} visit={detail.visit} timezone={detail.timezone} action={detail.proposal ? null : nextVisitAction(String(detail.visit.payload.stage))} pendingProposal={!!detail.proposal} busy={busy} onAdvance={setVisitConfirm} /> : null}
           {canOpenChat ? <Button role={role} label={['completed', 'cancelled'].includes(status) ? 'Lihat percakapan' : 'Buka chat'} onPress={() => onOpenChat(detail.record.id)} /> : null}
+          {canWriteClinicalNote ? <Button role={role} label={clinicalNote ? 'Lanjutkan Catatan Pemeriksaan' : 'Catat Hasil Pemeriksaan'} onPress={() => onOpenClinicalNote(detail.record.id)} /> : null}
+          {role === 'vet' && canShowClinicalResult && status === 'in_progress' ? <Button role={role} label="Selesaikan layanan" onPress={() => onOpenClinicalNote(detail.record.id)} /> : null}
+          {role === 'farmer' && canShowClinicalResult ? <Button role={role} variant="secondary" label="Hasil pemeriksaan" onPress={() => onOpenClinicalNote(detail.record.id)} /> : null}
+          {role === 'vet' && canShowClinicalResult && status !== 'in_progress' ? <Button role={role} variant="secondary" label="Lihat catatan final" onPress={() => onOpenClinicalNote(detail.record.id)} /> : null}
           {role === 'farmer' || !['rejected', 'cancelled'].includes(status) ? <Button role={role} variant="secondary" label={role === 'vet' ? 'Riwayat pasien' : 'Lihat ternak'} onPress={() => onOpenAnimal(String(detail.record.payload.animalId))} /> : null}
         </View>
         {detail.attachments.length ? <View style={styles.card}><Text style={styles.heading}>Lampiran keluhan</Text>{detail.attachments.map((item) => <View key={item.id} style={styles.card}>
@@ -154,7 +169,14 @@ export function ConsultationFlow({ store, session, initialId, initialTab = 'requ
         {role === 'vet' && !detail.verified ? <InlineFeedback message="Verifikasi diperlukan sebelum menanggapi permintaan." /> : null}
         {role === 'vet' && status === 'requested' && !future ? <InlineFeedback message="Waktu permintaan sudah lewat. Permintaan ini tidak dapat diterima." /> : null}
         {cancellable ? <Button role={role} variant="secondary" label="Batalkan layanan" disabled={busy} onPress={() => openForm('cancel')} /> : null}
-        <View style={styles.card}><Text style={styles.heading}>Riwayat status</Text><Line label={date(detail.record.createdAt)} value="Layanan tercatat" />{detail.history.length ? detail.history.map((item) => <View key={item.id} style={styles.history}><Line label={date(item.createdAt)} value={actionLabels[item.payload.action as ConsultationAction] ?? String(item.payload.action)} /><Text style={styles.body}>{item.payload.fromStage ? `${visitLabel(String(item.payload.fromStage))} → ${visitLabel(String(item.payload.toStage))}` : `${consultationLabel(String(item.payload.fromStatus))} → ${consultationLabel(String(item.payload.toStatus))}`}</Text>{item.payload.reason ? <Text style={styles.body}>{String(item.payload.reason)}</Text> : null}{['propose', 'approve'].includes(String(item.payload.action)) ? <Text style={styles.body}>{date(String(item.payload.startsAt))} – {time(String(item.payload.endsAt))}</Text> : null}</View>) : <Text style={styles.body}>Belum ada perubahan status yang tercatat.</Text>}</View>
+        <View style={styles.card}><Text style={styles.heading}>Riwayat status</Text><Line label={date(detail.record.createdAt)} value="Layanan tercatat" />{detail.history.length ? detail.history.map((item) => {
+          const action = String(item.payload.action);
+          const summary = action === 'finalize_note' ? 'Catatan final tersimpan dan layanan tetap berlangsung.'
+            : action === 'complete' ? 'Layanan dan kunjungan ditandai selesai.'
+              : item.payload.fromStage ? `${visitLabel(String(item.payload.fromStage))} → ${visitLabel(String(item.payload.toStage))}`
+                : `${consultationLabel(String(item.payload.fromStatus))} → ${consultationLabel(String(item.payload.toStatus))}`;
+          return <View key={item.id} style={styles.history}><Line label={date(item.createdAt)} value={actionLabels[action] ?? action} /><Text style={styles.body}>{summary}</Text>{item.payload.reason ? <Text style={styles.body}>{String(item.payload.reason)}</Text> : null}{['propose', 'approve'].includes(action) ? <Text style={styles.body}>{date(String(item.payload.startsAt))} – {time(String(item.payload.endsAt))}</Text> : null}</View>;
+        }) : <Text style={styles.body}>Belum ada perubahan status yang tercatat.</Text>}</View>
       </> : !selectedId ? <>
         <View style={styles.tabs}>{(['requests', 'appointments', 'history'] as Tab[]).map((value) => <Pressable key={value} accessibilityRole="tab" accessibilityState={{ selected: tab === value }} onPress={() => setTab(value)} style={[styles.tab, tab === value && styles.activeTab]}><Text style={styles.tabText}>{value === 'requests' ? 'Permintaan' : value === 'appointments' ? 'Jadwal' : 'Riwayat'} ({items.filter((item) => consultationTab(item.record) === value).length})</Text></Pressable>)}</View>
         <TextField label="Cari layanan" placeholder="Nama, ternak, atau ID layanan" value={query} onChangeText={setQuery} />
@@ -189,7 +211,7 @@ function VisitProgress({ role, stage, visit, timezone, action, pendingProposal, 
     </View>)}
     {role === 'vet' && action ? <Button role={role} label={visitActionButtonLabel(action)} disabled={busy} onPress={() => onAdvance(action)} /> : null}
     {role === 'vet' && pendingProposal ? <InlineFeedback message="Tunggu respons Peternak pada usulan jadwal sebelum memulai kunjungan." /> : null}
-    {role === 'vet' && stage === 'examining' ? <InlineFeedback message="Layanan dapat diselesaikan setelah Catatan Pemeriksaan difinalkan. Konfirmasi selesai akan tersedia setelah alur catatan siap." /> : null}
+    {role === 'vet' && stage === 'examining' ? <InlineFeedback message="Buka Catatan Pemeriksaan pada detail layanan untuk menyimpan hasil dan menyelesaikan kunjungan." /> : null}
     {role === 'farmer' ? <Text style={styles.label}>Progres diperbarui oleh dokter yang ditugaskan.</Text> : null}
   </View>;
 }

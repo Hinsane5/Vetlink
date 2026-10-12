@@ -1,6 +1,6 @@
 # Katalog fitur VetLink
 
-Status implementasi per fitur dicatat pada [backlog frontend](backlog/FRONTEND.md); FE-00/02 selesai dan FE-01/03–13 sedang dikerjakan. Flow frontend aktif memakai persona lokal tanpa autentikasi/backend jaringan; penerimaan UI Android belum lengkap. Prioritas P0 = fondasi dan flow wajib; P1 = kelengkapan scope lokal. P1 tetap wajib sebelum milestone seluruh scope lokal diterima. Acuan fitur: permintaan pengguna; detail visual: [Figma mapping](FIGMA_MAPPING.md).
+Status implementasi per fitur dicatat pada [backlog frontend](backlog/FRONTEND.md); FE-00/02 selesai dan FE-01/03–14 sedang dikerjakan. Flow frontend aktif memakai persona lokal tanpa autentikasi/backend jaringan; penerimaan UI Android belum lengkap. Prioritas P0 = fondasi dan flow wajib; P1 = kelengkapan scope lokal. P1 tetap wajib sebelum milestone seluruh scope lokal diterima. Acuan fitur: permintaan pengguna; detail visual: [Figma mapping](FIGMA_MAPPING.md).
 
 ## Peternak
 
@@ -58,7 +58,7 @@ Status implementasi per fitur dicatat pada [backlog frontend](backlog/FRONTEND.m
 | Reset password | Form dan hasil layanan pemulihan lokal; skenario berhasil/gagal diuji lewat adapter | Tidak mengirim email/SMS nyata atau mengklaim tautan sudah dikirim oleh provider |
 | Verifikasi | Dokumen lokal dan status fixture/service lokal | Tidak menilai keabsahan izin profesi |
 | Chat | Pesan teks/foto/video dan delivery status tersimpan di SQLite; persona Peternak/Dokter assigned pada instalasi yang sama melihat conversation yang sama | Tidak ada realtime/sinkronisasi lintas perangkat; video playback belum tersedia |
-| Kunjungan | Dokter memperbarui berangkat/tiba/pemeriksaan berurutan; Peternak melihat progres dan waktu; alamat snapshot dapat diteruskan ke aplikasi peta | Tidak membaca GPS; penyelesaian menunggu catatan final FE-14; belum ada sinkronisasi lintas perangkat |
+| Kunjungan | Dokter memperbarui berangkat/tiba/pemeriksaan berurutan; Peternak melihat progres dan waktu; alamat snapshot dapat diteruskan ke aplikasi peta | Tidak membaca GPS; penyelesaian membutuhkan note final dan konfirmasi; belum ada sinkronisasi lintas perangkat |
 | Pembayaran | Adapter hasil pending/succeeded/failed; ID transaksi dan status persisten | Tidak memindahkan uang, tidak memakai rekening pengguna nyata |
 | Pengiriman | Shipment timeline dari adapter lokal dengan hasil tersimpan | Tidak menghubungi kurir atau melacak GPS nyata |
 | Notifikasi | Inbox lokal dibentuk dari event; pengiriman simulasi tercatat | Tidak ada push produksi dan tidak menjamin alarm saat aplikasi ditutup |
@@ -73,4 +73,10 @@ Booking chat/kunjungan, ternak/jadwal/keluhan/alamat/media, draft dan review bia
 
 ## Implementasi kunjungan FE-13
 
-Detail consultation bertipe visit menampilkan `visitAddressSnapshot`, tautan peta berbasis alamat, progres kronologis dan waktu berangkat/tiba/mulai pemeriksaan. Dokter assigned dan verified hanya dapat melakukan satu transisi berikutnya setelah dialog konfirmasi; guard memeriksa payment dan versi record pada write. Perjalanan tidak memakai sensor lokasi atau mengubah alamat Peternak. Peternak membaca entity/status yang sama tanpa tombol tindakan. Aksi menyelesaikan layanan baru dapat disambungkan setelah FE-14 menyediakan catatan final dan dialog konfirmasi penyelesaian.
+Detail consultation bertipe visit menampilkan `visitAddressSnapshot`, tautan peta berbasis alamat, progres kronologis dan waktu berangkat/tiba/mulai pemeriksaan. Dokter assigned dan verified hanya dapat melakukan satu transisi berikutnya setelah dialog konfirmasi; guard memeriksa payment dan versi record pada write. Perjalanan tidak memakai sensor lokasi atau mengubah alamat Peternak. Peternak membaca entity/status yang sama tanpa tombol tindakan.
+
+## Implementasi catatan pemeriksaan FE-14
+
+`ClinicalNoteFlow` terhubung ke detail layanan dari daftar konsultasi dan kalender Dokter. Dokter assigned/verified dapat mengetik lima field ClinicalNote ketika Consultation berstatus `in_progress`, payment cocok, dan bila Visit sudah `examining`. Simpan Draft menulis ke repository SQLite dengan version; review memakai versi draft tersimpan; finalisasi menolak field wajib kosong dan mengunci catatan. Keluhan booking dimuat sebagai konteks yang dapat diedit; temuan, penilaian, tindakan, serta instruksi perawatan diisi pengguna.
+
+Peternak hanya membuka note final. Riwayat kesehatan menggunakan ClinicalNote final yang sama; HealthEvent tertaut adalah proyeksi deduplikasi, bukan salinan edit terpisah. Status Consultation tetap `in_progress` setelah finalisasi. Tombol selesai membuka konfirmasi; batal tidak memanggil service. Konfirmasi menandai Consultation dan Visit completed atomik serta mencatat earning bersih pending dari snapshot rupiah integer. Pemeriksaan typecheck/lint/domain dan export lulus; interaksi UI Android belum diuji karena input ADB ditolak MIUI, sehingga fitur masih Sedang dikerjakan.

@@ -1,6 +1,6 @@
 # Arsitektur VetLink
 
-Status: tahap aktif adalah frontend Android tanpa layar autentikasi dan tanpa backend jaringan. `FrontendFlow` memilih persona fixture lokal berdasarkan peran; `DashboardFlow`, `LivestockFlow`, `FarmerHealthFlow`, `PatientFlow`, dan `VetDirectoryFlow` menampilkan flow FE-05–08. Data tetap berasal dari SQLite lokal melalui service dan repository. FE-03 tetap ada sebagai implementasi historis, tetapi tidak dipasang pada root aplikasi. QA interaksi di Xiaomi tertunda karena input MIUI ditolak; acuan Peternak FE-06/07/08 terhalang izin file utama atau batas Figma Starter. Backend di bawah adalah rancangan netral framework, belum keputusan implementasi.
+Status: tahap aktif adalah frontend Android tanpa layar autentikasi dan tanpa backend jaringan. `FrontendFlow` memilih persona fixture lokal berdasarkan peran; `DashboardFlow`, `LivestockFlow`, `FarmerHealthFlow`, `PatientFlow`, `VetDirectoryFlow`, `ConsultationFlow`, dan `ClinicalNoteFlow` menampilkan flow FE-05–14. Data tetap berasal dari SQLite lokal melalui service dan repository. FE-03 tetap ada sebagai implementasi historis, tetapi tidak dipasang pada root aplikasi. APK standalone FE-14 telah dipasang dan dibuka di Xiaomi sampai Pilih Peran; interaksi belum diuji karena MIUI menolak tap ADB dengan `INJECT_EVENTS`. Acuan visual terkini tidak dimuat ulang sesuai arahan pengguna untuk menghindari koneksi Figma selama limit MCP. Backend di bawah adalah rancangan netral framework, belum keputusan implementasi.
 
 ## Boundary aplikasi
 
@@ -88,7 +88,9 @@ Port event menyimpan event, effect, notification, dan health projection dalam sa
 
 FE-12 `ChatService` membaca/menulis Message dan Attachment lewat repository bersama dalam transaction queue SQLite. Kedua persona melihat percakapan dari data yang sama pada satu instalasi; participant, payment/status, pemilik file, relasi attachment, MIME dan URI diperiksa di service. Adapter lokal mengembalikan delivery `sent` tanpa jaringan; pending/failed dapat diuji dan retry memperbarui pesan yang sama memakai `clientMessageId`. Tidak ada realtime/sinkronisasi antar perangkat atau playback video. Jika backend diperkenalkan, adapter API menjadi otoritas write untuk modul yang dipindahkan; cache lokal tidak boleh mengubah status finansial atau final note secara independen.
 
-FE-13 `ConsultationService.advanceVisit` menjaga transition visit pada transaction queue SQLite yang sama. Dokter harus assigned, verified, dan memiliki payment succeeded yang cocok; alamat snapshot wajib tersedia; stage serta versi Visit dan Consultation diperiksa sebelum write. Perjalanan memperbarui timestamp dan status Consultation ke `in_progress` saat berangkat bersama audit action secara atomik dan idempotent. Peternak membaca proyeksi yang sama. Tombol peta meneruskan alamat snapshot ke aplikasi eksternal melalui `geo:`; tidak ada izin GPS atau lokasi aktual. Completion menunggu use case FE-14 yang memeriksa catatan klinis final dan konfirmasi eksplisit.
+FE-13 `ConsultationService.advanceVisit` menjaga transition visit pada transaction queue SQLite yang sama. Dokter harus assigned, verified, dan memiliki payment succeeded yang cocok; alamat snapshot wajib tersedia; stage serta versi Visit dan Consultation diperiksa sebelum write. Perjalanan memperbarui timestamp dan status Consultation ke `in_progress` saat berangkat bersama audit action secara atomik dan idempotent. Peternak membaca proyeksi yang sama. Tombol peta meneruskan alamat snapshot ke aplikasi eksternal melalui `geo:`; tidak ada izin GPS atau lokasi aktual.
+
+FE-14 `ClinicalNoteService` memakai booking transaction queue yang sama. Draft satu-per-konsultasi disimpan dengan optimistic version dan relasi dokter/pasien/konsultasi. Simpan/final butuh layanan `in_progress`, dokter assigned dan verified, payment cocok; kunjungan harus berada pada tahap `examining`. Finalisasi mengubah draft menjadi snapshot immutable, membuat HealthEvent terhubung ke catatan untuk proyeksi riwayat, dan mencatat audit tanpa mengubah status layanan. Peternak hanya membaca note final; dokter dapat melanjutkan draft atau membaca final. Completion terpisah memeriksa versi serta konfirmasi eksplisit, lalu mengubah Consultation dan Visit bersama, mencatat audit, EarningTransaction pending, dan `earn_pending` LedgerEntry pada transaksi yang sama. Tidak ada akses langsung komponen ke SQLite, jaringan, atau provider pembayaran.
 
 ## Use case yang memerlukan transaksi
 
@@ -96,8 +98,8 @@ FE-13 `ConsultationService.advanceVisit` menjaga transition visit pada transacti
 | --- | --- | --- |
 | AcceptRequest | Session dokter, verified, request aktif, payment sesuai kebijakan, slot tidak konflik | Consultation scheduled, slot committed, event/notification |
 | AcceptReschedule | Pemilik, proposal pending, slot valid, version sama | Jadwal baru + proposal accepted; jadwal lama dilepas setelah sukses |
-| FinalizeClinicalNote | Dokter terkait, draft version sama, wajib lengkap | Final snapshot immutable + health event; layanan tetap berlangsung |
-| CompleteConsultation | Dokter terkait, note final, in_progress, explicit confirmation | Completed timestamp + event; earning dicatat satu kali bila payment settled |
+| FinalizeClinicalNote | Dokter assigned/verified, payment cocok, draft version sama, wajib lengkap, layanan in_progress (visit: examining) | Final snapshot immutable + linked HealthEvent + audit; layanan tetap berlangsung |
+| CompleteConsultation | Dokter assigned/verified, note final, payment succeeded, in_progress, explicit confirmation, visit examining | Consultation/Visit completed + audit + EarningTransaction net dan earn_pending ledger sekali, atomik |
 | ConfirmOrder | Peternak, cart valid, quote/address valid | Order dan item snapshot; cart berubah hanya setelah commit |
 | SubmitWithdrawal | Pemilik saldo, amount >0, available cukup, tujuan valid | Withdrawal submitted + ledger reservation + event |
 

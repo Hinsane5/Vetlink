@@ -344,12 +344,13 @@ Penerimaan UI FE-10 **Belum diuji/terblokir**: tabs/search/status/ID, membuka de
 | FE-11 | UI editor availability/kalender tersedia; seluruh interaksi layar dan visual belum diuji di Android |
 | FE-12 | UI chat tersedia dan 9 tes domain/repository lulus; chat pada layar Android, media viewer, retry sentuh, keyboard/scroll dan visual belum diuji |
 | FE-13 | UI progres kunjungan tersedia dan 5 tes service baru lulus; tindakan dokter/alamat peta/progres Peternak dan visual belum diuji di layar Android |
+| FE-14 | UI editor/review/hasil/konfirmasi selesai tersedia; `npm run check` dan export lulus, bundle startup Xiaomi lulus; interaksi Android diblokir MIUI |
 
-FE-01/03–13 tetap **Sedang dikerjakan**. Tidak menaikkan status fase berdasarkan smoke startup. Untuk review manual: Dokter → Konsultasi → request VL-V-106 → terima/tolak/usulkan; Peternak → Konsultasi saya → layanan yang sama → respons usulan. Waktu fixture 7 Oktober 2026 11:00–12:00 Asia/Jakarta sengaja tidak digeser otomatis; setelah lewat, permintaan tidak dapat diterima, sesuai guard stale.
+FE-01/03–14 tetap **Sedang dikerjakan**. Tidak menaikkan status fase berdasarkan smoke startup. Untuk review manual: Dokter → Konsultasi → request VL-V-106 → terima/tolak/usulkan; Peternak → Konsultasi saya → layanan yang sama → respons usulan. Waktu fixture 7 Oktober 2026 11:00–12:00 Asia/Jakarta sengaja tidak digeser otomatis; setelah lewat, permintaan tidak dapat diterima, sesuai guard stale.
 
 ## Hasil pemeriksaan FE-11 — 6 Oktober 2026
 
-FE-11 menambahkan AvailabilityService/SQLite dan halaman Dokter **Jadwal → Atur ketersediaan**. FE-10 sebelumnya di-commit sebagai `8dd97a0`; FE-11 kini di-commit sebagai `917a83c`, lalu FE-12 di-commit sebagai `8df984a`; semua checkpoint ini tidak di-push. FE-13 berada di working tree. Frontend tetap tanpa autentikasi/backend jaringan, serta simulator tidak dibuka.
+FE-11 menambahkan AvailabilityService/SQLite dan halaman Dokter **Jadwal → Atur ketersediaan**. FE-10 sebelumnya di-commit sebagai `8dd97a0`; FE-11 di-commit sebagai `917a83c`, FE-12 sebagai `8df984a`, dan FE-13 sebagai `c771aac`; semua checkpoint ini tidak di-push. FE-14 berada di working tree. Frontend tetap tanpa autentikasi/backend jaringan, serta simulator tidak dibuka.
 
 | Pemeriksaan | Hasil dan batas bukti |
 | --- | --- |
@@ -377,8 +378,11 @@ Penerimaan UI FE-11 **Belum diuji/terblokir**: navigasi tab Jadwal, buka/tutup e
 | FE-09 | UI booking/draft/media/review tersedia; form/picker/draft/cold restart dan konfirmasi payment belum diuji di UI Android; payment flow FE-19 belum ada |
 | FE-10 | UI request/detail/decision/proposal/history tersedia; interaksi lintas peran dan visual belum diuji di Android |
 | FE-11 | UI editor availability/kalender tersedia; seluruh interaksi layar dan visual belum diuji di Android |
+| FE-12 | UI chat/media tersedia; interaksi/chat viewer dan visual belum diuji di Android |
+| FE-13 | UI progres kunjungan tersedia; interaksi tahap/alamat dan visual belum diuji di Android |
+| FE-14 | `npm run check`, export, dan Gradle `assembleRelease` lulus; APK standalone terpasang/dibuka. Interaksi form dan visual selain startup belum diuji |
 
-FE-01 dan FE-03–11 tetap **Sedang dikerjakan**; status backlog mencerminkan bahwa acceptance Android/visual belum lengkap. Pengujian fase lain tidak diulang kecuali check regression yang berjalan bersama suite domain.
+FE-01 dan FE-03–14 tetap **Sedang dikerjakan**; status backlog mencerminkan bahwa acceptance Android/visual belum lengkap. Pengujian fase lain tidak diulang kecuali check regression yang berjalan bersama suite domain.
 
 ## Hasil pemeriksaan FE-12 — 6 Oktober 2026
 
@@ -412,6 +416,22 @@ FE-13 menambahkan progres kunjungan ke detail konsultasi. Dokter Yuda dapat memb
 | Interaksi layar | Kunjungan belum dibuka. Percobaan tap MIUI terdahulu gagal dengan `java.lang.SecurityException: Injecting input events requires the caller (or the source of the instrumentation, if any) to have the INJECT_EVENTS permission.` Tidak mengubah izin/security MIUI; interaksi, address map, keyboard/back/scroll dan visual belum diuji |
 | Figma | Mapping lokal menunjuk visit `46:14` dan location `46:15`. Context dan screenshot pada file sumber sama-sama mengembalikan `Looks like you don't have edit access to this file. The file owner can share it with you and make you an editor.` WHOAMI hanya menunjukkan seat View. Panggilan ini dilakukan sebelum arahan pengguna agar tidak mencoba Figma lagi; tidak ada panggilan berikutnya |
 
-Tes service membuktikan transisi berurutan dan tidak dapat dilompati; hanya Dokter assigned/verified dengan pembayaran sukses serta snapshot alamat yang dapat memulai. Update Visit, status Consultation, timestamp dan audit berada dalam satu transaksi. Ketukan ulang idempotent, versi stale ditolak, dan kegagalan audit membatalkan seluruh perubahan. Domain yang sudah ada tetap mensyaratkan catatan final plus konfirmasi eksplisit untuk status completed; penerapan UI completion menunggu FE-14.
+Tes service FE-13 membuktikan transisi berurutan dan tidak dapat dilompati; hanya Dokter assigned/verified dengan pembayaran sukses serta snapshot alamat yang dapat memulai. Update Visit, status Consultation, timestamp dan audit berada dalam satu transaksi. Ketukan ulang idempotent, versi stale ditolak, dan kegagalan audit membatalkan seluruh perubahan. UI completion kini tersedia lewat FE-14; pemeriksaan pada implementasi terintegrasi tercatat di bagian FE-14 di bawah.
 
-FE-13 **Sedang dikerjakan** sampai completion FE-14 serta interaksi/visual Android selesai. UI/back/keyboard/scroll, alamat map, ukuran 390 × 844, layar kecil dan font besar **Belum diuji**. FE-12 `8df984a` telah di-commit tanpa push; FE-13 belum di-commit.
+FE-13 **Sedang dikerjakan** sampai interaksi/visual Android selesai. UI/back/keyboard/scroll, alamat map, ukuran 390 × 844, layar kecil dan font besar **Belum diuji**. FE-13 di-commit `c771aac`, tanpa push.
+
+## Hasil pemeriksaan FE-14 — 6 Oktober 2026
+
+UI catatan klinis ditambahkan ke detail konsultasi dan kalender Dokter. Layar memuat keluhan dari booking sebagai konteks awal, lalu menerima input nyata untuk temuan pemeriksaan, penilaian, tindakan, dan instruksi perawatan. Simpan draft menulis ClinicalNote ke SQLite; buka ulang membaca versi tersimpan. Tinjau finalisasi menyimpan perubahan terlebih dahulu lalu menampilkan isi draft dan versinya. Field wajib dicek oleh domain saat finalisasi. Catatan final hanya baca dan muncul pada hasil konsultasi Peternak serta riwayat kesehatan. Finalisasi tidak menyelesaikan layanan.
+
+Penyelesaian layanan merupakan aksi terpisah setelah catatan final. Dialog Batal hanya menutup dialog. Konfirmasi memeriksa status `in_progress`, versi konsultasi/note/visit, payment succeeded, dokter assigned/verified dan tahap `examining`; satu transaksi mengubah Consultation/Visit ke completed, menulis audit dan earning net sebagai pending ledger. Gross/commission/net memakai integer dari snapshot konsultasi; tidak ada provider payout. Retry penyelesaian memakai operation key dan tidak membuat earning kedua.
+
+- `npm run check` — **Lulus**: TypeScript typecheck, Expo lint tanpa warning, dan 89 tes domain/service (5 tes baru FE-14).
+- `npx expo export --platform android --output-dir /private/tmp/vetlink-fe14-export` — **Lulus**: 752 modul; Android Hermes bundle 2,5 MB.
+- `env EXPO_OFFLINE=1 GRADLE_USER_HOME=/private/tmp/vetlink-gradle ANDROID_HOME=/Volumes/HowSSD/AndroidStudio/SDK/sdk ./gradlew --no-daemon --max-workers=1 assembleRelease` dari `apps/mobile/android` — **Lulus** dalam 15 menit; 646 tasks (592 dieksekusi, 54 up-to-date). APK standalone 76 MB memuat `assets/index.android.bundle` (2.019.588 byte). Build lokal ditandatangani debug key; bukan build distribusi produksi.
+- Xiaomi fisik `2311DRK48G` — APK release terpasang dengan `adb install -r`; hasil `Success`. Metro dihentikan dan USB reverse dihapus sebelum app dipaksa tutup lalu dibuka ulang. Layar “Pilih Peran” tampil dari APK mandiri; lihat [screenshot](reference/android/fe14-standalone-startup.png). Ini smoke startup, bukan bukti interaksi layar FE-14.
+- Interaksi layar — satu tap biasa pada tombol “Lanjut” gagal dengan error persis `java.lang.SecurityException: Injecting input events requires the caller (or the source of the instrumentation, if any) to have the INJECT_EVENTS permission.` Tidak mengubah izin/security MIUI. Layar catatan pemeriksaan tidak dapat dibuka lewat ADB.
+- Figma — tidak dipanggil lagi sesuai arahan pengguna untuk tidak menghubungkan Figma selama limit MCP. Node dan screenshot pada mapping lokal hanya dipakai sebagai konteks terdokumentasi; visual terbaru tidak diverifikasi.
+- Draft cold restart, validasi field di UI, versi review, final immutability, cancel/confirm selesai, hasil lintas persona, ukuran 390 × 844, layar kecil, font besar, keyboard/scroll/Back Android — **Belum diuji pada perangkat**. Simulator tidak dibuka.
+
+FE-14 tetap **Sedang dikerjakan** karena interaksi layar dan penerimaan visual selain startup Android belum terverifikasi; belum di-commit. FE-13 sudah di-commit sebagai `c771aac`, tanpa push.

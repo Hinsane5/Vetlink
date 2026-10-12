@@ -25,6 +25,10 @@ Semua PNG berikut berasal dari export MCP, berukuran 390 × 844, dan disimpan lo
 
 Ini referensi dokumentasi, bukan assets untuk menggantikan UI screen. Gambar panjang/scroll hanya mencakup viewport. Tidak semua layar dan koneksi sudah diperiksa high-fidelity; pemeriksaan tiap layar dilakukan saat implementasi.
 
+## Cakupan FE-14
+
+Pemetaan lama menyediakan Catatan Pemeriksaan `46:19`, Catatan Final `46:21`, serta node review/visit pada [Figma mapping](../../FIGMA_MAPPING.md). Selama pengerjaan FE-14 tidak ada koneksi atau panggilan MCP baru sesuai arahan pengguna; screenshot yang ada adalah arsip, bukan validasi terhadap desain terkini. Catatan UI dan batas pemeriksaan fase ini tercatat pada pemetaan FE-14.
+
 ## Pemeriksaan saat FE-01
 
 Pada 5 Oktober 2026, konteks dan screenshot komponen berhasil diambil untuk Peternak Primary `12:1666`, Dokter Button `75:2492`, Field `75:2509`, Status `75:2614`, dan frame Dokter Chat `46:16`. Chat Peternak `12:2353` dan Logout Dialog `12:3184` sebelumnya tertunda, lalu berhasil diperiksa dari link terbaru. Referensi ini sudah terbaca, tetapi tidak tersedia screenshot Android produk untuk pixel-match kedua screen; bukti lama hanya mencakup galeri komponen development.
