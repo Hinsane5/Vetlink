@@ -34,6 +34,8 @@ Smoke tanpa konfigurasi env awalnya berhenti sebelum startup karena `DATABASE_HO
 
 Pemeriksaan BE-07 dilakukan dari `apps/api` terhadap container uji PostgreSQL `17.4-alpine` terpisah di port `54339`. Container dibuat sementara dengan `--rm`, tanpa volume; migrasi dan fixture dibuang bersama container setelah smoke. `npm ci` lulus dengan 0 vulnerability; npm memperingatkan engine karena shell menyediakan Node `24.10.0` / npm `11.6.0`, sedangkan `.nvmrc` meminta Node `24.15.0`. NVM dan Node 24.15 tidak tersedia. Typecheck/build/smoke berhasil pada runtime yang tersedia, belum dikonfirmasi di Node versi `.nvmrc`.
 
+Commit implementasi lokal: `644f595` (`feat(api): implement BE-07 private chat media`); tidak di-push.
+
 - `npm run check` — **Lulus** (`tsc --noEmit`, `nest build`).
 - `npm run db:migrate` — **Lulus**, tiga migrasi diterapkan termasuk `20261013_000003_chat_media.sql`.
 - `npm run db:seed` — **Lulus**, fixture Budi/Yuda fiktif tersedia tanpa menimpa record.
