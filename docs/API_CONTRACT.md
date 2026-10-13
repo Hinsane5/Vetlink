@@ -1,16 +1,16 @@
 # Kontrak integrasi backend v1
 
-Status: OpenAPI executable memuat healthcheck dan auth BE-01 (`/v1/auth/*`, `/v1/me`). Route domain lain tetap kontrak target untuk tiket berikutnya. Aplikasi mobile belum memakai backend jaringan.
+Status: OpenAPI executable memuat healthcheck/auth BE-00/01 dan chat/media BE-07. Route domain selain auth, chat, dan media tetap kontrak target untuk tiket berikutnya. Aplikasi mobile belum memakai backend jaringan.
 
 ## Konvensi
 
 Prefix `/v1`, JSON, ID stabil, timestamp ISO-8601 UTC, integer IDR, paginasi cursor untuk daftar. Auth memakai bearer credential opaque; token tidak menjadi query parameter. Error berbentuk `{code, message, fieldErrors?, requestId}` tanpa isi rahasia/stack trace. Client menerjemahkan pesan teknis ke bahasa Indonesia.
 
-Mutasi concurrency-sensitive menerima `expectedVersion`. Mutasi pembayaran, order, pencairan, finalisasi dan completion menerima `Idempotency-Key`; key sama/payload sama mengembalikan hasil sebelumnya, payload berbeda ditolak. Status HTTP standar: 400 validation, 401 session, 403 role/access, 404 resource tersembunyi, 409 status/version/slot conflict, 422 rule, 429 rate limit, 503 dependency unavailable, dan 500 internal error.
+Mutasi concurrency-sensitive menerima `expectedVersion`. Mutasi pembayaran, order, pencairan, finalisasi dan completion menerima `Idempotency-Key`; key sama/payload sama mengembalikan hasil sebelumnya, payload berbeda ditolak. Upload media juga mewajibkan `Idempotency-Key`; pesan memakai `clientMessageId` yang unik per actor/konsultasi. Status HTTP standar: 400 validation, 401 session, 403 role/access, 404 resource tersembunyi, 409 status/version/slot conflict, 413 payload terlalu besar, 422 rule, 429 rate limit, 503 dependency unavailable, dan 500 internal error.
 
 Gunakan action endpoint untuk transisi yang membutuhkan syarat; jangan menyediakan PATCH umum yang membolehkan client mengatur `verified`, `completed`, `paid`, `balance`, atau `finalizedAt`.
 
-## OpenAPI executable BE-00/01
+## OpenAPI executable BE-00/01/07
 
 NestJS melayani Swagger UI di `/docs` dan JSON di `/openapi.json`. Endpoint runtime yang tersedia:
 
@@ -25,12 +25,19 @@ NestJS melayani Swagger UI di `/docs` dan JSON di `/openapi.json`. Endpoint runt
 | `POST /v1/auth/password-reset` | Email | 202 generik | 400/429; tidak membocorkan keberadaan akun |
 | `POST /v1/auth/password-reset/confirm` | Reset token, password baru | 204 | 400/429 |
 | `GET /v1/me` | Bearer access token | Akun aktif dan memberships | 401/403 |
+| `POST /v1/attachments/uploads` | Multipart `consultationId`, `file`; `Idempotency-Key` | 201 `Attachment` status `uploaded` | 400/401/403/404/409/413/422/503 |
+| `POST /v1/attachments/{id}/commit` | ID lampiran yang diunggah actor | 200 `Attachment` status `committed` | 401/403/404/409/422/503 |
+| `GET /v1/attachments/{id}` | ID lampiran | 200 metadata dan URL content privat | 401/403/404 |
+| `GET /v1/attachments/{id}/content` | ID lampiran; bearer | 200 byte media dengan MIME terdeteksi | 401/403/404/503 |
+| `GET /v1/consultations/{consultationId}/messages` | `cursor` opsional; `limit` 1–100, default 20 | 200 pesan lama-ke-baru per halaman, `nextCursor`, `hasMore` | 400/401/403/404/422 |
+| `POST /v1/consultations/{consultationId}/messages` | `clientMessageId`, `text?`, `attachmentIds?` | 201 record pesan dan `deliveryStatus` | 400/401/403/404/409/422/503 |
+| `POST /v1/consultations/{consultationId}/messages/{messageId}/retry` | ID pesan pengirim | 200 record yang sama dan attempt terbaru | 401/403/404/422/503 |
 
 Error menggunakan `{code, message, fieldErrors?, requestId}`. `fieldErrors` adalah object dari nama field ke daftar pesan; exception filter tidak mengirim stack trace. Setiap response juga mengirim header `X-Request-Id`. Shared error code/status, request pagination (`cursor`, `limit` 1–100), base `expectedVersion`, dan parameter header `Idempotency-Key` terdokumentasi sebagai schema/response reusable. `AdapterOperationResult` memiliki outcome `pending/succeeded/failed`; outcome gagal membawa `{code, message, retryable}`, dan pemanggil harus menyimpan hasil adapter sebelum memberi respons sukses.
 
-Komponen enum status domain di OpenAPI diturunkan dari [Data model](DATA_MODEL.md): role, verifikasi dokter, siklus konsultasi, proposal jadwal, tahap kunjungan, catatan klinis, rekomendasi, follow-up/reminder/delivery, payment, order, earning, ledger, withdrawal, dan outcome adapter. Enum tersebut mendeskripsikan nilai kontrak; route domain belum diimplementasikan dan komponen ini tidak membuka akses atau mengubah status. Sebelum tiap tiket domain selesai, request/response endpoint-nya harus ditambahkan ke OpenAPI lalu direview bersama mobile.
+Komponen enum status domain di OpenAPI diturunkan dari [Data model](DATA_MODEL.md): role, verifikasi dokter, siklus konsultasi, proposal jadwal, tahap kunjungan, upload/media, delivery pesan, catatan klinis, rekomendasi, follow-up/reminder, payment, order, earning, ledger, withdrawal, dan outcome adapter. Enum tidak membuka akses atau mengubah status.
 
-BE-01 menambahkan bearer scheme `bearer` dan operation untuk register, login, logout, refresh, reset kata sandi, dan `/me`. Detail payload auth ada di bagian berikut. Route domain lain belum diimplementasikan.
+BE-01 menambahkan bearer scheme `bearer` dan operation untuk register, login, logout, refresh, reset kata sandi, dan `/me`. BE-07 menambahkan operation multipart untuk upload privat, commit, metadata/content, daftar/kirim pesan, dan retry. Detail payload auth dan BE-07 ada di bagian berikut.
 
 Untuk menjalankan server lokal, migrasi, seed, dan smoke check, ikuti [panduan backend](../apps/api/README.md).
 
@@ -55,6 +62,22 @@ Semua endpoint auth dibatasi per proses: register 5/IP/jam; login 20/IP/15 menit
 Adapter reset bernama `PasswordResetDeliveryAdapter` mengembalikan `pending/succeeded/failed`; token reset hanya dapat dikonfirmasi bila hasil persisted adalah `succeeded`. Adapter BE-01 yang aktif `UnconfiguredPasswordResetDeliveryAdapter` selalu gagal tertutup dan tidak mengirim pesan, mengembalikan token, atau mencatat token/password. Karena belum ada provider pengiriman yang dipilih, alur permintaan reset aman dan siap disambungkan, tetapi reset yang dapat digunakan pengguna menunggu adapter pengiriman berikutnya. Hasil gagal tetap mendapat response generik 202 untuk mencegah account enumeration.
 
 Body request/response tidak pernah ditulis ke log. Error menggunakan envelope standar tanpa nilai request, token, password atau stack. Endpoint jaringan pada deployment wajib memakai HTTPS; konfigurasi proxy dan distributed rate-limit tetap keputusan operasional sebelum multi-instance.
+
+## Chat dan media BE-07
+
+Semua route memerlukan bearer session, active role membership, dan identitas actor dari sesi. Konsultasi harus merupakan layanan `chat`, peserta harus sama dengan `farmer_id` atau `vet_id` sesuai active role, pembayaran konsultasi harus berstatus `succeeded` dengan amount sama dengan snapshot server, dan chat harus sudah diterima (`scheduled`/`in_progress`) atau tersedia read-only untuk status `reschedule_pending`, `completed`, dan `cancelled`. ID konsultasi yang tidak terkait dikembalikan sebagai 404 agar keberadaannya tidak bocor. Bila dokter terkait belum terverifikasi, kedua pihak tidak dapat mengirim pesan atau mengunggah/commit media; dokter yang terhubung tetap dapat membaca percakapan terkait.
+
+| Method / path | Request dan respons | Otorisasi/aturan |
+| --- | --- | --- |
+| `POST /v1/attachments/uploads` | `multipart/form-data`: `consultationId` UUID + satu `file`; header `Idempotency-Key` 8–128 karakter. 201 `Attachment` berstatus `uploaded` | Pengirim terverifikasi bila active role dokter; file hanya milik actor dan konteks konsultasi; retry memakai key dan fingerprint payload yang sama |
+| `POST /v1/attachments/{id}/commit` | Tanpa body. 200 `Attachment` berstatus `committed` | Hanya pemilik upload; operasi idempotent dan memeriksa kembali file privat sebelum commit |
+| `GET /v1/attachments/{id}` | 200 metadata `id`, `kind`, MIME, filename, `byteSize`, status, dan URL content | Pemilik dapat membaca upload committed miliknya; peserta lain hanya sesudah attachment masuk pesan yang terkirim |
+| `GET /v1/attachments/{id}/content` | 200 byte file dengan `Content-Type` hasil deteksi; `Cache-Control: private, no-store`, `X-Content-Type-Options: nosniff` | Otorisasi hubungan konsultasi dan relasi lampiran diperiksa ulang pada setiap download; tidak ada path/storage key pada response |
+| `GET /v1/consultations/{consultationId}/messages?cursor=&limit=` | `{items, nextCursor, hasMore}`; item diurutkan lama-ke-baru dalam halaman | Sender melihat status pending/failed miliknya; penerima baru melihat pesan setelah polling transport mencatat status `sent` |
+| `POST /v1/consultations/{consultationId}/messages` | `{clientMessageId, text?, attachmentIds?}` → 201 message | Teks maksimal 4.000 karakter; teks atau lampiran harus ada; maks. lima lampiran committed milik sender untuk konsultasi yang sama. clientMessageId + payload sama tidak menambah record; payload berbeda mendapat 409. Status `failed` adalah record tersimpan yang bisa dicoba lagi, bukan sukses delivery |
+| `POST /v1/consultations/{consultationId}/messages/{messageId}/retry` | Tanpa body → 200 message yang sama | Hanya pengirim; retry memperbarui attempt pada record yang sama, sukses sebelumnya tidak dikirim ulang |
+
+BE-07 memakai adapter filesystem privat lokal di luar static web root dan adapter polling PostgreSQL sebagai transport awal; tidak memerlukan realtime atau provider media/chat eksternal. Upload menerima `image/jpeg`, `image/png`, `image/webp`, dan `video/mp4`; MIME multipart harus cocok dengan signature byte. Guardrail default development adalah 10 MiB per gambar dan 50 MiB per video, dapat diubah lewat `MEDIA_IMAGE_MAX_BYTES` dan `MEDIA_VIDEO_MAX_BYTES` (masing-masing dibatasi sampai 100 MiB oleh parser transport). Guardrail ini bukan kebijakan produksi dan tidak menutup DEC-17. File tidak dikirim sebagai base64 JSON. Gagal storage/delivery menghasilkan status adapter `failed`; upload dapat diulang dengan `Idempotency-Key` yang sama, pesan dengan clientMessageId/messageId yang sama.
 
 ## Kelompok endpoint
 
@@ -114,4 +137,4 @@ Payload event minimal: eventId, aggregateId, actorId, occurredAt, version. Efek 
 
 Jalankan suite yang sama terhadap repository lokal dan API: scope ownership, verified guard, slot conflicts, final-note immutability, complete guard, sequence visit, computed totals, earning once, withdrawal reservation/retry, notification recipient. Perbedaan teknis error harus dinormalisasi ke domain error yang sama.
 
-OpenAPI BE-00/01 executable memuat healthcheck, auth dan `/me`; endpoint domain lain pada tabel masih usulan dan belum tersedia. Request/response serta validation constraints untuk tiap domain tetap harus diturunkan dari Data model dan direview bersama mobile sebelum implementasi.
+OpenAPI executable BE-00/01/07 memuat healthcheck, auth, `/me`, chat, dan media. Endpoint domain lainnya pada tabel masih usulan dan belum tersedia. Request/response serta validation constraints untuk tiap domain tetap harus diturunkan dari Data model dan direview bersama mobile sebelum implementasi.

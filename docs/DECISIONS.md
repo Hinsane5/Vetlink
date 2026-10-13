@@ -20,7 +20,7 @@ Tanggal baseline: 5 Oktober 2026. “Dipilih” berarti berasal dari jawaban/ins
 | DEC-14 | Reservasi saldo saat pengajuan pencairan berhasil; release bila gagal/ditolak | Usulan | Menghindari pengajuan melebihi saldo dan debit ganda |
 | DEC-15 | Verifikasi lokal fixture; produksi membutuhkan reviewer tepercaya | Terbuka untuk produksi | Tidak boleh ada self-verify oleh akun dokter |
 | DEC-16 | Tidak ada multi-device atau sync offline produksi pada tahap lokal | Usulan batas implementasi | Android data lokal dahulu; backend menyusul |
-| DEC-17 | Batas ukuran media, minimum pencairan, masa slot hold, cancellation/refund | Terbuka | Jangan menetapkan tarif/SLA bisnis sebagai fakta |
+| DEC-17 | Batas ukuran media produksi, minimum pencairan, masa slot hold, cancellation/refund | Terbuka | BE-07 memakai guardrail development configurable: JPEG/PNG/WebP 10 MiB dan MP4 50 MiB secara default; ini bukan kebijakan produk/produksi |
 | DEC-18 | iOS, hosting, provider nyata dan operasional admin | Terbuka | Belum diminta sebagai tahap awal |
 | DEC-19 | Mulai implementasi dari tiket FE-00 | Dipilih | Instruksi pengguna 5 Oktober 2026; memulai scaffold mobile tanpa memilih backend atau memperluas fitur produk |
 | DEC-20 | Lanjut ke FE-02 setelah fondasi FE-01 | Diterapkan | Instruksi pengguna 5 Oktober 2026; fondasi domain, SQLite lokal, seed, repository dan event selesai dengan bukti di Testing |
@@ -34,6 +34,8 @@ Tanggal baseline: 5 Oktober 2026. “Dipilih” berarti berasal dari jawaban/ins
 DEC-01 mencatat keadaan tahap dokumentasi sebelum pengguna meminta implementasi. DEC-19 memulai implementasi; DEC-23/24 menetapkan fokus frontend aktif. DEC-10 kini menetapkan stack backend; FE-03 tetap ditunda sesuai DEC-23. Keputusan provider dan operasi produksi tetap terbuka.
 
 BE-00 pada 13 Oktober 2026 menerapkan DEC-10 dan mencatat pilihan versi/penggerak SQL melalui DEC-25. BE-01 menerapkan DEC-26: health/auth aktif di API, sedangkan route domain lain menunggu tiketnya. Reset password enumeration-safe tetap gagal tertutup tanpa provider pengiriman; tidak ada pesan atau transaksi nyata.
+
+BE-07 pada 13 Oktober 2026 memakai filesystem privat lokal dan transport polling PostgreSQL, tanpa bucket, realtime, provider produksi, secret, atau transaksi finansial. Default batas media dapat diubah untuk development; kebijakan produksi DEC-17 tetap terbuka.
 
 Untuk mengubah keputusan, tambah tanggal, alasan dan dampak pada PRD, model status, API, backlog dan acceptance criteria. Jangan menghapus riwayat keputusan pengguna tanpa mencatat penggantinya.
 

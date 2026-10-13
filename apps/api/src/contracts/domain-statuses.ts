@@ -42,6 +42,13 @@ export const domainStatusSchemas = {
   FollowUpStatus: { type: 'string', enum: ['scheduled', 'completed', 'cancelled'] },
   ReminderCareStatus: { type: 'string', enum: ['scheduled', 'done'] },
   DeliveryStatus: { type: 'string', enum: ['pending', 'sent', 'failed'] },
+  MessageDeliveryStatus: {
+    type: 'string',
+    enum: ['pending', 'sent', 'failed'],
+    description: 'Pesan sent tersedia melalui polling; retry memakai record dan clientMessageId yang sama.',
+  },
+  AttachmentKind: { type: 'string', enum: ['image', 'video'] },
+  AttachmentUploadStatus: { type: 'string', enum: ['pending', 'uploaded', 'failed', 'committed'] },
   PaymentStatus: { type: 'string', enum: ['pending', 'succeeded', 'failed', 'expired'] },
   OrderStatus: {
     type: 'string',

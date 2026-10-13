@@ -1,6 +1,6 @@
 # Strategi pengujian VetLink
 
-Status QA per 6 Oktober 2026: bukti FE-00/02 sebelumnya tetap berlaku. Tahap aktif memakai frontend tanpa autentikasi/backend jaringan; Pilih Peran membuka persona lokal. UI FE-06–13 tersedia, termasuk chat dan progres kunjungan lokal. `npm run check` terbaru lulus typecheck, lint dan 84 tes domain/service; export Android lulus pada 749 modul. Xiaomi fisik membuka aplikasi sampai Pilih Peran; ada jendela mengambang aplikasi lain, sehingga screenshot yang layak tidak disimpan. Layar produk, form, filter, picker, kalender, chat, kunjungan, keyboard/dialog/back/scroll, cold restart draft perangkat, viewport kecil/font besar dan pembandingan visual 390 × 844 belum terbukti. Figma visit yang dicoba sebelumnya gagal izin edit pada file sumber; sesuai arahan terbaru, tidak ada pemanggilan Figma berikutnya.
+Status QA per 13 Oktober 2026: bukti FE-00/02 sebelumnya tetap berlaku. Tahap aktif memakai frontend tanpa autentikasi/backend jaringan; Pilih Peran membuka persona lokal. UI FE-06–16 tersedia, termasuk chat dan progres kunjungan lokal. Backend BE-00/01/07 memiliki health/auth/chat/media executable; mobile belum terhubung ke API. Pemeriksaan Android yang dicatat di bagian FE tetap berlaku dan bukan bukti integrasi backend. Layar produk, form, filter, picker, kalender, chat, kunjungan, keyboard/dialog/back/scroll, cold restart draft perangkat, viewport kecil/font besar dan pembandingan visual 390 × 844 belum terbukti. Figma visit yang dicoba sebelumnya gagal izin edit pada file sumber; sesuai arahan terbaru, tidak ada pemanggilan Figma berikutnya.
 
 ## Level pengujian
 
@@ -11,9 +11,9 @@ Status QA per 6 Oktober 2026: bukti FE-00/02 sebelumnya tetap berlaku. Tahap akt
 | Component/integration | Typed form, validation, dirty draft, modal, send error, route params | Layar atau binding yang berubah |
 | Native Android flow | A–D dan perjalanan Peternak, back/keyboard/tabs/scroll | Per vertical slice dan gate Android |
 | Visual | Figma vs Android screenshot, teks panjang/font scaling | Screen implementasi atau visual yang berubah |
-| Backend/security/concurrency | Role/owner access, race slot/payout, duplicate callbacks | Setelah backend tersedia |
+| Backend/security/concurrency | Role/owner access, race slot/payout, duplicate callbacks | Pada vertical slice backend terkait |
 
-Framework tes domain/UI dan E2E pada [Tech](TECH.md) belum dipasang. Jalankan script yang benar-benar tersedia dari manifest; saat ini `npm run check` dan build Android tersedia, tetapi tidak ada script `npm test`.
+Framework tes domain/UI dan E2E pada [Tech](TECH.md) belum dipasang. Jalankan script yang benar-benar tersedia dari manifest; backend belum memiliki `npm test`, sehingga pemeriksaan runtime BE-07 memakai `npm run api:smoke` yang memang ada pada manifest.
 
 ## Bukti BE-01 (13 Oktober 2026)
 
@@ -29,6 +29,18 @@ Review koordinator setelah commit `0a9f9e9`: Compose PostgreSQL `17.4-alpine` lo
 - Adapter reset aktif mengembalikan `failed`, tidak mengirim pesan, dan tidak mengungkap token. Tidak ada credential fixture, provider eksternal, secret, migrasi database lokal, transaksi finansial, atau deployment yang dijalankan.
 
 Smoke tanpa konfigurasi env awalnya berhenti sebelum startup karena `DATABASE_HOST` wajib. Run final memakai nilai placeholder lokal yang sama dengan `.env.example`; hasil tersebut tidak mengubah database.
+
+## Bukti BE-07 (13 Oktober 2026)
+
+Pemeriksaan BE-07 dilakukan dari `apps/api` terhadap container uji PostgreSQL `17.4-alpine` terpisah di port `54339`. Container dibuat sementara dengan `--rm`, tanpa volume; migrasi dan fixture dibuang bersama container setelah smoke. `npm ci` lulus dengan 0 vulnerability; npm memperingatkan engine karena shell menyediakan Node `24.10.0` / npm `11.6.0`, sedangkan `.nvmrc` meminta Node `24.15.0`. NVM dan Node 24.15 tidak tersedia. Typecheck/build/smoke berhasil pada runtime yang tersedia, belum dikonfirmasi di Node versi `.nvmrc`.
+
+- `npm run check` — **Lulus** (`tsc --noEmit`, `nest build`).
+- `npm run db:migrate` — **Lulus**, tiga migrasi diterapkan termasuk `20261013_000003_chat_media.sql`.
+- `npm run db:seed` — **Lulus**, fixture Budi/Yuda fiktif tersedia tanpa menimpa record.
+- `npm run api:smoke` — **Lulus**: OpenAPI routes BE-07, owner dan assigned-vet access, outsider 404, kedua sisi ditolak menulis ketika dokter belum verified, `clientMessageId` dedupe/fingerprint conflict, delivery failure → retry attempt 2, pagination tanpa duplikasi, MIME mismatch dan gambar 10 MiB + 1 byte ditolak, storage failure → retry dengan `Idempotency-Key` sama, upload commit, penerima hanya melihat lampiran sesudah pesan sent, download privat oleh related vet dan penolakan outsider.
+- Percobaan smoke pertama mendapati retry POST berstatus 201 dari default Nest, berbeda dari kontrak 200. `@HttpCode(200)` ditambahkan untuk retry/commit dan run ulang lulus.
+- API smoke menggunakan account, farm, ternak, konsultasi, dan payment status fiktif lokal untuk menjalankan guard chat; tidak ada provider atau transaksi finansial nyata. Skrip menghapus record tersebut dan folder media sementara di `finally`. Container PostgreSQL dihapus setelah selesai.
+- Tidak ada test runner khusus backend; smoke adalah satu-satunya pemeriksaan API domain yang tersedia. Tidak ada integrasi mobile, uji video 50 MiB, realtime, provider produksi, deployment, atau QA Android pada tiket backend ini.
 
 ## Fixture dan kondisi
 

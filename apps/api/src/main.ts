@@ -48,7 +48,7 @@ async function bootstrap(): Promise<void> {
   const openApiConfig = new DocumentBuilder()
     .setTitle('VetLink API')
     .setDescription(
-      'BE-00/BE-01 contract. Health and first-party authentication routes are implemented; domain routes are delivered by their backend tickets.',
+      'BE-00/01/07 contract. Health, authentication, private chat media, message persistence, and polling delivery are implemented; other domain routes are delivered by their backend tickets.',
     )
     .setVersion('1.0.0')
     .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'Opaque token' }, 'bearer')
@@ -141,6 +141,7 @@ async function bootstrap(): Promise<void> {
       RuleViolation: { description: 'Domain rule rejected the request', content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiErrorResponseDto' } } } },
       RateLimited: { description: 'Request rate limit exceeded', content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiErrorResponseDto' } } } },
       ServiceUnavailable: { description: 'Dependency unavailable', content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiErrorResponseDto' } } } },
+      PayloadTooLarge: { description: 'Uploaded file exceeds the multipart transport limit', content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiErrorResponseDto' } } } },
       InternalError: { description: 'Unexpected server error', content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiErrorResponseDto' } } } },
     },
   };
