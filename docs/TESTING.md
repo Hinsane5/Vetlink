@@ -1,6 +1,6 @@
 # Strategi pengujian VetLink
 
-Status QA per 13 Oktober 2026: tahap aktif memakai frontend lokal tanpa autentikasi/backend jaringan; Pilih Peran membuka persona fiktif. UI FE-06–17 tersedia dan pemeriksaan FE-17 `npm run check` lulus typecheck, lint, serta 99 tes domain/repository. `npm run android` FE-17 berhenti sebelum build karena Android SDK/ADB tidak tersedia. Backend BE-00/01/07 memiliki health/auth/chat/media executable, tetapi mobile belum terhubung ke API. Pemeriksaan Android terdahulu bukan bukti integrasi backend. Interaksi fitur pada perangkat, viewport kecil/font besar, dan pembandingan visual 390 × 844 tetap tertunda; tidak ada pemanggilan Figma MCP baru.
+Status QA per 13 Oktober 2026: tahap aktif memakai frontend lokal tanpa autentikasi/backend jaringan; Pilih Peran membuka persona fiktif. UI FE-06–18 tersedia dan pemeriksaan FE-18 `npm run check` lulus typecheck, lint, serta 103 tes domain/repository. `npm run android` FE-18 berhenti sebelum build karena Android SDK/ADB tidak tersedia. Backend BE-00/01/07 memiliki health/auth/chat/media executable, tetapi mobile belum terhubung ke API. Pemeriksaan Android terdahulu bukan bukti integrasi backend. Interaksi fitur pada perangkat, viewport kecil/font besar, dan pembandingan visual 390 × 844 tetap tertunda; tidak ada pemanggilan Figma MCP baru.
 
 ## Level pengujian
 
@@ -524,3 +524,14 @@ Perbandingan terhadap node terbaru tidak dilakukan karena scope melarang Figma M
 | Interaksi/visual Android | **Belum diuji**: rekomendasi terkirim → Marketplace, pencarian, kombinasi filter, detail, error product inactive/unknown, Back Android, keyboard, scroll, viewport 390 × 844, layar kecil, font besar, dan pixel-match. |
 
 FE-17 tetap **Sedang dikerjakan** sampai QA interaksi dan visual Android tersedia. Kontrak lokal read-only disepakati melalui Orca; `GET /products` dan `GET /products/{id}` tetap endpoint usulan pada `docs/API_CONTRACT.md`, tanpa perubahan dari lane frontend.
+
+## Hasil pemeriksaan FE-18 — 13 Oktober 2026
+
+| Pemeriksaan | Hasil |
+| --- | --- |
+| `npm run check` dari `apps/mobile` | **Lulus**: typecheck, Expo lint, dan 103 tes domain/repository. Empat tes FE-18 memakai adapter SQLite in-memory untuk kuantitas positif, remove/empty, owner/role Dokter, validasi alamat, quote dan cakupan ongkir lokal, subtotal+ongkir, snapshot Order/OrderItem, retry submit paralel, serta konflik harga/alamat stale. |
+| `npm run android` dari `apps/mobile` | **Terhalang sebelum build**: `ANDROID_HOME` menunjuk `/Volumes/HowSSD/AndroidStudio/SDK/sdk` yang tidak ada; `adb` tidak ditemukan (`spawn adb ENOENT`). Tidak ada APK baru atau interaksi Android FE-18 yang dihasilkan. |
+| Referensi desain lokal | Inventory/prototype-links menunjukkan Cart `12:2796`, Cart Two `12:2819`, Cart Empty `12:2847`, dan Checkout `12:2862`. Tidak ada screenshot Cart/Checkout pada cache lokal. Tidak ada pemanggilan Figma MCP sesuai instruksi task. |
+| QA layar | Sentuhan, Back Android, keyboard, scrolling, 390 × 844, ukuran kecil, font besar dan perbandingan visual **Belum diuji**; build tidak tersedia pada sesi ini. |
+
+Kontrak checkout diselaraskan dengan koordinator via Orca tanpa mengubah `API_CONTRACT.md`: order tersimpan sebagai `awaiting_payment`, `paymentId=null`, dan FE-19 mengonsumsi `payableType=order`, `payableId=order.id`, `amount=order.totalSnapshot`. Ongkir Rp9.000 Bogor/Depok dan Rp12.000 Sleman/Yogyakarta hanya aturan fiktif adapter lokal; wilayah lain menghasilkan error, tanpa klaim provider kurir nyata. FE-18 tetap **Sedang dikerjakan** sampai QA UI Android/visual selesai.

@@ -21,12 +21,15 @@
     "src/application/PatientService.ts",
     "src/application/VetDirectoryService.ts",
     "src/application/CatalogService.ts",
+    "src/application/CommerceService.ts",
     "src/data/local/sqlite/seed.ts",
     "src/data/local/sqlite/migrations.ts",
     "src/application/vetPatientAccess.ts",
     "src/application/ports/EventStore.ts",
     "src/application/ports/AuthRepository.ts",
+    "src/application/ports/CommerceRepository.ts",
     "src/application/ports/ProfileRepository.ts",
+    "src/application/ports/ShippingQuoteProvider.ts",
     "src/domain/auth.ts",
     "src/domain/dashboard.ts",
     "src/domain/livestock.ts",
@@ -38,6 +41,8 @@
     "src/application/AvailabilityService.ts",
     "src/application/CareCoordinationService.ts",
     "src/data/local/sqlite/SqliteEventStore.ts",
-    "src/data/local/sqlite/SqliteBookingRepository.ts"
+    "src/data/local/sqlite/SqliteBookingRepository.ts",
+    "src/data/local/sqlite/SqliteCommerceRepository.ts",
+    "src/data/local/commerce/LocalShippingQuoteAdapter.ts"
   ]
 }

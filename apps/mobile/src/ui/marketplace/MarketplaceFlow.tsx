@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BackHandler,
   KeyboardAvoidingView,
@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import type { LocalStore } from '../../data/local/sqlite/LocalStore';
+import { CartCheckoutFlow } from './CartCheckoutFlow';
 import type { SessionSnapshot } from '../../domain/auth';
 import { catalogCategoryLabel, selectCatalogProducts, speciesLabel, type CatalogProduct } from '../../domain/catalog';
 import type { LivestockSpecies } from '../../domain/profiles';
@@ -51,7 +52,7 @@ const speciesOptions: { value: LivestockSpecies | null; label: string }[] = [
 
 export function MarketplaceFlow({ store, session, route, onExit }: Props) {
   const role = session.activeRole;
-  const [screen, setScreen] = useState<'catalog' | 'product'>(route.productId ? 'product' : 'catalog');
+  const [screen, setScreen] = useState<'catalog' | 'product' | 'commerce'>(route.productId ? 'product' : 'catalog');
   const [selectedProductId, setSelectedProductId] = useState(route.productId ?? null);
   const [openedFromRecommendation, setOpenedFromRecommendation] = useState(route.entry === 'recommendation');
   const [products, setProducts] = useState<CatalogProduct[]>([]);
@@ -65,6 +66,10 @@ export function MarketplaceFlow({ store, session, route, onExit }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  const [cartQuantity, setCartQuantity] = useState(0);
+  const [addingToCart, setAddingToCart] = useState(false);
+  const [addedToCart, setAddedToCart] = useState(false);
+  const addLock = useRef(false);
 
   const filteredProducts = useMemo(
     () => selectCatalogProducts(products, { query, category, species }),
@@ -83,6 +88,11 @@ export function MarketplaceFlow({ store, session, route, onExit }: Props) {
   useEffect(() => {
     let mounted = true;
     const load = async () => {
+      if (role === 'farmer') {
+        const cart = await store.commerce.getCart(session.userId, role);
+        if (mounted) setCartQuantity(cart.quantityCount);
+      }
+      if (screen === 'commerce') return;
       if (screen === 'catalog') {
         await store.catalog.assertRecommendationContext(session.userId, route.recommendationId, route.consultationId);
         const next = await store.catalog.listProducts(session.userId, role);
@@ -121,6 +131,7 @@ export function MarketplaceFlow({ store, session, route, onExit }: Props) {
         returnToCatalog();
         return true;
       }
+      if (screen === 'commerce') return false;
       onExit();
       return true;
     });
@@ -130,7 +141,26 @@ export function MarketplaceFlow({ store, session, route, onExit }: Props) {
   const openProduct = (id: string) => {
     setSelectedProductId(id);
     setOpenedFromRecommendation(false);
+    setAddedToCart(false);
     setScreen('product');
+  };
+
+  const addToCart = async () => {
+    if (addLock.current || !product || role !== 'farmer') return;
+    addLock.current = true;
+    setAddingToCart(true);
+    setError('');
+    setAddedToCart(false);
+    try {
+      const next = await store.commerce.addItem(session.userId, role, product.id);
+      setCartQuantity(next.quantityCount);
+      setAddedToCart(true);
+    } catch (cause) {
+      setError(messageFor(cause));
+    } finally {
+      addLock.current = false;
+      setAddingToCart(false);
+    }
   };
 
   const openFilters = () => {
@@ -153,6 +183,10 @@ export function MarketplaceFlow({ store, session, route, onExit }: Props) {
     setFilterVisible(false);
   };
 
+  if (screen === 'commerce') {
+    return <CartCheckoutFlow store={store} session={session} onExit={returnToCatalog} />;
+  }
+
   return (
     <View style={styles.root}>
       <View style={styles.header}>
@@ -160,6 +194,10 @@ export function MarketplaceFlow({ store, session, route, onExit }: Props) {
           <Icon name="arrow-left" size={22} color={colors.brown} />
         </Pressable>
         <Text accessibilityRole="header" style={styles.title}>{screen === 'product' ? 'Detail Produk' : 'Marketplace'}</Text>
+        {role === 'farmer' ? <Pressable accessibilityRole="button" accessibilityLabel={`Buka keranjang, ${cartQuantity} produk`} onPress={() => setScreen('commerce')} style={styles.cartButton}>
+          <Icon name="shopping-bag" size={18} color={colors.brown} />
+          <Text style={styles.cartButtonText}>Keranjang{cartQuantity ? ` (${cartQuantity})` : ''}</Text>
+        </Pressable> : null}
       </View>
 
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
@@ -205,6 +243,11 @@ export function MarketplaceFlow({ store, session, route, onExit }: Props) {
               <Text style={styles.sectionTitle}>Jenis ternak</Text>
               <Text style={styles.body}>{product.species.length ? product.species.map(speciesLabel).join(', ') : 'Tidak dibatasi di katalog.'}</Text>
             </View>
+            {role === 'farmer' ? <>
+              <Button role="farmer" label="Tambah ke Keranjang" loading={addingToCart} disabled={addingToCart} onPress={() => void addToCart()} />
+              {addedToCart ? <InlineFeedback message="Produk tersimpan di keranjang." /> : null}
+              <Button role="farmer" variant="secondary" label={`Lihat Keranjang${cartQuantity ? ` (${cartQuantity})` : ''}`} onPress={() => setScreen('commerce')} />
+            </> : null}
             <Button role="farmer" variant="secondary" label="Jelajahi katalog" onPress={returnToCatalog} />
           </> : null}
         </>}
@@ -278,6 +321,8 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.cream },
   header: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: spacing[3], paddingHorizontal: layout.contentHorizontal, paddingVertical: spacing[2] },
   back: { width: 48, height: 48, borderRadius: radii.button, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center' },
+  cartButton: { minHeight: 48, minWidth: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[1], paddingHorizontal: spacing[2], borderRadius: radii.button, backgroundColor: colors.white },
+  cartButtonText: { color: colors.brown, fontFamily: fonts.semiBold, fontSize: typeScale.small, flexShrink: 1 },
   title: { flex: 1, color: colors.brown, fontFamily: fonts.bold, fontSize: 21, lineHeight: 28, flexShrink: 1 },
   content: { flexGrow: 1, width: '100%', maxWidth: 480, alignSelf: 'center', gap: spacing[3], padding: spacing[4], paddingBottom: spacing[8] },
   introCard: { gap: spacing[2], padding: spacing[4], borderRadius: roleTokens.farmer.cardRadius, backgroundColor: colors.white },

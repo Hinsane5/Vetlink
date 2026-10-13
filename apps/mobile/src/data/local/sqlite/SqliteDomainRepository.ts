@@ -5,7 +5,7 @@ import { isEntityKind, type DomainEntity, type EntityKind, type EntityRelation }
 import { assertClinicalNoteFinalizable } from '../../../domain/policies';
 import { columnsForAlias, entityColumns, insertEntity, insertRelations, toDomainEntity, type EntityRow } from './entitySql';
 
-const immutableKinds = new Set<EntityKind>(['ledgerEntry', 'paymentAttempt', 'review', 'consultationAction']);
+const immutableKinds = new Set<EntityKind>(['ledgerEntry', 'orderItem', 'paymentAttempt', 'review', 'consultationAction']);
 
 export class SqliteDomainRepository implements DomainRepository {
   constructor(private readonly database: SQLiteDatabase, private readonly inTransaction = false) {}
@@ -127,7 +127,7 @@ export class SqliteDomainRepository implements DomainRepository {
   }
 
   async delete(kind: EntityKind, id: string, expectedVersion: number): Promise<void> {
-    if (kind !== 'recommendationItem') {
+    if (kind !== 'recommendationItem' && kind !== 'cartItem') {
       throw new DomainError('INVALID_STATE', 'Penghapusan record ini belum tersedia.');
     }
     await this.write(async (transaction) => {
@@ -136,7 +136,7 @@ export class SqliteDomainRepository implements DomainRepository {
       );
       if (!current) throw new DomainError('NOT_FOUND', 'Item rekomendasi tidak ditemukan.');
       if (current.version !== expectedVersion) throw new DomainError('VERSION_CONFLICT', 'Item rekomendasi sudah berubah. Muat ulang sebelum menghapus.');
-      await assertRecommendationItemEditable(transaction, id);
+      if (kind === 'recommendationItem') await assertRecommendationItemEditable(transaction, id);
       await transaction.runAsync('DELETE FROM entity_relations WHERE source_id = ? OR target_id = ?', id, id);
       const result = await transaction.runAsync(
         'DELETE FROM entities WHERE id = ? AND kind = ? AND version = ?', id, kind, expectedVersion,

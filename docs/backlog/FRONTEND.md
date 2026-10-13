@@ -1,6 +1,6 @@
 # Backlog frontend / mobile Android
 
-Status keseluruhan saat ini: **FE-00 Selesai, FE-01 Sedang dikerjakan, FE-02 Selesai, FE-03/04/05/06/07/08/09/10/11/12/13/14/15/16/17 Sedang dikerjakan**; FE-18–FE-25 **Belum mulai**. Tahap aktif mengikuti arahan pengguna: flow frontend tanpa autentikasi dan tanpa backend jaringan. Acceptance autentikasi FE-03 ditunda; implementasi historisnya tidak dipasang pada aplikasi aktif. Data fiktif lokal tetap dipakai agar screen dapat menampilkan perubahan yang konsisten.
+Status keseluruhan saat ini: **FE-00 Selesai, FE-01 Sedang dikerjakan, FE-02 Selesai, FE-03/04/05/06/07/08/09/10/11/12/13/14/15/16/17/18 Sedang dikerjakan**; FE-19–FE-25 **Belum mulai**. Tahap aktif mengikuti arahan pengguna: flow frontend tanpa autentikasi dan tanpa backend jaringan. Acceptance autentikasi FE-03 ditunda; implementasi historisnya tidak dipasang pada aplikasi aktif. Data fiktif lokal tetap dipakai agar screen dapat menampilkan perubahan yang konsisten.
 
 Status setiap tiket: **Selesai** berarti seluruh acceptance criteria terpenuhi dan buktinya dicatat; **Sedang dikerjakan** berarti ada progres tetapi acceptance belum lengkap; **Belum mulai** berarti implementasi belum dimulai.
 
@@ -68,7 +68,7 @@ FE-08/09 bergantung availability dari FE-11; kerjakan FE-11 lebih awal dalam sli
 | ID | Status | P | Pekerjaan / keluaran | Dependensi | Acceptance criteria |
 | --- | --- | --- | --- | --- | --- |
 | FE-17 | Sedang dikerjakan | P1 | Marketplace search/filter/details, recommendation entry | FE-01/02/15 | Produk/price/info dari catalog; query/filter kombinasi; link recommendation ID benar; produk inactive/unknown error jelas |
-| FE-18 | Belum mulai | P1 | Cart quantities/remove, address, quote, checkout | FE-04/17 | Qty integer positif; remove/empty; totals + ongkir akurat; address required; order price/address snapshot; doctor access ditolak |
+| FE-18 | Sedang dikerjakan | P1 | Cart quantities/remove, address, quote, checkout | FE-04/17 | Qty integer positif; remove/empty; totals + ongkir akurat; address required; order price/address snapshot; doctor access ditolak |
 | FE-19 | Belum mulai | P0 | Payment method, submit, pending/failed/success, history | FE-02; context FE-09 dan FE-18 | Tap method tidak membayar; service result persisten; pending bukan paid; retry/idempotency; consultation/order dipisahkan; riwayat dapat dibuka kembali |
 | FE-20 | Belum mulai | P1 | Orders active/done/details/shipment timeline | FE-18/19 | Paid hanya dari payment sukses; delivery status dari adapter; jumlah/harga sesuai snapshot; gagal kirim tidak ditampilkan delivered |
 | FE-21 | Belum mulai | P1 | Rating/review dan agregasi profil dokter | FE-10/14 | Hanya consultation own completed; stars 1–5; satu review per layanan; rating dokter berubah dari review tersimpan |
@@ -163,3 +163,13 @@ Referensi lokal yang digunakan ada pada [Figma mapping](../FIGMA_MAPPING.md); ti
 Koordinasi kontrak melalui Orca menyepakati port katalog read-only dengan adapter lokal. `GET /products` dan `GET /products/{id}` pada [kontrak API](../API_CONTRACT.md) tetap usulan untuk integrasi berikutnya; lane frontend tidak mengubah kontrak backend.
 
 `npm run check` dari `apps/mobile` lulus: typecheck, lint, dan 99 tes domain/repository, termasuk empat tes FE-17 untuk filter gabungan, konteks/relasi ID rekomendasi, akses Peternak, serta produk inactive/unknown. `npm run android` dicoba tetapi berhenti sebelum build karena `ANDROID_HOME` menunjuk direktori SDK yang tidak ada dan `adb` tidak ditemukan. QA sentuh/back/keyboard/scroll serta visual Android 390 × 844, layar kecil, font besar dan pixel-match **Belum diuji**; node lokal dan keterbatasan referensi dicatat di [Figma mapping](../FIGMA_MAPPING.md) dan [Testing](../TESTING.md).
+
+## Progres FE-18 — 13 Oktober 2026
+
+`CommerceService`, `SqliteCommerceRepository`, dan aturan ongkir lokal memakai repository SQLite yang sama dengan katalog dan profil. Cart membatasi satu keranjang per Peternak; kuantitas wajib integer positif, subtotal dihitung dari harga produk aktif saat ini, serta item dapat dihapus sampai empty state. Dokter ditolak pada service sebelum data cart atau alamat dibaca.
+
+Checkout memerlukan penerima, nomor telepon, alamat, kota/kabupaten, provinsi, dan kode pos valid. Quote menyimpan snapshot item/harga/alamat, subtotal, ongkir integer, total, versi alamat, dan masa berlaku 15 menit. Adapter lokal memberi ongkir fiktif Rp9.000 untuk Bogor/Depok di Jawa Barat dan Rp12.000 untuk Sleman/Yogyakarta; kota di luar cakupan menghasilkan kegagalan tanpa menyimpan quote/alamat baru. Submit memeriksa ulang isi cart, harga, kepemilikan/versi alamat, masa berlaku dan perhitungan. Order dan `OrderItem` snapshot disimpan atomik sebagai `awaiting_payment`, `paymentId=null`; cart dikosongkan. `operationKey=checkout:<quoteId>` membuat retry dari quote yang sama mengembalikan order tersimpan. Pembayaran tidak dilakukan oleh FE-18.
+
+Koordinasi kontrak melalui Orca menyepakati output order ini untuk handoff FE-19: `payableType=order`, `payableId=order.id`, dan `amount=order.totalSnapshot` dalam integer rupiah; hanya PaymentService yang boleh mengubah pembayaran/status. API_CONTRACT dan lane backend tidak diubah; route cart/quote/order masih usulan untuk integrasi. Implementasi membuka cart dari detail produk Marketplace; tab Pesanan masih menunggu FE-20.
+
+`npm run check` dari `apps/mobile` lulus: typecheck, lint, dan 103 tes domain/repository. Empat tes baru memeriksa jumlah positif/removal/empty, penolakan Dokter, alamat dan cakupan ongkir, total quote plus snapshot harga/alamat/order, retry paralel idempoten, serta konflik harga/alamat stale. `npm run android` berhenti sebelum build karena `ANDROID_HOME` menunjuk `/Volumes/HowSSD/AndroidStudio/SDK/sdk` yang tidak ada dan `adb` tidak ditemukan. UI sentuh/back/keyboard/scroll, visual Android 390 × 844, layar kecil/font besar, serta pixel-match **Belum diuji**; referensi node dan batas screenshot dicatat di [Figma mapping](../FIGMA_MAPPING.md) dan [Testing](../TESTING.md). FE-18 tetap **Sedang dikerjakan** sampai QA Android/visual tersedia.

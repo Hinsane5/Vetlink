@@ -1,0 +1,140 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { DatabaseSync } from 'node:sqlite';
+import { CommerceService } from '../.test-build/src/application/CommerceService.js';
+import { LocalShippingQuoteAdapter } from '../.test-build/src/data/local/commerce/LocalShippingQuoteAdapter.js';
+import { SqliteCommerceRepository } from '../.test-build/src/data/local/sqlite/SqliteCommerceRepository.js';
+import { SqliteDomainRepository } from '../.test-build/src/data/local/sqlite/SqliteDomainRepository.js';
+import { SqliteProfileRepository } from '../.test-build/src/data/local/sqlite/SqliteProfileRepository.js';
+import { migrateDatabase } from '../.test-build/src/data/local/sqlite/migrations.js';
+import { seedFixturesIfEmpty } from '../.test-build/src/data/local/sqlite/seed.js';
+import { fixtureIds as ids } from '../.test-build/src/testing/fixtures.js';
+
+async function setup() {
+  const db = new SQLiteAdapter();
+  await migrateDatabase(db);
+  await seedFixturesIfEmpty(db);
+  const repository = new SqliteDomainRepository(db);
+  const storage = new SqliteCommerceRepository(db);
+  const profiles = new SqliteProfileRepository(db);
+  let nextId = 1;
+  const idFactory = { create: () => `commerce-test-${nextId++}` };
+  const now = () => new Date('2026-10-13T00:00:00.000Z');
+  return { db, repository, service: new CommerceService(storage, profiles, new LocalShippingQuoteAdapter(), idFactory, now) };
+}
+
+function validAddress(overrides = {}) {
+  return {
+    label: 'Alamat rumah',
+    recipient: 'Budi Santoso',
+    phone: '081234567890',
+    address: 'Jalan Ternak Fiktif Nomor 1',
+    city: 'Bogor',
+    province: 'Jawa Barat',
+    postalCode: '16111',
+    ...overrides,
+  };
+}
+
+test('FE18 cart quantities are positive integers; removal returns an empty cart and Dokter is denied', async () => {
+  const s = await setup();
+  try {
+    const initial = await s.service.getCart(ids.budi, 'farmer');
+    assert.equal(initial.lines.length, 1);
+    assert.equal(initial.lines[0].quantity, 2);
+    await assert.rejects(s.service.setQuantity(ids.budi, 'farmer', ids.product, 0), { code: 'VALIDATION_FAILED' });
+    await assert.rejects(s.service.setQuantity(ids.budi, 'farmer', ids.product, 1.5), { code: 'VALIDATION_FAILED' });
+
+    const updated = await s.service.setQuantity(ids.budi, 'farmer', ids.product, 3);
+    assert.equal(updated.lines[0].quantity, 3);
+    assert.equal(updated.subtotal, 135000);
+    const empty = await s.service.removeItem(ids.budi, 'farmer', ids.product);
+    assert.deepEqual(empty.lines, []);
+    assert.equal(empty.subtotal, 0);
+    assert.equal((await s.service.getCart(ids.budi, 'farmer')).quantityCount, 0);
+    await assert.rejects(s.service.getCart(ids.vetZero, 'vet'), { code: 'FORBIDDEN' });
+    await assert.rejects(s.service.addItem(ids.vetZero, 'vet', ids.product), { code: 'FORBIDDEN' });
+  } finally { s.db.close(); }
+});
+
+test('FE18 requires a complete address and fails unsupported local shipping before writing a quote', async () => {
+  const s = await setup();
+  try {
+    await assert.rejects(s.service.createQuote(ids.budi, 'farmer', { address: {} }), { code: 'VALIDATION_FAILED' });
+    await assert.rejects(s.service.createQuote(ids.budi, 'farmer', {
+      address: validAddress({ city: 'Makassar', province: 'Sulawesi Selatan' }),
+    }), { code: 'INVALID_STATE' });
+    assert.equal((await s.repository.listByKind('quote')).length, 0);
+    assert.equal((await s.repository.listByOwner('address', ids.budi)).length, 1);
+    await s.service.addItem(ids.sari, 'farmer', ids.product);
+    await assert.rejects(s.service.createQuote(ids.sari, 'farmer', { addressId: ids.budiAddress }), { code: 'FORBIDDEN' });
+  } finally { s.db.close(); }
+});
+
+test('FE18 quote totals and checkout persist immutable item/address snapshots; retries create one order', async () => {
+  const s = await setup();
+  try {
+    const quote = await s.service.createQuote(ids.budi, 'farmer', { address: validAddress() });
+    assert.equal(quote.subtotal, 90000);
+    assert.equal(quote.shippingAmount, 9000);
+    assert.equal(quote.totalAmount, 99000);
+    assert.equal(quote.lines[0].unitPrice, 45000);
+    assert.equal(quote.lines[0].quantity, 2);
+
+    const [order, retry] = await Promise.all([
+      s.service.submitOrder(ids.budi, 'farmer', quote.id),
+      s.service.submitOrder(ids.budi, 'farmer', quote.id),
+    ]);
+    assert.equal(order.id, retry.id);
+    assert.equal(order.status, 'awaiting_payment');
+    assert.equal(order.paymentId, null);
+    assert.equal(order.totalAmount, 99000);
+    assert.equal(order.address.address, 'Jalan Ternak Fiktif Nomor 1');
+    assert.deepEqual(order.items.map(({ nameSnapshot, unitPrice, quantity, lineTotal }) => ({ nameSnapshot, unitPrice, quantity, lineTotal })), [
+      { nameSnapshot: 'Paket perawatan ternak fiktif', unitPrice: 45000, quantity: 2, lineTotal: 90000 },
+    ]);
+    assert.equal((await s.repository.listByOwner('order', ids.budi)).filter((item) => item.payload.operationKey === `checkout:${quote.id}`).length, 1);
+    assert.equal((await s.repository.listByOwner('orderItem', ids.budi)).filter((item) => item.payload.orderId === order.id).length, 1);
+    assert.deepEqual((await s.service.getCart(ids.budi, 'farmer')).lines, []);
+
+    const product = await s.repository.findById('product', ids.product);
+    await s.repository.update({ ...product, version: product.version + 1, payload: { ...product.payload, unitPrice: 99000 } }, product.version);
+    const savedOrder = await s.repository.findById('order', order.id);
+    assert.equal(savedOrder.payload.totalSnapshot, 99000);
+    assert.equal(order.items[0].unitPrice, 45000);
+  } finally { s.db.close(); }
+});
+
+test('FE18 rejects a stale cart price or address after a quote was created', async () => {
+  const s = await setup();
+  try {
+    const quote = await s.service.createQuote(ids.budi, 'farmer', { address: validAddress() });
+    const product = await s.repository.findById('product', ids.product);
+    await s.repository.update({ ...product, version: product.version + 1, payload: { ...product.payload, unitPrice: 50000 } }, product.version);
+    await assert.rejects(s.service.submitOrder(ids.budi, 'farmer', quote.id), { code: 'VERSION_CONFLICT' });
+    assert.equal((await s.repository.listByOwner('order', ids.budi)).some((item) => item.payload.quoteId === quote.id), false);
+
+    const freshQuote = await s.service.createQuote(ids.budi, 'farmer', { address: validAddress() });
+    const address = await s.repository.findById('address', freshQuote.address.id);
+    await s.repository.update({ ...address, version: address.version + 1, payload: { ...address.payload, address: 'Jalan lain yang berbeda' } }, address.version);
+    await assert.rejects(s.service.submitOrder(ids.budi, 'farmer', freshQuote.id), { code: 'VERSION_CONFLICT' });
+  } finally { s.db.close(); }
+});
+
+class SQLiteAdapter {
+  constructor() { this.database = new DatabaseSync(':memory:'); this.database.exec('PRAGMA foreign_keys = ON'); this.queue = Promise.resolve(); }
+  async execAsync(sql) { this.database.exec(sql); }
+  async getFirstAsync(sql, ...bindings) { return this.database.prepare(sql).get(...bindings) ?? null; }
+  async getAllAsync(sql, ...bindings) { return this.database.prepare(sql).all(...bindings); }
+  async runAsync(sql, ...bindings) { return this.database.prepare(sql).run(...bindings); }
+  async withExclusiveTransactionAsync(action) {
+    const task = this.queue.then(async () => {
+      this.database.exec('BEGIN IMMEDIATE');
+      try { await action(this); this.database.exec('COMMIT'); }
+      catch (error) { this.database.exec('ROLLBACK'); throw error; }
+    });
+    this.queue = task.catch(() => {});
+    return task;
+  }
+  close() { this.database.close(); }
+}

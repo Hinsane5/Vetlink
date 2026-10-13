@@ -21,7 +21,10 @@ import { BookingService } from '../../../application/BookingService';
 import { SqliteBookingRepository } from './SqliteBookingRepository';
 import { VetDirectoryService } from '../../../application/VetDirectoryService';
 import { CatalogService } from '../../../application/CatalogService';
+import { CommerceService } from '../../../application/CommerceService';
 import { ExpoAttachmentMedia } from '../ExpoAttachmentMedia';
+import { LocalShippingQuoteAdapter } from '../commerce/LocalShippingQuoteAdapter';
+import { SqliteCommerceRepository } from './SqliteCommerceRepository';
 import { migrateDatabase } from './migrations';
 import { readFixtureSeedVersion, seedFixturesIfEmpty, type SeedResult } from './seed';
 
@@ -38,6 +41,7 @@ export interface LocalStore {
   preview: FrontendPreviewService;
   vetDirectory: VetDirectoryService;
   catalog: CatalogService;
+  commerce: CommerceService;
   booking: BookingService;
   consultations: ConsultationService;
   clinicalNotes: ClinicalNoteService;
@@ -93,6 +97,12 @@ async function createLocalStore(): Promise<LocalStore> {
   const preview = new FrontendPreviewService(repositories, profiles);
   const vetDirectory = new VetDirectoryService(repositories, profiles);
   const catalog = new CatalogService(repositories, profileRepository);
+  const commerce = new CommerceService(
+    new SqliteCommerceRepository(database),
+    profileRepository,
+    new LocalShippingQuoteAdapter(),
+    new ExpoIdFactory(),
+  );
   const bookingRepository = new SqliteBookingRepository(database);
   const booking = new BookingService(bookingRepository, attachmentMedia, new ExpoIdFactory());
   const consultations = new ConsultationService(bookingRepository, attachmentMedia, new ExpoIdFactory());
@@ -110,5 +120,5 @@ async function createLocalStore(): Promise<LocalStore> {
     );
   }
 
-  return { database, repositories, events, auth, profiles, dashboard, livestock, healthRecords, patients, preview, vetDirectory, catalog, booking, consultations, clinicalNotes, recommendations, chat, availability, careCoordination, authStore, schemaVersion, fixtureSeedVersion, seedResult };
+  return { database, repositories, events, auth, profiles, dashboard, livestock, healthRecords, patients, preview, vetDirectory, catalog, commerce, booking, consultations, clinicalNotes, recommendations, chat, availability, careCoordination, authStore, schemaVersion, fixtureSeedVersion, seedResult };
 }
