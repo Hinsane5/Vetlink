@@ -1,6 +1,6 @@
-# VetLink API (BE-00/01)
+# VetLink API (BE-00/01/07)
 
-Backend ini adalah modular monolith NestJS + PostgreSQL. BE-00 menyediakan healthcheck, migrasi awal, seed fiktif non-destruktif, dan kontrak OpenAPI. BE-01 menambahkan register/login/logout/refresh/reset, sesi bearer dan role guard. Route domain lain, integrasi payment, dan provider produksi belum tersedia.
+Backend ini adalah modular monolith NestJS + PostgreSQL. BE-00 menyediakan healthcheck, migrasi awal, seed fiktif non-destruktif, dan kontrak OpenAPI. BE-01 menambahkan register/login/logout/refresh/reset, sesi bearer dan role guard. BE-07 menambahkan storage media privat lokal, upload/commit/download terotorisasi, persistensi pesan dan transport polling. Route domain lain, integrasi payment, dan provider produksi belum tersedia. Mobile belum terhubung ke API.
 
 ## Versi yang dipilih
 
@@ -42,6 +42,16 @@ Jika port host `5432` sudah dipakai, ubah `DATABASE_PORT` di `.env` ke port beba
 
 Seed hanya menambahkan identitas fixture Budi/Yuda, farm, dan ternak fiktif dengan `INSERT ... ON CONFLICT DO NOTHING`. Fixture tidak berisi credential dan tidak dapat dipakai untuk masuk. Seed tidak menghapus atau menimpa record yang sudah ada; konflik ID fixture dengan data berbeda membuat transaksi seed dibatalkan.
 
+## Media dan chat BE-07
+
+Migrasi `20261013_000003_chat_media.sql` menambah Attachment, Message, dan relasi lampiran. Storage adapter lokal menulis di luar static web root; default-nya `apps/api/.local/private-media` dengan permission privat. Ubah `MEDIA_STORAGE_DIR` bila membutuhkan lokasi lokal lain. Tidak ada bucket/provider produksi, file URL publik, atau path/storage key di response API.
+
+Default limit development di `.env.example` adalah `MEDIA_IMAGE_MAX_BYTES=10485760` (gambar JPEG/PNG/WebP) dan `MEDIA_VIDEO_MAX_BYTES=52428800` (video MP4). Nilai integer positif dapat diubah sampai 100 MiB, batas parser multipart. Backend memeriksa byte aktual dan signature MIME, bukan hanya `Content-Type`; satu pesan menerima maksimal lima lampiran dan teks maksimal 4.000 karakter. Batas ini adalah guardrail development; keputusan produksi pada DEC-17 tetap terbuka.
+
+Endpoint aktif BE-07 adalah `GET/POST /v1/consultations/{consultationId}/messages`, `POST .../{messageId}/retry`, `POST /v1/attachments/uploads`, `POST /v1/attachments/{id}/commit`, `GET /v1/attachments/{id}`, dan `GET /v1/attachments/{id}/content`. Semua memerlukan bearer dan mengotorisasi ulang participant/owner. Upload retry memakai `Idempotency-Key` sama; message retry memakai `clientMessageId`/message ID sama. Adapter delivery menyimpan status ke PostgreSQL; penerima membaca pesan sent lewat polling tanpa realtime. Kegagalan tercatat dan dapat diulang tanpa membuat message duplikat.
+
+Fault injection delivery hanya tersedia saat `NODE_ENV=test`: `CHAT_DELIVERY_TEST_FAIL_FIRST_ATTEMPT=true` membuat attempt pertama gagal untuk smoke retry. Nilai ini ditolak pada environment lain; tidak ada tombol atau jalur produk untuk memaksa kegagalan.
+
 ## Auth BE-01
 
 Provider credential yang dipilih untuk milestone ini adalah password internal VetLink: password di-hash dengan `scrypt`; access/refresh token opaque diterbitkan oleh API dan hanya hash token yang disimpan di PostgreSQL. Access token berlaku 15 menit, refresh token berotasi dan sesi berakhir setelah 30 hari. Logout mencabut sesi terkait, replay refresh mencabut sesi, dan password reset yang berhasil mencabut semua sesi akun. `GET /v1/me` mengambil identitas dari sesi dan role guard memastikan active role memang membership akun.
@@ -50,9 +60,9 @@ Rate limit berjalan di process memory; detail batas ada di [kontrak API](../../d
 
 Reset mengembalikan status/message generik tanpa membocorkan apakah email terdaftar. Adapter `UnconfiguredPasswordResetDeliveryAdapter` mengembalikan hasil `failed`, tidak mengirim email/SMS dan tidak mengembalikan token. Konfirmasi reset hanya menerima token yang adapter-nya berhasil dan tersimpan sebagai `succeeded`; provider pengiriman belum dipilih. Karena itu endpoint reset aman terhadap enumeration, tetapi pengiriman reset yang dapat digunakan menunggu pilihan provider.
 
-## Batas OpenAPI BE-00/01
+## Batas OpenAPI BE-00/01/07
 
-Route aktif adalah `GET /v1/health/live`, `GET /v1/health/ready`, endpoint Auth BE-01 dan `GET /v1/me`. Response, status HTTP, error envelope, shared pagination/version/idempotency schemas, enum status domain, dan bentuk adapter `pending/succeeded/failed` tercantum di OpenAPI. Route domain yang ada di [kontrak integrasi](../../docs/API_CONTRACT.md) akan ditambahkan oleh tiket backend masing-masing setelah request/response-nya disepakati dengan mobile.
+Route aktif adalah health, endpoint Auth BE-01/`GET /v1/me`, dan chat/media BE-07. Response, status HTTP, error envelope, pagination, enum status, dan adapter `pending/succeeded/failed` tercantum di OpenAPI. Route domain lain yang ada di [kontrak integrasi](../../docs/API_CONTRACT.md) menunggu tiket backend masing-masing.
 
 ## Script yang tersedia
 
@@ -61,6 +71,6 @@ Route aktif adalah `GET /v1/health/live`, `GET /v1/health/ready`, endpoint Auth 
 | `npm run check` | Typecheck dan build NestJS |
 | `npm run db:migrate` | Menerapkan migrasi yang belum ada |
 | `npm run db:seed` | Menambahkan fixture yang belum tersedia |
-| `npm run api:smoke` | Menjalankan smoke check live/ready, OpenAPI/auth, login rate-limit dan no-password-log, reset enumeration-safe, serta error 503 |
+| `npm run api:smoke` | Smoke live/ready, OpenAPI/auth, rate-limit/no-password-log, reset enumeration-safe dan 503. Saat PostgreSQL ready, script juga memeriksa owner/related scope, vet verification guard, dedupe/retry, MIME/size, private download, dan cursor pagination; fixture account/media sementara dibersihkan |
 
 CI menjalankan script tersebut dengan PostgreSQL sementara. Tidak ada script reset/drop database.

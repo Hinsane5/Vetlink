@@ -32,6 +32,8 @@ function codeForStatus(status: number): ApiErrorResponseDto['code'] {
       return 'RULE_VIOLATION';
     case HttpStatus.TOO_MANY_REQUESTS:
       return 'RATE_LIMITED';
+    case HttpStatus.PAYLOAD_TOO_LARGE:
+      return 'PAYLOAD_TOO_LARGE';
     case HttpStatus.SERVICE_UNAVAILABLE:
       return 'SERVICE_UNAVAILABLE';
     default:
