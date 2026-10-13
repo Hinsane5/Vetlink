@@ -178,7 +178,7 @@ Sebelum coding setiap layar: ambil high-fidelity context subtree dan screenshot 
 
 Dashboard Peternak memakai node `12:1833` dan Dokter `46:7`; screenshot referensi lokal `screenshots/farmer-dashboard.png` serta `screenshots/vet-dashboard.png` telah diperiksa ulang sebelum implementasi. Figma MCP belum dapat mengambil konteks dashboard terbaru karena batas Starter; tampilan implementasi dashboard pada perangkat masih menunggu QA.
 
-Penerapan menampilkan metrics dan kartu dari `DashboardService`, membuka detail dengan ID konsultasi/pengingat yang dibaca ulang, dan memisahkan peran melalui query owner/assignment. Availability memakai record tersimpan dan mensyaratkan verified untuk menerima layanan baru; janji terjadwal tetap terlihat setelah toggle off. Tombol cepat Peternak “Tambah ternak” kini membuka form FE-06. Tab Ternak dan tab Pasien Dokter aktif; Pesanan masih nonaktif karena layar FE-19 belum dibuat. QA screenshot Android FE-05 belum dilakukan.
+Penerapan menampilkan metrics dan kartu dari `DashboardService`, membuka detail dengan ID konsultasi/pengingat yang dibaca ulang, dan memisahkan peran melalui query owner/assignment. Availability memakai record tersimpan dan mensyaratkan verified untuk menerima layanan baru; janji terjadwal tetap terlihat setelah toggle off. Tombol cepat Peternak “Tambah ternak” kini membuka form FE-06. Tab Ternak dan tab Pasien Dokter aktif; Pesanan masih nonaktif karena daftar/pesanan FE-20 belum dibuat. QA screenshot Android FE-05 belum dilakukan.
 
 ## Implementasi awal FE-06: data ternak
 
@@ -338,3 +338,11 @@ Figma terkini tidak diperiksa lagi sesuai arahan pengguna. APK standalone FE-14 
 Pemetaan lokal menunjuk frame Marketplace `12:2681` dan Product `12:2777`. Inventory/prototype-links lokal diperiksa tanpa memanggil Figma MCP sesuai batas task. Folder screenshot referensi tidak memiliki PNG Marketplace atau detail produk; `Added` `12:2738` tidak dipakai sebagai aksi FE-17 karena cart/add-to-cart berada pada FE-18. Marketplace dibuka dari rekomendasi terkirim, lalu memakai ID recommendation, konsultasi, dan produk yang terpisah; rute detail dari item rekomendasi memvalidasi relasi item-ke-produk.
 
 UI disusun dengan tokens/Inter/Lucide lokal, pencarian, filter gabungan kategori/jenis ternak, kartu katalog, detail harga/info, serta state loading/error/empty. QA interaksi dan visual Android, perbandingan 390 × 844, layar kecil/font besar, serta pixel-match **tertunda**; tidak ada screenshot penuh yang digunakan sebagai UI aplikasi.
+
+## Implementasi FE-18: Keranjang dan checkout
+
+Inventory lokal menunjuk Cart `12:2796`, Cart Two `12:2819`, Cart Empty `12:2847`, dan Checkout `12:2862`; `prototype-links.json` lokal memperlihatkan tautan Checkout ↔ Cart. Referensi PNG Cart/Checkout tidak ada pada cache screenshot lokal. Tidak ada panggilan Figma MCP sesuai instruksi task.
+
+`CartCheckoutFlow` dibuka dari Marketplace Peternak dan merangkum variasi cart, empty state, address form, quote serta konfirmasi order. Implementasi memakai tokens, Inter, Lucide, tombol minimal 44 dp, scrolling dan keyboard avoidance dari shell aplikasi. Selisih fungsi yang disengaja: ongkir berasal dari aturan lokal untuk wilayah fixture yang disebutkan, dan tombol terakhir membuat order `awaiting_payment`; tidak mengklaim pembayaran atau pengiriman. FE-19 mengurus pembayaran dan FE-20 daftar pesanan.
+
+Visual QA layar Cart/Checkout di Android 390 × 844, ukuran kecil, font besar, keyboard, back dan scroll **tertunda** karena SDK/ADB tidak tersedia. Implementasi belum dibandingkan dengan screenshot frame Figma terbaru dan bukan klaim pixel-match.

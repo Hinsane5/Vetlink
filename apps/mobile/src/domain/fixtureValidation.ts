@@ -19,6 +19,8 @@ const relationTargetKinds: Partial<Record<EntityKind, Record<string, EntityKind[
   followUp: { consultation: ['consultation'], animal: ['livestock'], veterinarian: ['user'] },
   reminder: { animal: ['livestock'], consultation: ['consultation'], followUp: ['followUp'] },
   cartItem: { cart: ['cart'], product: ['product'] },
+  order: { address: ['address'] },
+  orderItem: { order: ['order'], product: ['product'] },
   shipment: { order: ['order'] },
   payment: { payable: ['consultation', 'order'] },
   paymentAttempt: { payment: ['payment'] },

@@ -32,6 +32,7 @@ export const entityKinds = [
   'cartItem',
   'quote',
   'order',
+  'orderItem',
   'shipment',
   'payment',
   'paymentAttempt',
