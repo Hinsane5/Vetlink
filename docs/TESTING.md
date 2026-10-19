@@ -1,6 +1,6 @@
 # Strategi pengujian VetLink
 
-Status QA per 13 Oktober 2026: tahap aktif memakai frontend lokal tanpa autentikasi/backend jaringan; Pilih Peran membuka persona fiktif. UI FE-06–18 tersedia dan pemeriksaan FE-18 `npm run check` lulus typecheck, lint, serta 103 tes domain/repository. `npm run android` FE-18 berhenti sebelum build karena Android SDK/ADB tidak tersedia. Backend BE-00/01/07 memiliki health/auth/chat/media executable, tetapi mobile belum terhubung ke API. Pemeriksaan Android terdahulu bukan bukti integrasi backend. Interaksi fitur pada perangkat, viewport kecil/font besar, dan pembandingan visual 390 × 844 tetap tertunda; tidak ada pemanggilan Figma MCP baru.
+Status QA per 19 Oktober 2026: tahap aktif memakai frontend lokal tanpa autentikasi/backend jaringan; Pilih Peran membuka persona fiktif. UI FE-06–18 tersedia dan pemeriksaan FE-18 `npm run check` lulus typecheck, lint, serta 103 tes domain/repository. `npm run android` FE-18 berhenti sebelum build karena Android SDK/ADB tidak tersedia. Backend BE-00/01/02/07 memiliki route executable, tetapi mobile belum terhubung ke API. Pemeriksaan Android terdahulu bukan bukti integrasi backend. Interaksi fitur pada perangkat, viewport kecil/font besar, dan pembandingan visual 390 × 844 tetap tertunda; tidak ada pemanggilan Figma MCP baru.
 
 ## Level pengujian
 
@@ -43,6 +43,16 @@ Commit implementasi lokal: `644f595` (`feat(api): implement BE-07 private chat m
 - Percobaan smoke pertama mendapati retry POST berstatus 201 dari default Nest, berbeda dari kontrak 200. `@HttpCode(200)` ditambahkan untuk retry/commit dan run ulang lulus.
 - API smoke menggunakan account, farm, ternak, konsultasi, dan payment status fiktif lokal untuk menjalankan guard chat; tidak ada provider atau transaksi finansial nyata. Skrip menghapus record tersebut dan folder media sementara di `finally`. Container PostgreSQL dihapus setelah selesai.
 - Tidak ada test runner khusus backend; smoke adalah satu-satunya pemeriksaan API domain yang tersedia. Tidak ada integrasi mobile, uji video 50 MiB, realtime, provider produksi, deployment, atau QA Android pada tiket backend ini.
+
+## Bukti BE-02 (19 Oktober 2026)
+
+Pemeriksaan BE-02 dilakukan dari `apps/api`. `npm ci` berhasil (0 vulnerability) dengan peringatan engine karena Node tersedia `24.10.0`, sedangkan `.nvmrc` mensyaratkan `24.15.0`. PostgreSQL lokal `17.4-alpine` dijalankan oleh Compose pada port `55432` karena port `5432` sudah dipakai. Semua empat migrasi diterapkan, termasuk `20261019_000004_profiles_verification.sql`.
+
+- `npm run check` — **Lulus** (`tsc --noEmit`, `nest build`).
+- `npm run db:migrate` — **Lulus**, empat migrasi pada database lokal baru.
+- `npm run api:smoke` — **Lulus** dengan nilai placeholder `.env.example`; ini menjalankan smoke BE-00/01/07 yang tersedia. Tidak ada smoke khusus untuk route BE-02, sehingga akses owner, upload profesi, submission/review dan reason belum divalidasi lewat request end-to-end.
+- `trusted_reviewers` hanya dapat diberi grant lewat administrasi database; tidak ada endpoint grant. Dokumen disimpan privat oleh adapter BE-07 dan alat internal menampilkan queue, stream dokumen submission pending, serta menerima keputusan reviewer. Belum ada audit log terpisah untuk tindakan reviewer.
+- Compose DB lokal dihentikan tanpa menghapus volume. Tidak ada provider produksi, credential nyata, transaksi finansial, deployment, atau integrasi mobile.
 
 ## Fixture dan kondisi
 

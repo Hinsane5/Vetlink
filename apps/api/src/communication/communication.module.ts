@@ -17,5 +17,6 @@ import { MediaController } from './media.controller.js';
     { provide: MEDIA_STORAGE_ADAPTER, useClass: LocalPrivateMediaStorageAdapter },
     { provide: CHAT_DELIVERY_ADAPTER, useClass: LocalPollingChatDeliveryAdapter },
   ],
+  exports: [MEDIA_CONFIG, MEDIA_STORAGE_ADAPTER],
 })
 export class CommunicationModule {}
