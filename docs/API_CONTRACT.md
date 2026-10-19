@@ -120,8 +120,8 @@ BE-07 memakai adapter filesystem privat lokal di luar static web root dan adapte
 | Verifikasi | POST `/me/vet/verification-submissions`; GET `/me/vet/verification` | Dokter submit/revisi; hasil review hanya trusted reviewer |
 | Ternak | GET/POST `/livestock`; GET/PATCH `/livestock/{id}` | Peternak own CRUD; dokter read sesuai assignment |
 | Kesehatan | GET `/livestock/{id}/health-events`; POST `/livestock/{id}/care-events`; GET `/patients` | Dokter daftar scoped; Peternak tidak menulis clinical note |
-| Dokter | GET `/vets`, `/vets/{id}`, `/vets/{id}/slots`, `/vets/{id}/reviews` | Filter name/species/service/location/available/minFee/maxFee |
-| Ketersediaan | GET/PUT `/me/vet/availability`; CRUD `/me/vet/blocked-times`; GET `/me/vet/schedule` | Owner dokter; preserve accepted appointments |
+| Dokter | GET `/vets`, `/vets/{id}`, `/vets/{id}/slots`, `/vets/{id}/reviews` | Filter name/species/service/location/available/minFee/maxFee; only verified profiles with configured availability and rates are discoverable |
+| Ketersediaan | GET/PUT `/me/vet/availability`; CRUD `/me/vet/blocked-times`; GET `/me/vet/schedule` | Owner dokter; preserve accepted appointments; half-open interval conflict checks |
 | Booking | POST `/consultation-quotes`, `/consultations`; GET `/consultations`, `/consultations/{id}` | Peternak owner, doctor assigned; fee dari server |
 | Request | POST `/consultations/{id}/accept`, `/reject`, `/schedule-proposals` | Dokter assigned verified untuk accept; reject reason wajib |
 | Reschedule | POST `/consultations/{id}/schedule-proposals/{proposalId}/respond` | Peternak owner; accepted/rejected + version |
@@ -144,6 +144,16 @@ BE-07 memakai adapter filesystem privat lokal di luar static web root dan adapte
 | Notifikasi | GET `/me/notifications`; POST `.../{id}/read`; GET/PATCH `/me/preferences` | Recipient/owner |
 
 Tooling admin review, catalog management dan provider callbacks adalah internal backend/operasional berikutnya, bukan fitur mobile dokter atau toko dokter. Integrasi callbacks nyata diblokir sampai provider/security contract tersedia.
+
+### BE-04 executable contract
+
+Semua route BE-04 memerlukan bearer dan active role membership. Discovery/slot dapat dibaca Peternak maupun Dokter; konfigurasi, block dan kalender hanya Dokter pemilik. Vet discovery hanya mengembalikan profil `verified` dengan profil direktori, availability dan tarif yang telah dikonfigurasi. Query `name`, `species`, `service`, `location`, `available`, `minFee`, `maxFee` dapat digabungkan; biaya adalah integer rupiah dan sedikitnya satu tarif layanan aktif harus berada dalam seluruh batas tarif yang diminta.
+
+`PUT /me/vet/availability` menerima `expectedVersion`, accepting flag, layanan, IANA timezone, aturan weekday lokal (Minggu=0), durasi, metadata direktori serta tarif integer rupiah per layanan. Server mengunci konfigurasi dokter, menolak versi basi/jam invalid/aturan weekday ganda, menyimpan konfigurasi dan rate efektif-dated; tarif pada consultation lama tetap snapshot. Mengubah availability tidak menghapus atau mengubah consultation yang sudah ada. Hasil mutasi berisi operationId/status/occurredAt dan nilai tersimpan.
+
+`GET /vets/{id}/slots?dateFrom=YYYY-MM-DD&dateTo=YYYY-MM-DD&service=chat|visit` menghasilkan slot dalam timezone dokter, maksimal 32 tanggal inklusif. Kandidat dimulai dari aturan lokal dan durasi layanan; interval memakai `[start,end)`, sehingga dua slot yang bersebelahan tidak konflik. Slot lampau, layanan tanpa rate, dokter non-verified/tidak menerima permintaan, consultation berstatus awaiting_payment/requested/scheduled/reschedule_pending/in_progress, dan blokir aktif tidak dikembalikan. Slot hasil baca tidak mereservasi jadwal; BE-05 tetap harus mengulang cek saat menerima/menetapkan layanan.
+
+Blokir dibuat atau diubah hanya di masa depan. Pemeriksaan konflik yang diserialisasi per dokter menolak overlap dengan blok aktif dan consultation aktif, tetapi mengizinkan batas interval bersebelahan. Penghapusan blok adalah soft delete (`status=cancelled`); appointment yang diterima tidak pernah dihapus. `GET /me/vet/schedule` menampilkan consultation dan blokir pada rentang UTC yang diminta, tanpa expose hold `awaiting_payment` sebagai appointment.
 
 ## Contoh command domain
 
@@ -169,4 +179,4 @@ Payload event minimal: eventId, aggregateId, actorId, occurredAt, version. Efek 
 
 Jalankan suite yang sama terhadap repository lokal dan API: scope ownership, verified guard, slot conflicts, final-note immutability, complete guard, sequence visit, computed totals, earning once, withdrawal reservation/retry, notification recipient. Perbedaan teknis error harus dinormalisasi ke domain error yang sama.
 
-OpenAPI executable BE-00/01/07 memuat healthcheck, auth, `/me`, chat, dan media. Endpoint domain lainnya pada tabel masih usulan dan belum tersedia. Request/response serta validation constraints untuk tiap domain tetap harus diturunkan dari Data model dan direview bersama mobile sebelum implementasi.
+OpenAPI executable BE-00/01/02/03/04/07 memuat healthcheck, auth, profil/verifikasi, livestock/patient, vet discovery/availability/slots/blocked-times/schedule, chat, dan media. Domain endpoint yang tersisa pada tabel masih usulan. Request/response serta validation constraints untuk tiap domain tetap harus diturunkan dari Data model dan direview bersama mobile sebelum implementasi.

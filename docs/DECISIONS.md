@@ -41,3 +41,5 @@ Untuk mengubah keputusan, tambah tanggal, alasan dan dampak pada PRD, model stat
 
 
 5 Oktober 2026 — FE-09 menerapkan DEC-23/24: booking berjalan melalui data lokal tanpa credential/backend jaringan, dengan rancangan mandiri karena izin/kuota Figma. Draft eksplisit tersimpan, review dan submit atomik tidak menandakan pembayaran sukses. Batas media dan expiry hold produksi tetap terbuka (DEC-17); komisi 10% hanya snapshot fixture DEC-13. Tidak memilih provider pembayaran atau memperluas scope ke layanan nyata.
+
+19 Oktober 2026 — BE-04 memakai tabel PostgreSQL availability, profil direktori, rate efektif-dated integer IDR, dan blocked time soft-cancel. Slot adalah proyeksi baca dalam timezone IANA dokter dengan interval `[start,end)`; konfigurasi dikunci per dokter dan tidak menghapus accepted appointment. Tarif dan slot menjadi data server untuk BE-05; slot baca bukan reservasi. Tidak memilih provider produksi atau mengubah kebijakan komersial.

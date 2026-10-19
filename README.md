@@ -2,12 +2,12 @@
 
 Aplikasi mobile berbahasa Indonesia untuk pengelolaan kesehatan ternak, konsultasi dokter hewan, kunjungan, dan pembelian produk kesehatan hewan.
 
-**Fokus mobile tetap flow frontend Android lokal.** Aplikasi membuka “Pilih Peran” dan memakai data fiktif persisten. FE-06–19 mencakup ternak, pasien, direktori dokter, booking, respons layanan, jadwal, chat, kunjungan, catatan klinis, rekomendasi, tindak lanjut, laporan perkembangan, Marketplace, checkout dan pembayaran lokal. FE-00/02 selesai; FE-01/04–19 masih memerlukan penerimaan visual/interaksi Android dan FE-03 autentikasi tetap ditunda sesuai DEC-23. `npm run check` FE-19 lulus dengan 105 tes; build Android saat ini terhalang SDK/ADB yang tidak tersedia. Backend NestJS/PostgreSQL mencakup fondasi BE-00, autentikasi internal BE-01, profil/Farm/Address dan review profesi BE-02, ternak/pasien/timeline kesehatan BE-03, serta chat/media BE-07 dengan penyimpanan privat lokal dan transport polling. Mobile belum terhubung ke API. [Catatan Testing](docs/TESTING.md) memisahkan bukti pemeriksaan lokal dari QA Android yang tertunda.
+**Fokus mobile tetap flow frontend Android lokal.** Aplikasi membuka “Pilih Peran” dan memakai data fiktif persisten. FE-06–19 mencakup ternak, pasien, direktori dokter, booking, respons layanan, jadwal, chat, kunjungan, catatan klinis, rekomendasi, tindak lanjut, laporan perkembangan, Marketplace, checkout dan pembayaran lokal. FE-00/02 selesai; FE-01/04–19 masih memerlukan penerimaan visual/interaksi Android dan FE-03 autentikasi tetap ditunda sesuai DEC-23. `npm run check` FE-19 lulus dengan 105 tes; build Android saat ini terhalang SDK/ADB yang tidak tersedia. Backend NestJS/PostgreSQL mencakup fondasi BE-00, autentikasi internal BE-01, profil/Farm/Address dan review profesi BE-02, ternak/pasien/timeline kesehatan BE-03, discovery dokter/availability/tarif/slot BE-04, serta chat/media BE-07 dengan penyimpanan privat lokal dan transport polling. Mobile belum terhubung ke API. [Catatan Testing](docs/TESTING.md) memisahkan bukti pemeriksaan lokal dari QA Android yang tertunda.
 
 ## Arah yang telah dipilih
 
 - Mobile: React Native + Expo + TypeScript; target pertama Android. Kode aplikasi tidak menggunakan Kotlin.
-- Tahap frontend memakai persona fixture lokal melalui “Pilih Peran”. Layar daftar/masuk/reset/keluar FE-03 tidak dipasang pada alur aktif; backend belum melayani fitur domain.
+- Tahap frontend memakai persona fixture lokal melalui “Pilih Peran”. Layar daftar/masuk/reset/keluar FE-03 tidak dipasang pada alur aktif; backend belum dihubungkan dari mobile.
 - Sumber data awal lokal persisten memakai `expo-sqlite`; backend menyusul melalui kontrak repository yang sama.
 - Alur mobile aktif menyimpan chat di SQLite lokal yang sama untuk kedua persona pada satu instalasi; mobile belum memakai API BE-07 dan belum memiliki realtime lintas perangkat. Backend menyediakan transport polling dasar. Pembayaran, pengiriman, notifikasi, dan pencairan tetap memakai layanan lokal.
 - Backend: NestJS + PostgreSQL modular monolith. Auth password internal dipilih; hosting, reset-message, payment dan media provider produksi belum dipilih. [Cara menjalankan backend](apps/api/README.md).
@@ -39,7 +39,7 @@ Aplikasi mobile berbahasa Indonesia untuk pengelolaan kesehatan ternak, konsulta
 | NestJS / Nest CLI | `12.1.3` / `12.0.8` |
 | TypeScript / PostgreSQL driver | `6.0.3` / `pg 8.23.1` |
 | PostgreSQL lokal / CI | `17.4` (`postgres:17.4-alpine`) |
-| API | REST `/v1`, OpenAPI 3.0; health/auth/profile-verification/chat/media aktif, route domain lain menunggu tiket |
+| API | REST `/v1`, OpenAPI 3.0; health/auth/profile-verification/livestock/patients/vet discovery & availability/chat/media aktif, route domain lain menunggu tiket |
 | ORM | Tidak dipilih; akses SQL lewat `pg`, migrasi SQL eksplisit |
 
 Expo SDK 57 mensyaratkan Node.js 22.13 atau lebih baru. Periksa [panduan Expo](https://docs.expo.dev/versions/latest/) dan gunakan versi Node LTS yang didukung. Native project Android dihasilkan Expo saat prebuild dan diabaikan Git; tidak ada kode Kotlin aplikasi buatan tangan. Komponen memakai satu keluarga ikon Lucide; glyph Figma akan dipetakan bertahap saat screen dibangun.
@@ -126,7 +126,7 @@ Urutan baca: PRD → Features → Figma mapping → Data model → Architecture 
 2. FE-02 selesai: domain, ports, SQLite/repository/event, seed dan cold-restart check lulus. Penerimaan autentikasi FE-03 ditunda sesuai DEC-23; FE-04/05 sedang dikerjakan untuk profil/media dan dashboard. FE-04 APK sudah terpasang namun QA interaksi menunggu layar HP dibuka.
 3. FE-06–19, FE-23: ternak, booking, flow Dokter A–D, catatan, tindak lanjut, Marketplace, checkout, pembayaran dan ledger lokal.
 4. FE-20/21/22 dan FE-24: fitur lokal tersisa, acceptance Android dan visual.
-5. BE-00/01/02/07 menyediakan fondasi, auth, profil/verifikasi, serta chat/media polling; endpoint domain lainnya dan integrasi mobile menyusul sesuai [backlog backend](docs/backlog/BACKEND.md).
+5. BE-00/01/02/03/04/07 menyediakan fondasi, auth, profil/verifikasi, ternak/pasien, discovery dokter/availability/slot, serta chat/media polling; integrasi mobile menyusul sesuai [backlog backend](docs/backlog/BACKEND.md).
 
 Semua fitur Peternak dan Dokter tetap termasuk baseline. Urutan milestone bukan penghapusan scope.
 
