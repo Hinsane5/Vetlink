@@ -1,6 +1,6 @@
 # Strategi pengujian VetLink
 
-Status QA per 19 Oktober 2026: tahap aktif memakai frontend lokal tanpa autentikasi/backend jaringan; Pilih Peran membuka persona fiktif. UI FE-06–18 tersedia dan pemeriksaan FE-18 `npm run check` lulus typecheck, lint, serta 103 tes domain/repository. `npm run android` FE-18 berhenti sebelum build karena Android SDK/ADB tidak tersedia. Backend BE-00/01/02/07 memiliki route executable, tetapi mobile belum terhubung ke API. Pemeriksaan Android terdahulu bukan bukti integrasi backend. Interaksi fitur pada perangkat, viewport kecil/font besar, dan pembandingan visual 390 × 844 tetap tertunda; tidak ada pemanggilan Figma MCP baru.
+Status QA per 19 Oktober 2026: tahap aktif memakai frontend lokal tanpa autentikasi/backend jaringan; Pilih Peran membuka persona fiktif. UI FE-06–18 tersedia dan pemeriksaan FE-18 `npm run check` lulus typecheck, lint, serta 103 tes domain/repository. `npm run android` FE-18 berhenti sebelum build karena Android SDK/ADB tidak tersedia. Backend BE-00/01/02/03/07 memiliki route executable; mobile belum terhubung ke API. Pemeriksaan Android terdahulu bukan bukti integrasi backend. Interaksi fitur pada perangkat, viewport kecil/font besar, dan pembandingan visual 390 × 844 tetap tertunda; tidak ada pemanggilan Figma MCP baru.
 
 ## Level pengujian
 
@@ -14,6 +14,17 @@ Status QA per 19 Oktober 2026: tahap aktif memakai frontend lokal tanpa autentik
 | Backend/security/concurrency | Role/owner access, race slot/payout, duplicate callbacks | Pada vertical slice backend terkait |
 
 Framework tes domain/UI dan E2E pada [Tech](TECH.md) belum dipasang. Jalankan script yang benar-benar tersedia dari manifest; backend belum memiliki `npm test`, sehingga pemeriksaan runtime BE-07 memakai `npm run api:smoke` yang memang ada pada manifest.
+
+## Bukti BE-03 (19 Oktober 2026)
+
+Pemeriksaan dari `apps/api` menggunakan Node `24.10.0` / npm `11.6.0`; `.nvmrc` meminta Node `24.15.0`, sehingga npm menampilkan peringatan engine. `npm ci` lulus tanpa vulnerability. PostgreSQL `17.4-alpine` lokal dijalankan oleh Compose di port `55432` karena `5432` telah digunakan; keenam migrasi dan seed fiktif berhasil. Tidak digunakan provider produksi, secret, atau layanan finansial.
+
+- `npm run check` — **Lulus**: `tsc --noEmit` dan `nest build`.
+- `npm run db:migrate` — **Lulus**; migrasi `20261019_000006_health_events.sql` diterapkan.
+- `npm run db:seed` — **Lulus**; fixture lokal non-destruktif tersedia.
+- `npm run api:smoke` — **Lulus**: create/patch ternak dan stale version, farm owner denial, arbitrary ID 404, daftar pasien dokter hanya pasien konsultasi terkait, farmer tidak dapat membaca daftar dokter, care-event retry mengembalikan event yang sama, draft clinical note tidak muncul, final note muncul sekali, dan timeline tidak menyertakan media privat. Smoke BE-07 tetap memeriksa chat/media scope, retry, byte MIME/size, private download serta pagination.
+- Tidak ada `npm test` pada manifest. Uji Android/mobile API integration belum dijalankan; mobile belum menggunakan backend.
+- Percobaan smoke awal menguji final-note immutability lalu teardown terhalang trigger immutable. Teardown smoke diperbaiki agar hanya fixture cleanup menggunakan `session_replication_role=replica`; trigger production tidak berubah. Smoke penuh sesudah perbaikan lulus.
 
 ## Bukti BE-01 (13 Oktober 2026)
 

@@ -243,6 +243,48 @@ try {
         [farmer.user.id, consultationId, `be07-smoke-${consultationId}`],
       );
 
+      const createdAnimalResponse = await sendJson(healthy.baseUrl, '/v1/livestock', farmer.accessToken, 'POST', {
+        farmId, displayCode: 'new-001', name: 'Anak Fiktif', species: 'sapi', sex: 'unknown', estimatedAgeMonths: 2, weightKg: 12.5,
+      });
+      assert.equal(createdAnimalResponse.status, 201);
+      const createdAnimal = await createdAnimalResponse.json();
+      assert.equal(createdAnimal.display_code, 'NEW-001');
+      const farmTakeover = await sendJson(healthy.baseUrl, '/v1/livestock', outsider.accessToken, 'POST', {
+        farmId, displayCode: 'TAKE-001', name: 'Tidak boleh', species: 'sapi', sex: 'female',
+      });
+      assert.equal(farmTakeover.status, 404);
+      const outsiderAnimal = await sendJson(healthy.baseUrl, `/v1/livestock/${animalId}`, outsider.accessToken, 'GET');
+      assert.equal(outsiderAnimal.status, 404);
+      const vetUnrelatedAnimal = await sendJson(healthy.baseUrl, `/v1/livestock/${createdAnimal.id}`, vet.accessToken, 'GET');
+      assert.equal(vetUnrelatedAnimal.status, 404);
+      const vetPatientList = await sendJson(healthy.baseUrl, '/v1/patients', vet.accessToken, 'GET');
+      assert.equal(vetPatientList.status, 200);
+      assert.deepEqual((await vetPatientList.json()).map((item) => item.id), [animalId]);
+      const outsiderPatientList = await sendJson(healthy.baseUrl, '/v1/patients', outsider.accessToken, 'GET');
+      assert.equal(outsiderPatientList.status, 403);
+      const patchAnimal = await sendJson(healthy.baseUrl, `/v1/livestock/${createdAnimal.id}`, farmer.accessToken, 'PATCH', { expectedVersion: 1, name: 'Anak Fiktif Revisi' });
+      assert.equal(patchAnimal.status, 200);
+      const staleAnimal = await sendJson(healthy.baseUrl, `/v1/livestock/${createdAnimal.id}`, farmer.accessToken, 'PATCH', { expectedVersion: 1, name: 'Stale' });
+      assert.equal(staleAnimal.status, 404);
+      const careBody = { kind: 'care', occurredAt: new Date().toISOString(), description: 'Catatan perawatan fiktif', sourceKey: `be03-${randomUUID()}` };
+      const careFirst = await sendJson(healthy.baseUrl, `/v1/livestock/${createdAnimal.id}/care-events`, farmer.accessToken, 'POST', careBody);
+      assert.equal(careFirst.status, 201);
+      const careAgain = await sendJson(healthy.baseUrl, `/v1/livestock/${createdAnimal.id}/care-events`, farmer.accessToken, 'POST', careBody);
+      assert.equal(careAgain.status, 201);
+      assert.equal((await careAgain.json()).id, (await careFirst.json()).id);
+
+      await database.query(`INSERT INTO clinical_notes(consultation_id,farmer_id,vet_id,animal_id,assessment) VALUES($1,$2,$3,$4,'Draft fiktif yang tidak boleh tampil')`,[consultationId,farmer.user.id,vet.user.id,animalId]);
+      const hiddenDraftTimeline = await sendJson(healthy.baseUrl, `/v1/livestock/${animalId}/health-events`, farmer.accessToken, 'GET');
+      assert.equal(hiddenDraftTimeline.status, 200);
+      assert.equal((await hiddenDraftTimeline.json()).length, 0);
+      await database.query(`UPDATE clinical_notes SET status='final',assessment='Temuan final fiktif',finalized_at=now(),finalized_by=$2 WHERE consultation_id=$1`,[consultationId,vet.user.id]);
+      const finalTimeline = await sendJson(healthy.baseUrl, `/v1/livestock/${animalId}/health-events`, vet.accessToken, 'GET');
+      assert.equal(finalTimeline.status, 200);
+      const finalEvents = await finalTimeline.json();
+      assert.equal(finalEvents.length, 1);
+      assert.equal(finalEvents[0].description, 'Temuan final fiktif');
+      assert.equal('attachments' in finalEvents[0], false);
+
       const messagesPath = `/v1/consultations/${consultationId}/messages`;
       const ownerList = await sendJson(healthy.baseUrl, `${messagesPath}?limit=2`, farmer.accessToken, 'GET');
       assert.equal(ownerList.status, 200);
@@ -371,13 +413,18 @@ try {
       assert.equal(pageTwo.items.length, 2);
       assert.equal(new Set([...pageOne.items, ...pageTwo.items].map((item) => item.id)).size, 4);
 
-      console.log('BE-07 smoke: owner/related scope, vet verification guard, clientMessageId dedupe, failed delivery retry, private media type/size validation and retry, commit/download scope, and cursor pagination lulus.');
+      console.log('BE-03/07 smoke: livestock owner/version scope, doctor patient scope, care-event idempotency, draft-hidden/final-once health timeline; chat/media scope, retry, validation, private download, and pagination lulus.');
     } finally {
       if (failedStorageServer) await stopServer(failedStorageServer.child);
+      // Smoke teardown is a fixture reset; it must remove immutable final-note rows
+      // without weakening the production immutability trigger.
+      await database.query("SET session_replication_role = 'replica'");
       if (consultationId) {
         await database.query('DELETE FROM message_attachments WHERE consultation_id = $1', [consultationId]);
         await database.query('DELETE FROM consultation_messages WHERE consultation_id = $1', [consultationId]);
         await database.query('DELETE FROM attachments WHERE consultation_id = $1', [consultationId]);
+        await database.query('DELETE FROM health_events WHERE actor_id = ANY($1::uuid[])', [actors]);
+        await database.query('DELETE FROM clinical_notes WHERE consultation_id = $1', [consultationId]);
         await database.query('DELETE FROM payments WHERE payable_type = \'consultation\' AND payable_id = $1', [consultationId]);
         await database.query('DELETE FROM consultations WHERE id = $1', [consultationId]);
       }
@@ -389,6 +436,7 @@ try {
         await database.query('DELETE FROM vet_profiles WHERE user_id = ANY($1::uuid[])', [actors]);
         await database.query('DELETE FROM users WHERE id = ANY($1::uuid[])', [actors]);
       }
+      await database.query("SET session_replication_role = 'origin'");
       await database.end();
     }
   } else {

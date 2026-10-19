@@ -1,6 +1,6 @@
-# VetLink API (BE-00/01/07)
+# VetLink API (BE-00/01/02/03/07)
 
-Backend ini adalah modular monolith NestJS + PostgreSQL. BE-00 menyediakan healthcheck, migrasi awal, seed fiktif non-destruktif, dan kontrak OpenAPI. BE-01 menambahkan register/login/logout/refresh/reset, sesi bearer dan role guard. BE-07 menambahkan storage media privat lokal, upload/commit/download terotorisasi, persistensi pesan dan transport polling. Route domain lain, integrasi payment, dan provider produksi belum tersedia. Mobile belum terhubung ke API.
+Backend ini adalah modular monolith NestJS + PostgreSQL. BE-00 menyediakan healthcheck, migrasi awal, seed fiktif non-destruktif, dan kontrak OpenAPI. BE-01 menambahkan register/login/logout/refresh/reset, sesi bearer dan role guard. BE-02 menambahkan profil, Farm/Address, dokumen profesi privat dan review tepercaya. BE-03 menyediakan CRUD ternak, timeline kesehatan dan daftar pasien dokter dengan scope owner/assignment. BE-07 menyediakan storage media privat lokal, upload/commit/download terotorisasi, persistensi pesan dan transport polling. Domain lain, integrasi payment, dan provider produksi belum tersedia. Mobile belum terhubung ke API.
 
 ## Versi yang dipilih
 

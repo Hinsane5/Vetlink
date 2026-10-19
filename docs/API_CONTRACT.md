@@ -1,6 +1,6 @@
 # Kontrak integrasi backend v1
 
-Status: OpenAPI executable memuat healthcheck/auth BE-00/01, profil/verifikasi BE-02, dan chat/media BE-07. Route domain selain auth, profil/verifikasi, chat, dan media tetap kontrak target untuk tiket berikutnya. Aplikasi mobile belum memakai backend jaringan.
+Status: OpenAPI executable memuat healthcheck/auth BE-00/01, profil/verifikasi BE-02, ternak/pasien/riwayat BE-03, dan chat/media BE-07. Route domain selain kelompok tersebut tetap kontrak target tiket berikutnya. Aplikasi mobile belum memakai backend jaringan.
 
 ## Konvensi
 
@@ -47,6 +47,23 @@ Semua route memakai bearer; actor ID selalu berasal dari sesi. Farm dan address 
 | `GET /v1/me/internal/reviews`; `GET /v1/me/internal/reviews/documents/{id}/content`; `POST /v1/me/internal/reviews/{id}` | queue; byte dokumen; `{status: verified|revision_required, reason?}` | Hanya user yang ada di `trusted_reviewers`; grant diadministrasikan di luar API. Dokumen disajikan privat untuk submission pending. Revisi wajib menyimpan alasan. Status pending hanya dapat diputus sekali. |
 
 `trusted_reviewers` tidak memiliki endpoint pemberian hak. Tidak ada alat toko/katalog Dokter. Akses dokumen review memakai streaming privat dengan `no-store` dan pemeriksaan ulang trusted reviewer.
+
+## Ternak, pasien, dan timeline kesehatan BE-03
+
+Semua route memakai bearer dan active role membership. Ternak Peternak dibatasi `farmer_id` sesi; Dokter hanya membaca ternak yang memiliki konsultasi terkait dengan `vet_id` sesi. Pasien arbitrary-ID disembunyikan sebagai 404. Tidak ada query media pada response ternak/timeline; timeline memasukkan catatan klinis berstatus `final` saja, sehingga draft tidak bocor. Lampiran konsultasi tetap tunduk pada endpoint media privat BE-07.
+
+| Method / path | Request → response | Otorisasi / aturan |
+| --- | --- | --- |
+| `GET /v1/livestock` | Array ternak | Peternak milik sendiri; Dokter pasien terkait saja |
+| `POST /v1/livestock` | `{farmId,displayCode,name,species,breed?,sex,birthDate?,estimatedAgeMonths?,weightKg?}` → 201 | Peternak; farm harus milik actor dan spesies konsisten; displayCode unik per farm |
+| `GET /v1/livestock/{id}` | Detail ternak | Owner Peternak atau Dokter terkait |
+| `PATCH /v1/livestock/{id}` | Field ternak + `expectedVersion` → detail versi baru | Peternak owner; stale version/ID tidak mengubah record |
+| `DELETE /v1/livestock/{id}` | `{deleted:true}` | Peternak owner; hanya bila tidak ada riwayat yang mereferensikannya |
+| `GET /v1/livestock/{id}/health-events` | Timeline terurut terbaru | Owner Peternak atau Dokter terkait; final note muncul satu kali, draft tidak ditampilkan |
+| `POST /v1/livestock/{id}/care-events` | `{kind,occurredAt,description,sourceKey}` → event | Peternak owner; `sourceKey` + payload sama retry mengembalikan event sama, payload berbeda 409; bukan catatan klinis Dokter |
+| `GET /v1/patients` | Data ringkas pasien | Dokter; distinct pasien dari konsultasi terkait saja |
+
+Data timeline BE-03 memakai `health_events` dengan provenance dan unique key. `clinical_note_id` unik memastikan proyeksi note tidak tertaut ganda; query timeline menampilkan sumber clinical note langsung dari record final dan mengabaikan baris proyeksi clinical_note agar tidak menduplikasi tampilan. Endpoint note/finalisasi tetap cakupan BE-08.
 
 Error menggunakan `{code, message, fieldErrors?, requestId}`. `fieldErrors` adalah object dari nama field ke daftar pesan; exception filter tidak mengirim stack trace. Setiap response juga mengirim header `X-Request-Id`. Shared error code/status, request pagination (`cursor`, `limit` 1–100), base `expectedVersion`, dan parameter header `Idempotency-Key` terdokumentasi sebagai schema/response reusable. `AdapterOperationResult` memiliki outcome `pending/succeeded/failed`; outcome gagal membawa `{code, message, retryable}`, dan pemanggil harus menyimpan hasil adapter sebelum memberi respons sukses.
 
