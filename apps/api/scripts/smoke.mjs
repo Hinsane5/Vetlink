@@ -7,6 +7,9 @@ import { tmpdir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
 import { join, resolve } from 'node:path';
 import { Pool } from 'pg';
+import { DatabaseService } from '../dist/database/database.service.js';
+import { LocalPaymentService } from '../dist/payment/payment.adapter.js';
+import { PaymentsService } from '../dist/payment/payment.service.js';
 
 const appPath = resolve(process.cwd(), 'dist/main.js');
 
@@ -87,11 +90,12 @@ async function registerSmokeUser(baseUrl, role, fullName) {
   return response.json();
 }
 
-async function sendJson(baseUrl, path, accessToken, method, body) {
+async function sendJson(baseUrl, path, accessToken, method, body, extraHeaders = {}) {
   return fetch(`${baseUrl}${path}`, {
     method,
     headers: {
       authorization: `Bearer ${accessToken}`,
+      ...extraHeaders,
       ...(body === undefined ? {} : { 'content-type': 'application/json' }),
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -312,6 +316,48 @@ try {
         VALUES ($1, $2, $3, $4, $5, 'chat', 'Booking fiktif belum dibayar', 'awaiting_payment',
                 now() + interval '3 hours', now() + interval '4 hours', 1000, 0)`,
         [unpaidConsultationId, `BE03-${unpaidConsultationId}`, farmer.user.id, vet.user.id, createdAnimal.id]);
+      const quoteResponse = await sendJson(healthy.baseUrl, `/v1/payment-quotes/consultation/${unpaidConsultationId}`, farmer.accessToken, 'GET');
+      assert.equal(quoteResponse.status, 200);
+      assert.equal((await quoteResponse.json()).amountIdr, 1000);
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/payment-quotes/consultation/${unpaidConsultationId}`, outsider.accessToken, 'GET')).status, 404);
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/payment-quotes/order/${randomUUID()}`, farmer.accessToken, 'GET')).status, 404);
+      const paymentBody = { payableType: 'consultation', payableId: unpaidConsultationId, method: 'bank_transfer' };
+      const firstKey = `be06-first-${randomUUID()}`;
+      const firstPaymentResponse = await sendJson(healthy.baseUrl, '/v1/payments', farmer.accessToken, 'POST', paymentBody, { 'idempotency-key': firstKey });
+      assert.equal(firstPaymentResponse.status, 201);
+      assert.equal((await sendJson(healthy.baseUrl, '/v1/payments', vet.accessToken, 'POST', paymentBody, { 'idempotency-key': `be06-vet-${randomUUID()}` })).status, 403);
+      const firstPayment = await firstPaymentResponse.json();
+      assert.equal(firstPayment.status, 'pending');
+      assert.equal(firstPayment.amountIdr, 1000);
+      const replayResponse = await sendJson(healthy.baseUrl, '/v1/payments', farmer.accessToken, 'POST', paymentBody, { 'idempotency-key': firstKey });
+      assert.equal((await replayResponse.json()).id, firstPayment.id);
+      const parallelPending = await sendJson(healthy.baseUrl, '/v1/payments', farmer.accessToken, 'POST', paymentBody, { 'idempotency-key': `be06-other-${randomUUID()}` });
+      assert.equal(parallelPending.status, 409);
+      const localDb = new DatabaseService();
+      try {
+        const localPayment = new PaymentsService(localDb, new LocalPaymentService());
+        const callbackBase = { paymentId: firstPayment.id, attemptId: firstPayment.attempt.id, reference: firstPayment.attempt.reference, amountIdr: '1000' };
+        await assert.rejects(localPayment.localCallback({ ...callbackBase, eventId: `be06-wrong-${randomUUID()}`, outcome: 'failed', amountIdr: '999' }));
+        await assert.rejects(localPayment.localCallback({ ...callbackBase, eventId: `be06-reference-${randomUUID()}`, outcome: 'failed', reference: 'local:wrong' }));
+        const failedEventId = `be06-failed-${randomUUID()}`;
+        assert.equal((await localPayment.localCallback({ ...callbackBase, eventId: failedEventId, outcome: 'failed' })).status, 'failed');
+        assert.equal((await localPayment.localCallback({ ...callbackBase, eventId: failedEventId, outcome: 'failed' })).status, 'failed');
+        const secondKey = `be06-retry-${randomUUID()}`;
+        const retryResponse = await sendJson(healthy.baseUrl, '/v1/payments', farmer.accessToken, 'POST', paymentBody, { 'idempotency-key': secondKey });
+        assert.equal(retryResponse.status, 201);
+        const retried = await retryResponse.json();
+        assert.equal(retried.id, firstPayment.id);
+        assert.notEqual(retried.attempt.id, firstPayment.attempt.id);
+        assert.equal(retried.status, 'pending');
+        const successEventId = `be06-success-${randomUUID()}`;
+        const successInput = { paymentId: retried.id, attemptId: retried.attempt.id, reference: retried.attempt.reference, amountIdr: '1000', eventId: successEventId, outcome: 'succeeded' };
+        assert.equal((await localPayment.localCallback(successInput)).status, 'succeeded');
+        assert.equal((await localPayment.localCallback(successInput)).status, 'succeeded');
+        await assert.rejects(localPayment.localCallback({ ...successInput, outcome: 'failed' }));
+        const counts = await database.query(`SELECT count(DISTINCT p.id)::int payments,count(a.id)::int attempts
+          FROM payments p JOIN payment_attempts a ON a.payment_id=p.id WHERE p.payable_id=$1`, [unpaidConsultationId]);
+        assert.deepEqual(counts.rows[0], { payments: 1, attempts: 2 });
+      } finally { await localDb.onModuleDestroy(); }
       const scheduleFrom=new Date().toISOString();
       const scheduleTo=new Date(Date.now()+5*60*60*1000).toISOString();
       const vetSchedule=await sendJson(healthy.baseUrl,`/v1/me/vet/schedule?from=${encodeURIComponent(scheduleFrom)}&to=${encodeURIComponent(scheduleTo)}`,vet.accessToken,'GET');
@@ -482,7 +528,7 @@ try {
       assert.equal(pageTwo.items.length, 2);
       assert.equal(new Set([...pageOne.items, ...pageTwo.items].map((item) => item.id)).size, 4);
 
-      console.log('BE-03/04/07 smoke: livestock and patient scopes; vet verification/discovery filters; availability/rates, timezone slots and blocked half-open conflicts; accepted appointment preservation; care-event idempotency; chat/media scope, retry, validation, private download, and pagination lulus.');
+      console.log('BE-03/04/06/07 smoke: livestock/patient and vet scope; availability/slot conflicts; payment quote owner, pending, retry attempts, callback dedupe; care-event idempotency; chat/media scope and retry lulus.');
     } finally {
       if (failedStorageServer) await stopServer(failedStorageServer.child);
       // Smoke teardown is a fixture reset; it must remove immutable final-note rows
@@ -497,7 +543,12 @@ try {
         await database.query('DELETE FROM payments WHERE payable_type = \'consultation\' AND payable_id = $1', [consultationId]);
         await database.query('DELETE FROM consultations WHERE id = $1', [consultationId]);
       }
-      if (unpaidConsultationId) await database.query('DELETE FROM consultations WHERE id = $1', [unpaidConsultationId]);
+      if (unpaidConsultationId) {
+        await database.query('DELETE FROM payment_callback_events WHERE payment_id IN (SELECT id FROM payments WHERE payable_type=\'consultation\' AND payable_id=$1)', [unpaidConsultationId]);
+        await database.query('DELETE FROM payment_attempts WHERE payment_id IN (SELECT id FROM payments WHERE payable_type=\'consultation\' AND payable_id=$1)', [unpaidConsultationId]);
+        await database.query('DELETE FROM payments WHERE payable_type=\'consultation\' AND payable_id=$1', [unpaidConsultationId]);
+        await database.query('DELETE FROM consultations WHERE id = $1', [unpaidConsultationId]);
+      }
       if (actors.length > 0) {
         await database.query('DELETE FROM livestock WHERE farmer_id = ANY($1::uuid[])', [actors]);
         await database.query('DELETE FROM farms WHERE owner_id = ANY($1::uuid[])', [actors]);

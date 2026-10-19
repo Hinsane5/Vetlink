@@ -1,6 +1,6 @@
 # Backlog backend
 
-Status keseluruhan saat ini: BE-00–04 dan BE-07 **Selesai**; BE-05/06 dan BE-08–17 **Belum mulai**. Stack backend dipilih melalui DEC-10; hosting/provider produksi dan integrasi mobile tetap belum dipilih.
+Status keseluruhan saat ini: BE-00–04/06/07 **Selesai**; BE-05 dan BE-08–17 **Belum mulai**. Stack backend dipilih melalui DEC-10; hosting/provider produksi dan integrasi mobile tetap belum dipilih.
 
 Status setiap tiket: **Selesai** berarti seluruh acceptance criteria terpenuhi dan buktinya dicatat; **Sedang dikerjakan** berarti ada progres tetapi acceptance belum lengkap; **Belum mulai** berarti implementasi belum dimulai.
 
@@ -16,7 +16,7 @@ P0 = fondasi dan aturan kritis integrasi; P1 = kelengkapan fitur backend; P2 = p
 | BE-03 | Selesai | P0 | Livestock CRUD, health timeline, doctor patient scope | BE-01/02 | Semua field/ownership validated; pasien terkait saja; arbitrary ID denied; draft/private media tidak bocor; note klinis terhubung sekali ke history. [Bukti BE-03](../TESTING.md#bukti-be-03-19-oktober-2026). |
 | BE-04 | Selesai | P0 | Vet discovery, availability/rates/blocked intervals, slots | BE-02 | Filters lengkap; half-open intervals; timezone; overlap ditolak; availability change tidak menghapus accepted appointments; tarif/slot bukan dari client. Route/migrasi dan bukti [BE-04](../TESTING.md#bukti-be-04-19-oktober-2026). |
 | BE-05 | Belum mulai | P0 | Booking/request/accept/reject/proposals, visit progression, completion/history | BE-03/04/06/08 | Transisi valid saja; verified accept; rejection reason; concurrent slot acceptance tidak ganda; proposal consent rechecks; final/confirmation complete guard; role assignment |
-| BE-06 | Belum mulai | P0 | Payable quotes, payment attempts dan PaymentService adapter | BE-01/00 | Amount dihitung server; separate consultation/order; pending bukan succeeded; same idempotency key deduped; callback local outcomes aman; refund_needed bukan refunded |
+| BE-06 | Selesai | P0 | Payable quotes, payment attempts dan PaymentService adapter | BE-01/00 | Amount dihitung server; tipe consultation/order terpisah dan order fail-closed sampai BE-11; pending bukan succeeded; same idempotency key deduped; retry setelah gagal memakai Payment sama; callback lokal diuji tanpa route publik; refund_needed bukan refunded. Lihat [bukti BE-06](../TESTING.md#hasil-pemeriksaan-be-06-19-oktober-2026). |
 | BE-07 | Selesai | P0 | Private media storage, message persistence, chat delivery | BE-01 + consultation schema BE-00 | Owner/related access; MIME dari byte signature dan ukuran tervalidasi; clientMessageId fingerprint/dedupe; cursor pagination; upload/send failure dapat di-retry tanpa record ganda; polling PostgreSQL executable tanpa realtime. [Bukti BE-07](../TESTING.md#bukti-be-07-13-oktober-2026). |
 | BE-08 | Belum mulai | P0 | Clinical note draft/version/final, recommendation CRUD/review/send | BE-03/07 | Required validation; stale review conflict; final snapshot immutable; final bukan completion; recommendation edits benar; empty send denied; doctor tak checkout |
 | BE-09 | Belum mulai | P1 | Follow-ups, reminders/care done, progress reports | BE-05/08 | Follow-up slots divalidasi; reminder delivery vs care completion terpisah; care HealthEvent sekali; farmer report ownership; notifications actor/recipient benar |

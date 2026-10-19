@@ -592,3 +592,15 @@ Dari `apps/api`, `npm ci` lulus tanpa vulnerability; runtime tersedia Node `24.1
 - Review koordinator menambah assertion bahwa rentang biaya tidak dapat cocok hanya karena dua layanan berada di sisi batas yang berbeda, serta booking `awaiting_payment` tidak muncul di kalender Dokter. `npm run check` dan `api:smoke` dijalankan ulang dan lulus pada PostgreSQL lokal setelah migrasi ketujuh; container kembali dihentikan.
 - Smoke awal menangkap perbandingan enum service rate dengan parameter text/array; query diperbaiki dengan cast tipe yang sesuai, lalu seluruh smoke dijalankan ulang hingga lulus. Tidak ada endpoint yang dapat menandai dokter verified; fixture smoke diotorisasi langsung lewat setup SQL test lalu dipulihkan untuk memeriksa guard BE-07.
 - Tidak ada `npm test` pada manifest. Tidak ada provider produksi, secret, deployment, integrasi mobile, transaksi finansial, atau layanan eksternal.
+## Hasil pemeriksaan BE-06 — 19 Oktober 2026
+
+Backend BE-06 menambahkan tabel event callback dedupe, quote konsultasi dengan amount snapshot server, satu Payment per payable dengan PaymentAttempt retry atomik, adapter lokal `pending`, idempotency key dengan fingerprint payload, dan validasi callback internal (referensi, amount integer, event unik, hasil final). Order quote fail-closed sampai BE-11 menambah order payable; belum ada provider atau route callback publik.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm ci` dari `apps/api` | Selesai; npm memberi peringatan engine karena runtime Node v24.10.0 lebih rendah dari manifest `>=24.15.0`; tidak ada vulnerability audit. |
+| `npm run typecheck` dari `apps/api` | **Lulus**. |
+| `npm run build` dari `apps/api` | **Lulus**. |
+| `npm run db:migrate` | **Lulus** pada PostgreSQL 17.4 lokal di port 55444; migrasi 000008 diterapkan setelah tujuh migrasi sebelumnya. |
+| `npm run api:smoke` | **Lulus**; quote owner-scoped, order fail-closed, role Dokter ditolak, pending, retry key sama, key lain saat pending ditolak, callback amount/reference mismatch ditolak, event sama idempoten, retry setelah gagal membuat attempt kedua pada Payment yang sama, callback sukses tersimpan dan outcome konflik ditolak. Smoke BE-03/04/07 juga lulus. |
+| Batas implementasi | Order belum didukung sampai BE-11; adapter aktif selalu `pending`. Callback internal diuji langsung sebagai metode service dan tidak dipasang sebagai webhook/OpenAPI route. Alur booking BE-05 belum mengubah konsultasi dari `awaiting_payment` setelah hasil sukses tersimpan. Tidak ada klaim refund atau transaksi uang nyata. PostgreSQL lokal dihentikan setelah uji. |
