@@ -35,7 +35,7 @@ NestJS melayani Swagger UI di `/docs` dan JSON di `/openapi.json`. Endpoint runt
 
 ## Profil dan verifikasi BE-02
 
-Semua route memakai bearer; actor ID selalu berasal dari sesi. Farm dan address hanya Peternak pemilik yang dapat membaca/mengubah. Profil Dokter tidak menerima `verificationStatus`/`verified`. Dokumen profesi dibatasi PDF/JPEG/PNG/WebP, 10 MiB, signature byte harus sesuai MIME, dan disimpan melalui private media adapter; storage gagal menghasilkan 503. Submission menerima 1–5 ID dokumen milik dokter sendiri dan mengubah status ke `pending` secara transaksional. Revisi membuat submission baru; histori review lama tidak ditimpa.
+Semua route memakai bearer; actor ID selalu berasal dari sesi. Farm dan address hanya Peternak pemilik yang dapat membaca/mengubah. Profil Dokter tidak menerima `verificationStatus`/`verified`. Dokumen profesi dibatasi PDF/JPEG/PNG/WebP, 10 MiB, signature byte harus sesuai MIME, dan disimpan melalui private media adapter; storage gagal menghasilkan 503. Submission menerima 1–5 ID dokumen milik dokter sendiri dan mengubah status ke `pending` secara transaksional. Hanya satu submission boleh pending per dokter. Revisi membuat submission baru setelah keputusan reviewer; histori review lama tidak ditimpa.
 
 | Method / path | Request → response | Otorisasi / aturan |
 | --- | --- | --- |

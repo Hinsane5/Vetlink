@@ -66,6 +66,7 @@ export class ProfileService {
       const vet=await c.query("SELECT verification_status FROM vet_profiles WHERE user_id=$1 FOR UPDATE",[p.userId]);
       if(!vet.rows[0]) throw new NotFoundException({code:'RESOURCE_NOT_FOUND',message:'Profil dokter tidak ditemukan.'});
       if(vet.rows[0].verification_status==='verified') throw new UnprocessableEntityException({code:'RULE_VIOLATION',message:'Profil terverifikasi tidak perlu diajukan ulang.'});
+      if(vet.rows[0].verification_status==='pending') throw new UnprocessableEntityException({code:'RULE_VIOLATION',message:'Pengajuan sebelumnya masih menunggu review.'});
       const s=await c.query('INSERT INTO verification_submissions(vet_id,document_ids) VALUES($1,$2) RETURNING *',[p.userId,ids]);
       await c.query("UPDATE vet_profiles SET verification_status='pending',updated_at=now(),version=version+1 WHERE user_id=$1",[p.userId]); return s.rows[0];
     });

@@ -52,6 +52,7 @@ Pemeriksaan BE-02 dilakukan dari `apps/api`. `npm ci` berhasil (0 vulnerability)
 - `npm run db:migrate` — **Lulus**, empat migrasi pada database lokal baru.
 - `npm run api:smoke` — **Lulus** dengan nilai placeholder `.env.example`; ini menjalankan smoke BE-00/01/07 yang tersedia. Tidak ada smoke khusus untuk route BE-02, sehingga akses owner, upload profesi, submission/review dan reason belum divalidasi lewat request end-to-end.
 - `trusted_reviewers` hanya dapat diberi grant lewat administrasi database; tidak ada endpoint grant. Dokumen disimpan privat oleh adapter BE-07 dan alat internal menampilkan queue, stream dokumen submission pending, serta menerima keputusan reviewer. Belum ada audit log terpisah untuk tindakan reviewer.
+- Review koordinator menambahkan batas satu submission pending per dokter di service dan migrasi terpisah untuk unique partial index. `npm run check` lulus setelah perubahan. `DATABASE_PORT=55432 npm run db:migrate` lulus pada database lokal yang telah memuat migrasi 000001–000004, lalu menerapkan 000005. Container dihentikan kembali.
 - Compose DB lokal dihentikan tanpa menghapus volume. Tidak ada provider produksi, credential nyata, transaksi finansial, deployment, atau integrasi mobile.
 
 ## Fixture dan kondisi
