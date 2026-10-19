@@ -579,3 +579,5 @@ Review koordinator menolak pengajuan kedua untuk payable yang sudah memiliki pem
 | QA interaksi/visual | **Belum diuji**: tab, detail, payment entry, Back Android, viewport 390 × 844, ukuran kecil, font besar, scrolling, serta pixel-match. |
 
 FE-20 tetap **Sedang dikerjakan** sampai QA perangkat/visual tersedia. Payment adapter aktif masih mengembalikan `pending`; layar checkout baru karena itu tetap menunggu pembayaran. GET order API tetap usulan kontrak berikutnya dan lane backend tidak diubah.
+
+Review koordinator memperketat proyeksi order: status pengiriman hanya mengikuti record shipment tersimpan; jika shipment gagal atau tidak ada, order yang sudah dibayar tetap ditampilkan `paid`, sekalipun status order tersimpan lebih maju. Tes regresi mencakup status order `delivered` yang bertentangan dengan shipment `failed`. `npm run check` dijalankan ulang dan lulus: typecheck, lint, 107 tes, 0 gagal.

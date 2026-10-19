@@ -434,8 +434,7 @@ export class CommerceService {
     }
     const shipment = this.shipmentStatus ? await this.shipmentStatus.getForOrder(userId, order.id) : null;
     const status = storedStatus === 'awaiting_payment' ? 'awaiting_payment'
-      : shipment && shipment.status !== 'failed' ? shipment.status
-        : storedStatus as OrderSnapshot['status'];
+      : shipment && shipment.status !== 'failed' ? shipment.status : 'paid';
     return {
       id: order.id,
       displayCode: stringValue(order.payload.displayCode),

@@ -57,6 +57,9 @@ test('FE20 failed shipment remains a paid order and never appears delivered', as
     assert.equal(detail.status, 'paid');
     assert.equal(detail.shipmentEvents[0].status, 'failed');
     assert.notEqual(detail.status, 'delivered');
+    const stored = await s.repository.findById('order', order.id);
+    await s.repository.update({ ...stored, version: stored.version + 1, payload: { ...stored.payload, status: 'delivered' } }, stored.version);
+    assert.equal((await s.service.getOrder(ids.budi, 'farmer', order.id)).status, 'paid');
   } finally { s.db.close(); }
 });
 
