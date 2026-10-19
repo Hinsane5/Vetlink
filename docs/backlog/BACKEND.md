@@ -1,6 +1,6 @@
 # Backlog backend
 
-Status per 20 Oktober 2026: BE-00–08 dan BE-10–12 (BE-09 belum mulai) **Selesai**; BE-13–17 **Belum mulai**. Stack backend dipilih melalui DEC-10; hosting/provider produksi dan integrasi mobile tetap belum dipilih.
+Status per 20 Oktober 2026: BE-00–08, BE-10–12, dan BE-15 **Selesai**; BE-09, BE-13/14, serta BE-16/17 **Belum mulai**. Stack backend dipilih melalui DEC-10; hosting/provider produksi dan integrasi mobile tetap belum dipilih.
 
 Status setiap tiket: **Selesai** berarti seluruh acceptance criteria terpenuhi dan buktinya dicatat; **Sedang dikerjakan** berarti ada progres tetapi acceptance belum lengkap; **Belum mulai** berarti implementasi belum dimulai.
 
@@ -32,7 +32,7 @@ BE-05/06/08 diimplementasikan sebagai slice kontrak bertahap: schema consultatio
 | BE-12 | Selesai | P1 | Shipment adapter dan order timelines | BE-11 | Transisi status dari hasil adapter tersimpan; event duplikat idempoten; timeline hanya dibaca Peternak pemilik; pending/failed tidak menjadi delivered. [Bukti BE-12](../TESTING.md#bukti-be-12-20-oktober-2026). |
 | BE-13 | Belum mulai | P1 | Review eligibility/uniqueness, profile aggregation | BE-05 | Completed own consultation only, 1–5, one per consultation; aggregate matches records |
 | BE-14 | Belum mulai | P1 | Event/outbox, inbox/read/preferences, notification delivery | BE-05/07/09/11/15 | Unique event/recipient; retry tidak menduplikasi; prefs respected; resource access checked on link; sent based on delivery adapter |
-| BE-15 | Belum mulai | P0 | Earnings ledger, period/detail, withdrawals/destination/reservation | BE-05/06 | Net calculation exact; earning once after paid+completed; available/pending; concurrent withdrawal cannot overspend; reserve atomically; paid no double debit; failure releases once |
+| BE-15 | Selesai | P0 | Earnings ledger, period/detail, withdrawals/destination/reservation | BE-05/06 | Net calculation exact; earning once after paid+completed; available/pending; concurrent withdrawal cannot overspend; reserve atomically; paid no double debit; failure releases once. [Bukti BE-15](../TESTING.md#bukti-be-15-20-oktober-2026). |
 | BE-16 | Belum mulai | P0 | Integration/contract/security/concurrency tests, mobile API handover | BE-01…15 sesuai scope integrasi | Local/API contract suites pass; OpenAPI conforms; cross-account access negative tests; payment/withdrawal duplicate/concurrency; flow A–D dan Peternak dua perangkat; README/evidence |
 | BE-17 | Belum mulai | P2 | Provider nyata auth verification/payment/shipping/push/payout, deployment and operations | BE-16 + pilihan provider/kebijakan dan arahan deployment | Signature/reconciliation/retry rules; secret server only; observability/backup/restore; success from provider; testing sandbox sebelum produksi |
 

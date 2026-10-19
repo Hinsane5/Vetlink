@@ -6,6 +6,7 @@ const fixture = {
   vetId: '00000000-0000-4000-8000-000000000002',
   farmId: '00000000-0000-4000-8000-000000000011',
   livestockId: '00000000-0000-4000-8000-000000000021',
+  payoutDestinationId: '00000000-0000-4000-8000-000000000120',
 };
 
 const productFixtures = [
@@ -100,6 +101,23 @@ async function main(): Promise<void> {
       throw new Error('Fixture IDs conflict with existing data; no rows were overwritten');
     }
 
+    await connection.query(
+      `INSERT INTO payout_destinations(id,vet_id,label,bank_label,account_masked,account_holder)
+       VALUES($1,$2,'Tujuan Lokal Yuda','Bank Contoh','•••• 4321','Yuda Fixture')
+       ON CONFLICT DO NOTHING`,
+      [fixture.payoutDestinationId, fixture.vetId],
+    );
+    const payoutDestination = await connection.query<{ id: string; vet_id: string; label: string; bank_label: string; account_masked: string; account_holder: string }>(
+      `SELECT id,vet_id,label,bank_label,account_masked,account_holder
+       FROM payout_destinations WHERE id=$1`, [fixture.payoutDestinationId],
+    );
+    const destination = payoutDestination.rows[0];
+    if (!destination || destination.vet_id !== fixture.vetId || destination.label !== 'Tujuan Lokal Yuda'
+      || destination.bank_label !== 'Bank Contoh' || destination.account_masked !== '•••• 4321'
+      || destination.account_holder !== 'Yuda Fixture') {
+      throw new Error('Payout destination fixture ID conflicts with existing data; no rows were overwritten');
+    }
+
     for (const product of productFixtures) {
       await connection.query(
         `INSERT INTO products (id, name, category, species, description, unit_price_idr, active)
@@ -127,7 +145,7 @@ async function main(): Promise<void> {
     }
 
     await connection.query('COMMIT');
-    console.log('Fixture fiktif akun dan katalog tersedia; existing rows dipertahankan (INSERT ON CONFLICT DO NOTHING).');
+    console.log('Fixture fiktif akun, tujuan pencairan termasking, dan katalog tersedia; existing rows dipertahankan (INSERT ON CONFLICT DO NOTHING).');
   } catch (error) {
     await connection.query('ROLLBACK');
     throw error;

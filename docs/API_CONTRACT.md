@@ -1,6 +1,6 @@
 # Kontrak integrasi backend v1
 
-Status per 20 Oktober 2026: OpenAPI executable memuat route BE-00–08 dan BE-10/11/12: health/auth, profil/verifikasi, ternak/pasien/riwayat, vet discovery/availability, booking/request/proposal/visit/completion, payment quote/create, chat/media, note/recommendation, katalog aktif, cart, checkout quote, order, snapshot, serta shipment timeline owner-scoped. BE-09 dan domain setelah BE-12 tetap kontrak target tiket berikutnya. Aplikasi mobile belum memakai backend jaringan.
+Status per 20 Oktober 2026: OpenAPI executable memuat route BE-00–08, BE-10/11/12, dan BE-15: health/auth, profil/verifikasi, ternak/pasien/riwayat, vet discovery/availability, booking/request/proposal/visit/completion, payment quote/create, chat/media, note/recommendation, katalog aktif, cart, checkout quote, order, shipment timeline owner-scoped, pendapatan Dokter, tujuan pencairan fiktif, dan reservasi ledger pencairan. BE-09, BE-13/14, dan BE-16/17 tetap menunggu tiket masing-masing. Aplikasi mobile belum memakai backend jaringan.
 
 ## Konvensi
 
@@ -10,7 +10,7 @@ Mutasi concurrency-sensitive menerima `expectedVersion`. Mutasi pembayaran, orde
 
 Gunakan action endpoint untuk transisi yang membutuhkan syarat; jangan menyediakan PATCH umum yang membolehkan client mengatur `verified`, `completed`, `paid`, `balance`, atau `finalizedAt`.
 
-## OpenAPI executable BE-00–08 dan BE-10–12 (BE-09 belum mulai)
+## OpenAPI executable BE-00–08, BE-10–12, dan BE-15
 
 NestJS melayani Swagger UI di `/docs` dan JSON di `/openapi.json`. Endpoint runtime yang tersedia:
 
@@ -155,8 +155,9 @@ BE-07 memakai adapter filesystem privat lokal di luar static web root dan adapte
 | Bayar | POST `/payments`; GET `/payments`, `/payments/{id}` | Owner payable; result provider atau adapter, bukan client claimed paid |
 | Orders | GET `/orders`, `/orders/{id}`, `/orders/{id}/shipment` | Owner Peternak |
 | Ulasan | POST `/consultations/{id}/review` | Owner, consultation completed, satu review per consultation |
-| Pendapatan | GET `/me/vet/earnings?from=&to=`, `/me/vet/transactions/{id}` | Dokter own ledger projections |
-| Pencairan | GET/POST `/me/vet/withdrawals`; GET `.../{id}` | Positive ≤ available; reservation transaction |
+| Pendapatan | GET `/me/vet/earnings?period=&from=&to=&cursor=&limit=`, `/me/vet/transactions/{id}` | Dokter own ledger projections; integer IDR, saldo semua periode dan transaksi per periode |
+| Tujuan pencairan | GET `/me/vet/payout-destinations` | Dokter sendiri; hanya tujuan aktif dengan rekening fiktif termasking |
+| Pencairan | GET/POST `/me/vet/withdrawals`; GET `.../{id}` | POST `{amount,destinationId}` + `Idempotency-Key`; positive ≤ available; reserve atomic; tidak menerima rekening mentah atau status paid dari client |
 | Notifikasi | GET `/me/notifications`; POST `.../{id}/read`; GET/PATCH `/me/preferences` | Recipient/owner |
 
 Tooling admin review, pengelolaan katalog, dan provider callbacks tetap merupakan operasi internal, bukan fitur mobile dokter atau toko dokter. Seed katalog hanya menambahkan fixture tanpa menimpa record. Integrasi callbacks nyata diblokir sampai provider/security contract tersedia.
@@ -209,6 +210,18 @@ Adapter fiktif lokal baru dipanggil setelah hasil pembayaran `succeeded` tersimp
 
 BE-06 kini dapat membuat quote/payment untuk order dari `total_snapshot_idr`; nominal client tidak diterima. Payment adapter aktif tetap lokal `pending`, sehingga order menunggu pembayaran. Status menjadi `paid` hanya bila hasil adapter `succeeded` tersimpan bersama order/payment; tidak ada layanan finansial nyata. Adapter ongkir dan pembayaran produksi belum dipilih.
 
+### Pendapatan dan pencairan BE-15
+
+Semua route memerlukan bearer dan active role `vet`; service juga memastikan profil Dokter ada. Pergantian peran tidak memperluas akses. Detail earning dan withdrawal dicari bersama `vet_id` sesi sehingga ID akun lain disembunyikan sebagai 404. `GET /me/vet/earnings` menerima `period=YYYY-MM` (default bulan UTC berjalan) atau pasangan `from`/`to` (inklusif), tidak keduanya; respons mencakup total gross/commission/net periode, saldo ledger seluruh waktu, daftar transaksi bercursor, withdrawal periode dan histori. `GET /me/vet/transactions/{id}`, `GET /me/vet/withdrawals/{id}`, dan daftar destination hanya membaca record milik Dokter sendiri.
+
+Completion BE-05 memanggil port BE-15 pada transaksi PostgreSQL yang sama. Port hanya menerima Consultation berstatus `completed` dengan `completion_at`, catatan klinis `final`, Payment `succeeded` milik Peternak yang sesuai serta nominal sama dengan `fee_snapshot_idr`. `consultation_id` unik menjamin satu earning. Gross dan komisi berasal dari snapshot layanan; server menghitung `net = gross − commission` memakai integer rupiah. DEC-13 tetap belum memilih tarif komersial sehingga BE-05 saat ini menyimpan komisi Rp0; BE-15 tidak memilih tarif. Earning dibuat `pending` dan `earn_pending` hanya dicatat jika net positif.
+
+Ledger append-only memakai entry rupiah positif dan operation key unik. Saldo dihitung sebagai `pending = earn_pending − release_pending`, `available = credit_available − reserve_withdrawal + release_withdrawal`, `reserved = reserve_withdrawal − release_withdrawal − payout_paid`, dan `paidOut = payout_paid`. Hasil settlement `pending`/`failed` tidak memindahkan bucket. Hanya outcome adapter `succeeded` yang disimpan secara internal dapat menulis pasangan `release_pending`/`credit_available` atomik dan mengubah earning ke `available`; tidak ada callback publik pada tiket ini.
+
+Tujuan hanya terbaca dari record aktif Dokter dengan nama bank/nomor yang sudah termasking. Seed Yuda memakai rekening fiktif `•••• 4321`; tidak ada route untuk menambah rekening mentah. Pengajuan menerima amount integer positif dan `destinationId`, memeriksa destination owner serta menghitung saldo di bawah row lock `vet_profiles`. Dalam transaksi yang sama server menyimpan Withdrawal dan satu `reserve_withdrawal`; dua pengajuan bersamaan terserialisasi oleh lock dokter. Fee snapshot Rp0 karena kebijakan komersial/minimum belum diputuskan.
+
+Adapter submission lokal tidak mengirim uang. Outcome `succeeded` yang tersimpan mengubah status `submitting → submitted`; dana tetap reserved dan belum diterima. Outcome `pending` mengembalikan HTTP 202, mempertahankan status `submitting` dan reservasi agar tidak overspend, serta tidak menyebutnya submitted. Outcome `failed` menyimpan status failed dan satu `release_withdrawal`, lalu mengembalikan 503. Key/payload yang sama memakai transaksi sama; payload berbeda mendapat 409. Hasil payout setelah pengajuan diterima hanya diterapkan oleh service internal: `paid` menambahkan `payout_paid` satu kali tanpa mengurangi available lagi, sedangkan gagal/ditolak menambahkan `release_withdrawal` satu kali. Tidak ada provider finansial, credential, callback publik, transaksi nyata, atau deployment.
+
 ### BE-04 executable contract
 
 Semua route BE-04 memerlukan bearer dan active role membership. Discovery/slot dapat dibaca Peternak maupun Dokter; konfigurasi, block dan kalender hanya Dokter pemilik. Vet discovery hanya mengembalikan profil `verified` dengan profil direktori, availability dan tarif yang telah dikonfigurasi. Query `name`, `species`, `service`, `location`, `available`, `minFee`, `maxFee` dapat digabungkan; biaya adalah integer rupiah dan sedikitnya satu tarif layanan aktif harus berada dalam seluruh batas tarif yang diminta.
@@ -243,4 +256,4 @@ Payload event minimal: eventId, aggregateId, actorId, occurredAt, version. Efek 
 
 Jalankan suite yang sama terhadap repository lokal dan API: scope ownership, verified guard, slot conflicts, final-note immutability, complete guard, sequence visit, computed totals, earning once, withdrawal reservation/retry, notification recipient. Perbedaan teknis error harus dinormalisasi ke domain error yang sama.
 
-OpenAPI executable BE-00–08 dan BE-10–12 memuat healthcheck, auth, profil/verifikasi, livestock/patient, vet discovery/availability/slots/blocked-times/schedule, booking/request/proposal/visit/completion, payment quote/create, chat/media, note/recommendation, katalog produk aktif, cart, checkout quote, order/snapshots dan shipment timeline owner-scoped. Follow-up BE-09, ledger, payout, dan domain lain pada tabel tetap menunggu tiket backend berikutnya. Routes dan semantik BE-11/12 dibagikan melalui Orca untuk koordinasi.
+OpenAPI executable BE-00–08, BE-10–12, dan BE-15 memuat healthcheck, auth, profil/verifikasi, livestock/patient, vet discovery/availability/slots/blocked-times/schedule, booking/request/proposal/visit/completion, payment quote/create, chat/media, note/recommendation, katalog produk aktif, cart, checkout quote, order/snapshots, shipment timeline, earnings, payout destinations, dan withdrawals owner-scoped. BE-09, BE-13/14, BE-16/17, serta provider produksi tetap menunggu scope masing-masing. Kontrak BE-15 disampaikan melalui Orca untuk koordinasi.
