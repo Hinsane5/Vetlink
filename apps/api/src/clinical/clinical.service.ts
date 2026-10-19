@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Inject, Inj
 import type { PoolClient } from 'pg';
 import type { AuthenticatedPrincipal } from '../auth/auth.types.js';
 import { DatabaseService } from '../database/database.service.js';
+import { CatalogService } from '../catalog/catalog.service.js';
 import type { ClinicalNoteInputDto, RecommendationInputDto } from './clinical.dto.js';
 import { RECOMMENDATION_DELIVERY_ADAPTER, type RecommendationDeliveryAdapter } from './recommendation-delivery.js';
 
@@ -14,7 +15,11 @@ function stale(): never { throw new ConflictException(error('VERSION_CONFLICT', 
 
 @Injectable()
 export class ClinicalService {
-  constructor(private readonly database: DatabaseService, @Inject(RECOMMENDATION_DELIVERY_ADAPTER) private readonly delivery: RecommendationDeliveryAdapter) {}
+  constructor(
+    private readonly database: DatabaseService,
+    @Inject(RECOMMENDATION_DELIVERY_ADAPTER) private readonly delivery: RecommendationDeliveryAdapter,
+    private readonly catalog: CatalogService,
+  ) {}
 
   private async context(principal: AuthenticatedPrincipal, consultationId: string, role = principal.activeRole, client?: PoolClient): Promise<Context> {
     const query = client ? client.query.bind(client) : this.database.query.bind(this.database);
@@ -99,21 +104,37 @@ export class ClinicalService {
       if (!old) {
         const inserted = await client.query(`INSERT INTO recommendations (consultation_id,farmer_id,vet_id) VALUES ($1,$2,$3) RETURNING *`, [context.id, context.farmer_id, context.vet_id]);
         const rec = inserted.rows[0];
-        await this.replaceItems(client, rec.id, input.items);
-        return { ...rec, items: input.items };
+        const items = await this.replaceItems(client, rec.id, input.items);
+        return { ...rec, items };
       }
       const result = await client.query(`UPDATE recommendations SET version=version+1,updated_at=now() WHERE id=$1 RETURNING *`, [old.id]);
-      await this.replaceItems(client, old.id, input.items);
-      return { ...result.rows[0], items: input.items };
+      const items = await this.replaceItems(client, old.id, input.items);
+      return { ...result.rows[0], items };
     });
   }
 
   private async replaceItems(client: PoolClient, recommendationId: string, items: RecommendationInputDto['items']) {
+    const products = await this.catalog.findActiveProducts(
+      items.flatMap((item) => item.productId ? [item.productId] : []),
+      client,
+    );
+    const snapshots = items.map((item, position) => {
+      if (item.productId) {
+        const product = products.get(item.productId);
+        if (!product) {
+          throw new UnprocessableEntityException({ code: 'PRODUCT_NOT_ACTIVE', message: 'Rekomendasi hanya dapat menautkan produk katalog yang aktif.' });
+        }
+        return { productId: product.id, title: product.name, instructions: item.instructions?.trim() ?? '', note: item.note?.trim() ?? '' };
+      }
+      const title = item.title?.trim();
+      if (!title) validation(`items.${position}.title`, 'Judul wajib diisi bila item tidak menautkan produk katalog.');
+      return { productId: null, title, instructions: item.instructions?.trim() ?? '', note: item.note?.trim() ?? '' };
+    });
     await client.query('DELETE FROM recommendation_items WHERE recommendation_id=$1', [recommendationId]);
-    for (const [position, item] of items.entries()) {
-      if (!item.title.trim()) validation(`items.${position}.title`, 'Judul wajib diisi.');
-      await client.query(`INSERT INTO recommendation_items (recommendation_id,product_id,title_snapshot,instructions,note,position) VALUES ($1,$2,$3,$4,$5,$6)`, [recommendationId,item.productId ?? null,item.title.trim(),item.instructions?.trim() ?? '',item.note?.trim() ?? '',position]);
+    for (const [position, item] of snapshots.entries()) {
+      await client.query(`INSERT INTO recommendation_items (recommendation_id,product_id,title_snapshot,instructions,note,position) VALUES ($1,$2,$3,$4,$5,$6)`, [recommendationId,item.productId,item.title,item.instructions,item.note,position]);
     }
+    return snapshots;
   }
 
   async sendRecommendation(principal: AuthenticatedPrincipal, consultationId: string, expectedVersion: number) {

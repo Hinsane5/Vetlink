@@ -8,6 +8,36 @@ const fixture = {
   livestockId: '00000000-0000-4000-8000-000000000021',
 };
 
+const productFixtures = [
+  {
+    id: '00000000-0000-4000-8000-000000000101',
+    name: 'Sikat Kandang Seruni',
+    category: 'perawatan',
+    species: ['sapi', 'kambing'],
+    description: 'Sikat perawatan kandang fiktif untuk penggunaan umum.',
+    unitPriceIdr: 18500,
+    active: true,
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000102',
+    name: 'Ember Pakan Rinjani',
+    category: 'perlengkapan',
+    species: ['sapi', 'kambing'],
+    description: 'Ember pakan fiktif berkapasitas 12 liter.',
+    unitPriceIdr: 42000,
+    active: true,
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000103',
+    name: 'Tempat Pakan Fiktif Nonaktif',
+    category: 'perlengkapan',
+    species: ['sapi'],
+    description: 'Fixture katalog nonaktif untuk pemeriksaan filter.',
+    unitPriceIdr: 27500,
+    active: false,
+  },
+];
+
 async function main(): Promise<void> {
   const pool = createPostgresPool();
   const connection = await pool.connect();
@@ -70,8 +100,34 @@ async function main(): Promise<void> {
       throw new Error('Fixture IDs conflict with existing data; no rows were overwritten');
     }
 
+    for (const product of productFixtures) {
+      await connection.query(
+        `INSERT INTO products (id, name, category, species, description, unit_price_idr, active)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT DO NOTHING`,
+        [product.id, product.name, product.category, product.species, product.description, product.unitPriceIdr, product.active],
+      );
+    }
+    const seededProducts = await connection.query<{ id: string; name: string; category: string; species: string[]; description: string; unit_price_idr: string; active: boolean }>(
+      'SELECT id, name, category, species, description, unit_price_idr::text AS unit_price_idr, active FROM products WHERE id = ANY($1::uuid[])',
+      [productFixtures.map((product) => product.id)],
+    );
+    const productsById = new Map(seededProducts.rows.map((product) => [product.id, product]));
+    if (productFixtures.some((product) => {
+      const stored = productsById.get(product.id);
+      return !stored
+        || stored.name !== product.name
+        || stored.category !== product.category
+        || JSON.stringify(stored.species) !== JSON.stringify(product.species)
+        || stored.description !== product.description
+        || Number(stored.unit_price_idr) !== product.unitPriceIdr
+        || stored.active !== product.active;
+    })) {
+      throw new Error('Product fixture IDs conflict with existing catalog data; no rows were overwritten');
+    }
+
     await connection.query('COMMIT');
-    console.log('Fixture fiktif tersedia; existing rows dipertahankan (INSERT ON CONFLICT DO NOTHING).');
+    console.log('Fixture fiktif akun dan katalog tersedia; existing rows dipertahankan (INSERT ON CONFLICT DO NOTHING).');
   } catch (error) {
     await connection.query('ROLLBACK');
     throw error;

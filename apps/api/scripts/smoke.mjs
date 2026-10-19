@@ -154,6 +154,12 @@ try {
   assert.ok(openApi.paths['/v1/auth/password-reset']?.post);
   assert.ok(openApi.paths['/v1/auth/password-reset/confirm']?.post);
   assert.ok(openApi.paths['/v1/me']?.get);
+  assert.ok(openApi.paths['/v1/products']?.get);
+  assert.ok(openApi.paths['/v1/products/{id}']?.get);
+  assert.equal(openApi.paths['/v1/internal/products'], undefined);
+  assert.equal(openApi.paths['/v1/products']?.get?.responses?.['200']?.content?.['application/json']?.schema?.$ref, '#/components/schemas/ProductPageResponseDto');
+  assert.equal(openApi.paths['/v1/products/{id}']?.get?.responses?.['200']?.content?.['application/json']?.schema?.$ref, '#/components/schemas/ProductResponseDto');
+  assert.ok(openApi.paths['/v1/products']?.get?.parameters?.some((parameter) => parameter.name === 'maxPrice'));
   assert.ok(openApi.paths['/v1/vets']?.get);
   assert.ok(openApi.paths['/v1/vets/{id}']?.get);
   assert.ok(openApi.paths['/v1/vets/{id}/slots']?.get);
@@ -230,6 +236,7 @@ try {
     const consultationIds = [];
     const quoteIds = [];
     const addressIds = [];
+    const productIds = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
     const localDb = new DatabaseService();
     const workflow = new ConsultationService(localDb, new PostgresConsultationActionAdapter());
     const localPayment = new PaymentsService(localDb, new LocalPaymentService(), workflow);
@@ -242,6 +249,45 @@ try {
       const outsider = await registerSmokeUser(healthy.baseUrl, 'farmer', 'Peternak Lain Fiktif BE-07');
       const unverifiedVet = await registerSmokeUser(healthy.baseUrl, 'vet', 'Dokter Belum Terverifikasi BE-04');
       actors.push(farmer.user.id, vet.user.id, outsider.user.id,unverifiedVet.user.id);
+
+      const catalogFixtures = [
+        [productIds[0], 'BE-10 Sikat Kandang Seruni', 'perawatan', ['sapi', 'kambing'], 'Produk perawatan fiktif.', 18500, true],
+        [productIds[1], 'BE-10 Sikat Kandang Pesisir', 'perawatan', ['sapi'], 'Produk perawatan fiktif kedua.', 19500, true],
+        [productIds[2], 'BE-10 Pakan Fiktif Sapi', 'pakan', ['sapi'], 'Produk pakan fiktif.', 10000, true],
+        [productIds[3], 'BE-10 Sikat Kandang Nonaktif', 'perawatan', ['sapi'], 'Produk katalog fiktif nonaktif.', 19000, false],
+      ];
+      for (const [id, name, category, species, description, price, active] of catalogFixtures) {
+        await database.query(
+          `INSERT INTO products (id, name, category, species, description, unit_price_idr, active)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [id, name, category, species, description, price, active],
+        );
+      }
+      const catalogSearch = await sendJson(healthy.baseUrl,
+        '/v1/products?name=BE-10%20Sikat&category=perawatan&species=sapi&minPrice=18000&maxPrice=20000&limit=1',
+        farmer.accessToken, 'GET');
+      assert.equal(catalogSearch.status, 200, await catalogSearch.clone().text());
+      const catalogPageOne = await catalogSearch.json();
+      assert.equal(catalogPageOne.items.length, 1);
+      assert.equal(catalogPageOne.hasMore, true);
+      assert.equal(catalogPageOne.items[0].active, true);
+      assert.equal(catalogPageOne.items[0].unitPriceIdr, 19500);
+      assert.ok(catalogPageOne.nextCursor);
+      const catalogPageTwoResponse = await sendJson(healthy.baseUrl,
+        `/v1/products?name=BE-10%20Sikat&category=perawatan&species=sapi&minPrice=18000&maxPrice=20000&limit=1&cursor=${encodeURIComponent(catalogPageOne.nextCursor)}`,
+        farmer.accessToken, 'GET');
+      assert.equal(catalogPageTwoResponse.status, 200, await catalogPageTwoResponse.clone().text());
+      const catalogPageTwo = await catalogPageTwoResponse.json();
+      assert.equal(catalogPageTwo.items.length, 1);
+      assert.equal(catalogPageTwo.hasMore, false);
+      assert.notEqual(catalogPageTwo.items[0].id, catalogPageOne.items[0].id);
+      assert.equal(catalogPageTwo.items[0].unitPriceIdr, 18500);
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/products/${productIds[0]}`, farmer.accessToken, 'GET')).status, 200);
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/products/${productIds[3]}`, farmer.accessToken, 'GET')).status, 404);
+      assert.equal((await sendJson(healthy.baseUrl, '/v1/products?minPrice=20000&maxPrice=10000', farmer.accessToken, 'GET')).status, 400);
+      const vetCatalog = await sendJson(healthy.baseUrl, '/v1/products?name=BE-10%20Sikat&limit=10', vet.accessToken, 'GET');
+      assert.equal(vetCatalog.status, 200);
+      assert.ok((await vetCatalog.json()).items.every((product) => product.active));
 
       // BE-04 directory fixture is explicitly verified by this test setup, never by a vet-facing API.
       await database.query("UPDATE vet_profiles SET verification_status='verified',professional_name='Dokter Uji Fiktif BE-04' WHERE user_id=$1",[vet.user.id]);
@@ -690,15 +736,32 @@ try {
       assert.equal(savedEmpty.status, 200);
       const editOne = await sendJson(healthy.baseUrl, recommendationPath, vet.accessToken, 'PUT', { expectedVersion: 1, items: [{ title: 'Produk fiktif satu', instructions: 'Instruksi fiktif satu' }] });
       assert.equal(editOne.status, 200);
-      const editTwo = await sendJson(healthy.baseUrl, recommendationPath, vet.accessToken, 'PUT', { expectedVersion: 2, items: [{ title: 'Produk fiktif dua', note: 'Catatan fiktif dua' }] });
+      const inactiveProductLink = await sendJson(healthy.baseUrl, recommendationPath, vet.accessToken, 'PUT', {
+        expectedVersion: 2,
+        items: [{ productId: productIds[3], title: 'Judul nonaktif dari client' }],
+      });
+      assert.equal(inactiveProductLink.status, 422);
+      const editTwo = await sendJson(healthy.baseUrl, recommendationPath, vet.accessToken, 'PUT', {
+        expectedVersion: 2,
+        items: [{ productId: productIds[0], title: 'Judul harga dari client yang tidak dipercaya', note: 'Catatan rekomendasi fiktif' }],
+      });
       assert.equal(editTwo.status, 200);
-      assert.equal((await editTwo.json()).items[0].title, 'Produk fiktif dua');
+      const linkedRecommendation = await editTwo.json();
+      assert.equal(linkedRecommendation.items[0].title, 'BE-10 Sikat Kandang Seruni');
+      assert.equal(linkedRecommendation.items[0].productId, productIds[0]);
       const sentRecommendation = await sendJson(healthy.baseUrl, `${recommendationPath}/send`, vet.accessToken, 'POST', { expectedVersion: 3 });
       assert.equal(sentRecommendation.status, 201);
       assert.equal((await sentRecommendation.json()).status, 'sent');
+      await database.query('UPDATE products SET unit_price_idr=18750 WHERE id=$1', [productIds[0]]);
+      const repricedProduct = await sendJson(healthy.baseUrl, `/v1/products/${productIds[0]}`, farmer.accessToken, 'GET');
+      assert.equal((await repricedProduct.json()).unitPriceIdr, 18750);
+      await database.query('UPDATE products SET active=false WHERE id=$1', [productIds[0]]);
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/products/${productIds[0]}`, farmer.accessToken, 'GET')).status, 404);
       const farmerRecommendation = await sendJson(healthy.baseUrl, recommendationPath, farmer.accessToken, 'GET');
       assert.equal(farmerRecommendation.status, 200);
-      assert.equal((await farmerRecommendation.json()).items[0].title, 'Produk fiktif dua');
+      const sentRecommendationResult = await farmerRecommendation.json();
+      assert.equal(sentRecommendationResult.items[0].title, 'BE-10 Sikat Kandang Seruni');
+      assert.equal(sentRecommendationResult.items[0].productId, productIds[0]);
       assert.equal((await sendJson(healthy.baseUrl, '/v1/orders', vet.accessToken, 'GET')).status, 404);
       const hiddenDraftTimeline = await sendJson(healthy.baseUrl, `/v1/livestock/${animalId}/health-events`, farmer.accessToken, 'GET');
       assert.equal(hiddenDraftTimeline.status, 200);
@@ -845,7 +908,7 @@ try {
       assert.equal(completeChat.status, 200, await completeChat.clone().text());
       assert.equal((await completeChat.json()).consultation.status, 'completed');
 
-      console.log('BE-03/04/05/06/07/08 smoke: scope/role; booking quote and concurrent slot create; payment pending-to-request transition; verified accept/idempotency; proposal consent plus verification/slot rechecks; rejection reason/refund-needed; visit ordering; final-note/confirmation completion and history; payment retry; chat/media; clinical immutability/recommendation lulus.');
+      console.log('BE-03/04/05/06/07/08/10 smoke: owner/role scope; active catalog filters/cursor/detail and authoritative IDR; recommendation active-product link/snapshot; booking/slot race and payment; verified access, visit/completion, chat/media lulus.');
     } finally {
       if (failedStorageServer) await stopServer(failedStorageServer.child);
       // Smoke teardown is a fixture reset; it must remove immutable final-note rows
@@ -869,6 +932,7 @@ try {
         await database.query('DELETE FROM idempotency_operations WHERE actor_id = ANY($1::uuid[])', [actors]);
         await database.query('DELETE FROM consultations WHERE id = ANY($1::uuid[])', [allConsultationIds]);
         await database.query('DELETE FROM consultation_quotes WHERE id = ANY($1::uuid[])', [quoteIds]);
+        await database.query('DELETE FROM products WHERE id = ANY($1::uuid[])', [productIds]);
         if (actors.length > 0) {
           await database.query('DELETE FROM addresses WHERE owner_id = ANY($1::uuid[])', [actors]);
           await database.query('DELETE FROM livestock WHERE farmer_id = ANY($1::uuid[])', [actors]);
