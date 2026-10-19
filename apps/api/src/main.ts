@@ -48,7 +48,7 @@ async function bootstrap(): Promise<void> {
   const openApiConfig = new DocumentBuilder()
     .setTitle('VetLink API')
     .setDescription(
-      'BE-00–08 and BE-10 contract. Health, authentication, profile/verification, farm/address, livestock CRUD, scoped patient/health timelines, verified-vet discovery and availability, booking/request/proposal/visit/completion, payment quote and attempts, clinical notes/recommendations, private chat media and polling delivery, plus active product catalog search/detail with internal seed-managed data are implemented; other domain routes are delivered by their backend tickets.',
+      'BE-00–08 and BE-10/11 contract. Health, authentication, profile/verification, farm/address, livestock CRUD, scoped patient/health timelines, verified-vet discovery and availability, booking/request/proposal/visit/completion, payment quote and attempts, clinical notes/recommendations, private chat media and polling delivery, active product catalog search/detail, plus farmer-only cart/checkout/order snapshots are implemented; other domain routes are delivered by their backend tickets.',
     )
     .setVersion('1.0.0')
     .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'Opaque token' }, 'bearer')
