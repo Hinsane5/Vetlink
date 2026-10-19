@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import { CommerceService } from '../.test-build/src/application/CommerceService.js';
+import { PaymentService } from '../.test-build/src/application/PaymentService.js';
 import { LocalShippingQuoteAdapter } from '../.test-build/src/data/local/commerce/LocalShippingQuoteAdapter.js';
 import { SqliteCommerceRepository } from '../.test-build/src/data/local/sqlite/SqliteCommerceRepository.js';
 import { SqliteDomainRepository } from '../.test-build/src/data/local/sqlite/SqliteDomainRepository.js';
@@ -20,8 +21,48 @@ async function setup() {
   let nextId = 1;
   const idFactory = { create: () => `commerce-test-${nextId++}` };
   const now = () => new Date('2026-10-13T00:00:00.000Z');
-  return { db, repository, service: new CommerceService(storage, profiles, new LocalShippingQuoteAdapter(), idFactory, now) };
+  return { db, repository, storage, idFactory, service: new CommerceService(storage, profiles, new LocalShippingQuoteAdapter(), idFactory, now) };
 }
+
+test('FE19 selecting a method is inert; persisted adapter outcome is idempotent and order remains separate', async () => {
+  const s = await setup();
+  try {
+    const quote = await s.service.createQuote(ids.budi, 'farmer', { address: validAddress() });
+    const order = await s.service.submitOrder(ids.budi, 'farmer', quote.id);
+    let calls = 0;
+    const payments = new PaymentService(s.storage, { submit: async () => { calls++; return { outcome: 'pending', message: 'Menunggu konfirmasi.' }; } }, s.idFactory, () => new Date('2026-10-13T00:00:00.000Z'));
+    assert.equal((await s.repository.listByOwner('payment', ids.budi)).some((p) => p.payload.payableId === order.id), false);
+    const [first, retry] = await Promise.all([
+      payments.submit(ids.budi, 'farmer', 'order', order.id, 'bank_transfer', 'payment-order-once'),
+      payments.submit(ids.budi, 'farmer', 'order', order.id, 'bank_transfer', 'payment-order-once'),
+    ]);
+    assert.equal(first.id, retry.id);
+    assert.equal(first.status, 'pending');
+    assert.equal((await s.repository.findById('order', order.id)).payload.status, 'awaiting_payment');
+    assert.equal(calls, 1);
+    await assert.rejects(payments.submit(ids.budi, 'farmer', 'order', order.id, 'e_wallet', 'another-pending-attempt'), { code: 'INVALID_STATE' });
+    await assert.rejects(payments.submit(ids.budi, 'vet', 'order', order.id, 'bank_transfer', 'vet-attempt'), { code: 'FORBIDDEN' });
+  } finally { s.db.close(); }
+});
+
+test('FE19 only persisted success marks an order paid; failed service result stays failed', async () => {
+  const s = await setup();
+  try {
+    const quote = await s.service.createQuote(ids.budi, 'farmer', { address: validAddress() });
+    const order = await s.service.submitOrder(ids.budi, 'farmer', quote.id);
+    const failed = new PaymentService(s.storage, { submit: async () => ({ outcome: 'failed', message: 'Layanan gagal.' }) }, s.idFactory);
+    const result = await failed.submit(ids.budi, 'farmer', 'order', order.id, 'e_wallet', 'failed-order-attempt');
+    assert.equal(result.status, 'failed');
+    assert.equal((await s.repository.findById('order', order.id)).payload.status, 'awaiting_payment');
+    const succeeded = new PaymentService(s.storage, { submit: async () => ({ outcome: 'succeeded' }) }, s.idFactory);
+    const paid = await succeeded.submit(ids.budi, 'farmer', 'order', order.id, 'e_wallet', 'success-order-attempt');
+    assert.equal(paid.status, 'succeeded');
+    const savedOrder = await s.repository.findById('order', order.id);
+    assert.equal(savedOrder.payload.status, 'paid');
+    assert.equal(savedOrder.payload.paymentId, paid.id);
+    assert.deepEqual((await succeeded.list(ids.budi, 'farmer')).filter((item) => item.payableId === order.id).map((item) => item.status).sort(), ['failed', 'succeeded']);
+  } finally { s.db.close(); }
+});
 
 function validAddress(overrides = {}) {
   return {

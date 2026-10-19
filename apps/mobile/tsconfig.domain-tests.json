@@ -22,6 +22,7 @@
     "src/application/VetDirectoryService.ts",
     "src/application/CatalogService.ts",
     "src/application/CommerceService.ts",
+    "src/application/PaymentService.ts",
     "src/data/local/sqlite/seed.ts",
     "src/data/local/sqlite/migrations.ts",
     "src/application/vetPatientAccess.ts",

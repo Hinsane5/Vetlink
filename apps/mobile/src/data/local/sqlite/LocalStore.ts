@@ -22,6 +22,7 @@ import { SqliteBookingRepository } from './SqliteBookingRepository';
 import { VetDirectoryService } from '../../../application/VetDirectoryService';
 import { CatalogService } from '../../../application/CatalogService';
 import { CommerceService } from '../../../application/CommerceService';
+import { PaymentService, type PaymentAdapter } from '../../../application/PaymentService';
 import { ExpoAttachmentMedia } from '../ExpoAttachmentMedia';
 import { LocalShippingQuoteAdapter } from '../commerce/LocalShippingQuoteAdapter';
 import { SqliteCommerceRepository } from './SqliteCommerceRepository';
@@ -42,6 +43,7 @@ export interface LocalStore {
   vetDirectory: VetDirectoryService;
   catalog: CatalogService;
   commerce: CommerceService;
+  payments: PaymentService;
   booking: BookingService;
   consultations: ConsultationService;
   clinicalNotes: ClinicalNoteService;
@@ -103,6 +105,7 @@ async function createLocalStore(): Promise<LocalStore> {
     new LocalShippingQuoteAdapter(),
     new ExpoIdFactory(),
   );
+  const payments = new PaymentService(new SqliteCommerceRepository(database), { submit: async () => ({ outcome: 'pending', message: 'Instruksi pembayaran lokal tersimpan dan menunggu konfirmasi.' }) } satisfies PaymentAdapter, new ExpoIdFactory());
   const bookingRepository = new SqliteBookingRepository(database);
   const booking = new BookingService(bookingRepository, attachmentMedia, new ExpoIdFactory());
   const consultations = new ConsultationService(bookingRepository, attachmentMedia, new ExpoIdFactory());
@@ -120,5 +123,5 @@ async function createLocalStore(): Promise<LocalStore> {
     );
   }
 
-  return { database, repositories, events, auth, profiles, dashboard, livestock, healthRecords, patients, preview, vetDirectory, catalog, commerce, booking, consultations, clinicalNotes, recommendations, chat, availability, careCoordination, authStore, schemaVersion, fixtureSeedVersion, seedResult };
+  return { database, repositories, events, auth, profiles, dashboard, livestock, healthRecords, patients, preview, vetDirectory, catalog, commerce, payments, booking, consultations, clinicalNotes, recommendations, chat, availability, careCoordination, authStore, schemaVersion, fixtureSeedVersion, seedResult };
 }

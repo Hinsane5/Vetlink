@@ -23,8 +23,9 @@ import { EmptyState, ErrorState, InlineFeedback, LoadingState } from '../compone
 import { Icon } from '../components/Icon';
 import { TextField } from '../components/TextField';
 import { colors, fonts, layout, radii, roleTokens, spacing, typeScale } from '../theme/tokens';
+import { PaymentPanel } from '../payment/PaymentPanel';
 
-type Screen = 'cart' | 'checkout' | 'order';
+type Screen = 'cart' | 'checkout' | 'order' | 'payment';
 type AddressField = keyof CheckoutAddressInput;
 
 type Props = {
@@ -96,6 +97,10 @@ export function CartCheckoutFlow({ store, session, onExit }: Props) {
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (screen === 'payment') {
+        setScreen('order');
+        return true;
+      }
       if (screen === 'checkout') {
         setScreen('cart');
         return true;
@@ -192,9 +197,12 @@ export function CartCheckoutFlow({ store, session, onExit }: Props) {
   };
 
   const back = () => {
+    if (screen === 'payment') { setScreen('order'); return; }
     if (screen === 'checkout') setScreen('cart');
     else onExit();
   };
+
+  if (screen === 'payment' && order) return <PaymentPanel store={store} session={session} payableType="order" payableId={order.id} amount={order.totalAmount} onBack={() => setScreen('order')} />;
 
   return (
     <View style={styles.root}>
@@ -208,7 +216,7 @@ export function CartCheckoutFlow({ store, session, onExit }: Props) {
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
         {error ? screen === 'cart' ? <ErrorState role="farmer" message={error} onRetry={() => { setLoading(true); void reload(); }} /> : <InlineFeedback message={error} tone="error" /> : null}
         {loading ? <LoadingState label="Memuat keranjang…" /> : screen === 'order' && order ? (
-          <OrderConfirmation order={order} onReturn={onExit} />
+          <OrderConfirmation order={order} onReturn={onExit} onPay={() => setScreen('payment')} />
         ) : screen === 'checkout' ? (
           <CheckoutScreen
             addresses={addresses}
@@ -331,7 +339,7 @@ function CheckoutScreen({
   );
 }
 
-function OrderConfirmation({ order, onReturn }: { order: OrderSnapshot; onReturn: () => void }) {
+function OrderConfirmation({ order, onReturn, onPay }: { order: OrderSnapshot; onReturn: () => void; onPay: () => void }) {
   return (
     <View style={styles.orderCard}>
       <View style={styles.orderIcon}><Icon name="package-check" size={32} color={colors.brown} /></View>
@@ -342,7 +350,8 @@ function OrderConfirmation({ order, onReturn }: { order: OrderSnapshot; onReturn
       <SummaryLine label="Ongkir" amount={order.shippingAmount} />
       <SummaryLine label="Total pesanan" amount={order.totalAmount} strong />
       <Text style={styles.secondary}>Alamat tujuan disimpan pada pesanan: {formatAddress(order.address)}</Text>
-      <Text style={styles.secondary}>Pembayaran belum dilakukan. Riwayat pembayaran tersedia pada tahap pembayaran.</Text>
+      <Text style={styles.secondary}>Pembayaran belum dilakukan.</Text>
+      <Button role="farmer" label="Lanjut ke Pembayaran" onPress={onPay} />
       <Button role="farmer" variant="secondary" label="Kembali ke Marketplace" onPress={onReturn} />
     </View>
   );

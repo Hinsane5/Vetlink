@@ -546,3 +546,11 @@ FE-17 tetap **Sedang dikerjakan** sampai QA interaksi dan visual Android tersedi
 | QA layar | Sentuhan, Back Android, keyboard, scrolling, 390 × 844, ukuran kecil, font besar dan perbandingan visual **Belum diuji**; build tidak tersedia pada sesi ini. |
 
 Kontrak checkout diselaraskan dengan koordinator via Orca tanpa mengubah `API_CONTRACT.md`: order tersimpan sebagai `awaiting_payment`, `paymentId=null`, dan FE-19 mengonsumsi `payableType=order`, `payableId=order.id`, `amount=order.totalSnapshot`. Ongkir Rp9.000 Bogor/Depok dan Rp12.000 Sleman/Yogyakarta hanya aturan fiktif adapter lokal; wilayah lain menghasilkan error, tanpa klaim provider kurir nyata. FE-18 tetap **Sedang dikerjakan** sampai QA UI Android/visual selesai.
+
+## FE-19 — pembayaran lokal
+
+`npm run check` dari `apps/mobile` lulus: typecheck, lint tanpa error, dan 105 tes domain/repository. Dua tes FE-19 memeriksa bahwa method selection tidak membuat payment, hasil pending tetap pending dan tidak mengubah order, owner/role Dokter ditolak, retry operationKey mengembalikan record sama, failed tidak menandai paid, dan success yang disimpan menautkan payment serta memperbarui order atomik.
+
+PaymentPanel dapat dibuka dari detail konsultasi `awaiting_payment` dan setelah submit order, dengan metode transfer bank/dompet digital dan riwayat owner scoped. Adapter lokal yang dikonfigurasi saat ini mengembalikan pending; provider, callback konfirmasi, dan outcome sukses/gagal lokal tetap belum tersedia. Tidak ada uang nyata yang dipindahkan. `npm run android` dicoba dan berhenti setelah prebuild karena `ANDROID_HOME` menunjuk `/Volumes/HowSSD/AndroidStudio/SDK/sdk` yang tidak ada serta `adb` tidak ditemukan (`spawn adb ENOENT`). QA interaksi/tampilan 390 × 844, layar kecil, font besar, keyboard/back/scroll tertunda; screenshot lokal tidak memiliki layar pembayaran dan Figma MCP tidak dipanggil sesuai instruksi.
+
+Review koordinator menolak pengajuan kedua untuk payable yang sudah memiliki pembayaran `pending`, termasuk pemeriksaan ulang di transaksi SQLite, dan memperbaiki Back Android dari layar pembayaran pesanan agar kembali ke detail order. `npm run check` dijalankan ulang dan lulus (typecheck, lint, 105 tes; 0 gagal). QA perangkat dan sumber outcome tetap terbuka.

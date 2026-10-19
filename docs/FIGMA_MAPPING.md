@@ -345,4 +345,10 @@ Inventory lokal menunjuk Cart `12:2796`, Cart Two `12:2819`, Cart Empty `12:2847
 
 `CartCheckoutFlow` dibuka dari Marketplace Peternak dan merangkum variasi cart, empty state, address form, quote serta konfirmasi order. Implementasi memakai tokens, Inter, Lucide, tombol minimal 44 dp, scrolling dan keyboard avoidance dari shell aplikasi. Selisih fungsi yang disengaja: ongkir berasal dari aturan lokal untuk wilayah fixture yang disebutkan, dan tombol terakhir membuat order `awaiting_payment`; tidak mengklaim pembayaran atau pengiriman. FE-19 mengurus pembayaran dan FE-20 daftar pesanan.
 
+### FE-19 — Pembayaran
+
+Node lokal yang dipetakan: Payment Consult `12:2325` dan Payment Order `12:2889`; prototype memakai pemilih metode, summary payable, submit, lalu hasil status dan riwayat. Implementasi `PaymentPanel` dibuka dari detail konsultasi `awaiting_payment` atau order yang baru disimpan. Method selection hanya mengubah state layar; submit memakai ID konteks payable dan nilai domain, lalu menampilkan outcome persisten serta riwayat pembayaran milik Peternak. Adapter lokal saat ini hanya mengembalikan `pending`; status sukses/gagal dan callback/provider nyata belum tersedia. Pembayaran order/konsultasi dipisahkan lewat payableType/ID; pending/gagal tidak mengubah payable menjadi paid/requested.
+
+Figma MCP tidak dipanggil sesuai instruksi tiket dan cache lokal hanya menyediakan inventory/prototype link, bukan screenshot khusus layar pembayaran. QA pixel-match/viewport Android, keyboard, back, scrolling dan interaksi metode **tertunda**; jangan anggap prototype sebagai bukti tampilan aplikasi.
+
 Visual QA layar Cart/Checkout di Android 390 × 844, ukuran kecil, font besar, keyboard, back dan scroll **tertunda** karena SDK/ADB tidak tersedia. Implementasi belum dibandingkan dengan screenshot frame Figma terbaru dan bukan klaim pixel-match.
