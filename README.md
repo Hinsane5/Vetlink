@@ -31,7 +31,7 @@ Aplikasi mobile berbahasa Indonesia untuk pengelolaan kesehatan ternak, konsulta
 | Font/icon FE-01 | `expo-font ~57.0.4`, Inter lokal (OFL), `@react-native-vector-icons/lucide ^13.1.4` |
 | Android application ID | `com.vetlink.mobile` (sementara untuk build lokal; belum ID rilis) |
 
-## Versi backend BE-00/01/02/07
+## Versi backend BE-00/01/02/03/04/06/07
 
 | Bagian | Versi / konfigurasi |
 | --- | --- |
@@ -39,7 +39,7 @@ Aplikasi mobile berbahasa Indonesia untuk pengelolaan kesehatan ternak, konsulta
 | NestJS / Nest CLI | `12.1.3` / `12.0.8` |
 | TypeScript / PostgreSQL driver | `6.0.3` / `pg 8.23.1` |
 | PostgreSQL lokal / CI | `17.4` (`postgres:17.4-alpine`) |
-| API | REST `/v1`, OpenAPI 3.0; health/auth/profile-verification/livestock/patients/vet discovery & availability/chat/media aktif, route domain lain menunggu tiket |
+| API | REST `/v1`, OpenAPI 3.0; health/auth/profile-verification/livestock/patients/vet discovery & availability/payment quote & create/chat/media aktif, route domain lain menunggu tiket |
 | ORM | Tidak dipilih; akses SQL lewat `pg`, migrasi SQL eksplisit |
 
 Expo SDK 57 mensyaratkan Node.js 22.13 atau lebih baru. Periksa [panduan Expo](https://docs.expo.dev/versions/latest/) dan gunakan versi Node LTS yang didukung. Native project Android dihasilkan Expo saat prebuild dan diabaikan Git; tidak ada kode Kotlin aplikasi buatan tangan. Komponen memakai satu keluarga ikon Lucide; glyph Figma akan dipetakan bertahap saat screen dibangun.
@@ -126,7 +126,7 @@ Urutan baca: PRD → Features → Figma mapping → Data model → Architecture 
 2. FE-02 selesai: domain, ports, SQLite/repository/event, seed dan cold-restart check lulus. Penerimaan autentikasi FE-03 ditunda sesuai DEC-23; FE-04/05 sedang dikerjakan untuk profil/media dan dashboard. FE-04 APK sudah terpasang namun QA interaksi menunggu layar HP dibuka.
 3. FE-06–19, FE-23: ternak, booking, flow Dokter A–D, catatan, tindak lanjut, Marketplace, checkout, pembayaran dan ledger lokal.
 4. FE-20/21/22 dan FE-24: fitur lokal tersisa, acceptance Android dan visual.
-5. BE-00/01/02/03/04/07 menyediakan fondasi, auth, profil/verifikasi, ternak/pasien, discovery dokter/availability/slot, serta chat/media polling; integrasi mobile menyusul sesuai [backlog backend](docs/backlog/BACKEND.md).
+5. BE-00/01/02/03/04/06/07 menyediakan fondasi, auth, profil/verifikasi, ternak/pasien, discovery dokter/availability/slot, pembayaran lokal pending, serta chat/media polling; integrasi mobile menyusul sesuai [backlog backend](docs/backlog/BACKEND.md).
 
 Semua fitur Peternak dan Dokter tetap termasuk baseline. Urutan milestone bukan penghapusan scope.
 

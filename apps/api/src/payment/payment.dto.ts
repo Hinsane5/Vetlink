@@ -1,7 +1,7 @@
-import { IsIn, IsString, IsUUID, Length } from 'class-validator';
+import { IsIn, IsUUID } from 'class-validator';
 
 export class CreatePaymentDto {
   @IsIn(['consultation', 'order']) payableType!: 'consultation' | 'order';
   @IsUUID() payableId!: string;
-  @IsString() @Length(1, 40) method!: string;
+  @IsIn(['bank_transfer', 'e_wallet']) method!: 'bank_transfer' | 'e_wallet';
 }
