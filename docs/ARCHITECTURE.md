@@ -1,6 +1,6 @@
 # Arsitektur VetLink
 
-Status: mobile tetap memakai alur Android lokal tanpa autentikasi dan tanpa koneksi backend. `FrontendFlow` memilih persona fixture lokal; FE-05–14 membaca SQLite lewat service/repository. BE-00/01 menyediakan modular monolith NestJS + PostgreSQL dengan Health dan Auth modules, migrasi SQL, seed fiktif, dan OpenAPI. Mobile belum diarahkan ke API; backend belum menyediakan domain use case untuk data ternak, layanan, pembayaran, atau keuangan.
+Status: mobile tetap memakai alur Android lokal tanpa autentikasi dan tanpa koneksi backend. `FrontendFlow` memilih persona fixture lokal; FE-05–14 membaca SQLite lewat service/repository. BE-00–08 menyediakan modular monolith NestJS + PostgreSQL dengan Health, Auth, Profile, Livestock, Vet, Payment, Consultation, Clinical, Communication, dan Media modules. Mobile belum diarahkan ke API; domain follow-up, commerce, earning/withdrawal, notification dan integrasi provider produksi tetap menunggu tiket.
 
 ## Boundary aplikasi
 
@@ -40,9 +40,17 @@ UI tidak mengetahui tabel SQL, transport HTTP, komisi hardcoded atau fixture out
 | Payments & earnings | Payment attempt, ledger, withdrawal | PaymentService, PaymentRepository, LedgerRepository, PayoutService |
 | Notifications | Event inbox, preferensi | NotificationRepository, NotificationDeliveryService |
 
+## Backend BE-05
+
+`ConsultationController` hanya memetakan route/DTO; aturan booking dan transisi berada di `ConsultationService`. `ConsultationModule` memberi PaymentModule port `ConsultationPaymentSucceededPort`; PaymentModule tidak mengimpor controller konsultasi dan memanggil port di transaksi sukses payment yang sama. Action/outbox disimpan oleh `PostgresConsultationActionAdapter` sebagai append-only record di transaksi, dengan hasil `AdapterResult` yang gagal mengembalikan 503 dan rollback.
+
+Quote tidak menahan slot. Submit booking, acceptance, proposal dan persetujuan proposal memakai advisory transaction lock yang sama dengan BE-04 per dokter, lalu memeriksa ulang availability, blocked time, appointment dan pending proposal. Mutasi memiliki optimistic version dan idempotency key. Scope owner/assignment tetap berasal dari session user ID; role membership tanpa relasi konsultasi tidak memberi akses data.
+
+Visit dan Consultation berubah bersama; final note menyimpan satu HealthEvent di timeline dan tidak menyelesaikan layanan. Completion memerlukan note final, payment succeeded, verifikasi dokter, status `in_progress`, konfirmasi eksplisit dan Visit `examining` bila layanan kunjungan. Komisi lokal disnapshot Rp0 sampai kebijakan komersial dipilih; refund `refund_needed` bukan refund aktual. Cancel, notification delivery dan earning/ledger berada di luar BE-05.
+
 ## Struktur aplikasi
 
-Source aktif saat ini berisi frontend dan fondasi backend; module domain akan ditambahkan sesuai tiket:
+Source aktif mencakup frontend lokal serta backend modular monolith; endpoint domain ditambahkan per tiket:
 
 ```text
 apps/mobile/

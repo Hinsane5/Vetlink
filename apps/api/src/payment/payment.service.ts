@@ -4,6 +4,7 @@ import type { PoolClient } from 'pg';
 import type { AuthenticatedPrincipal } from '../auth/auth.types.js';
 import { adapterFailed } from '../communication/adapter-result.js';
 import { DatabaseService } from '../database/database.service.js';
+import { CONSULTATION_PAYMENT_SUCCEEDED, type ConsultationPaymentSucceededPort } from '../consultation/consultation-payment.port.js';
 import { PAYMENT_SERVICE, type PaymentOutcome, type PaymentService } from './payment.adapter.js';
 
 type PayableType = 'consultation' | 'order';
@@ -12,7 +13,11 @@ type PaymentRow = Record<string, any>;
 
 @Injectable()
 export class PaymentsService {
-  constructor(private readonly db: DatabaseService, @Inject(PAYMENT_SERVICE) private readonly adapter: PaymentService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    @Inject(PAYMENT_SERVICE) private readonly adapter: PaymentService,
+    @Inject(CONSULTATION_PAYMENT_SUCCEEDED) private readonly consultationPayment: ConsultationPaymentSucceededPort,
+  ) {}
 
   async quote(p: AuthenticatedPrincipal, payableType: PayableType, payableId: string) {
     this.farmer(p);
@@ -74,6 +79,16 @@ export class PaymentsService {
         await c.query('UPDATE payment_attempts SET status=$2,adapter_reference=$3 WHERE id=$1 AND status=$4', [row.attempt_id, result.status, reference, 'pending']);
         await c.query('UPDATE payments SET status=$2,adapter_reference=$3,updated_at=now(),version=version+1 WHERE id=$1 AND status=$4',
           [row.id, result.status, reference, 'pending']);
+        if (result.status === 'succeeded') {
+          await this.consultationPayment.handlePaymentSucceeded(c, {
+            id: row.id,
+            ownerId: p.userId,
+            payableType: row.payable_type,
+            payableId: row.payable_id,
+            amountIdr: Number(row.amount_idr),
+            callbackEventId: `adapter:${row.attempt_id}`,
+          });
+        }
       });
     } catch { throw new ServiceUnavailableException({ code: 'SERVICE_UNAVAILABLE', message: 'Hasil layanan pembayaran belum tersimpan; periksa status sebelum mencoba lagi.' }); }
     const saved = await this.paymentByAttempt(row.attempt_id);
@@ -103,6 +118,16 @@ export class PaymentsService {
       if (input.outcome !== 'pending') {
         await c.query('UPDATE payment_attempts SET status=$2 WHERE id=$1', [row.attempt_id, input.outcome]);
         await c.query('UPDATE payments SET status=$2,updated_at=now(),version=version+1 WHERE id=$1', [row.id, input.outcome]);
+        if (input.outcome === 'succeeded') {
+          await this.consultationPayment.handlePaymentSucceeded(c, {
+            id: row.id,
+            ownerId: row.owner_id,
+            payableType: row.payable_type,
+            payableId: row.payable_id,
+            amountIdr: Number(row.amount_idr),
+            callbackEventId: input.eventId,
+          });
+        }
       }
       return { ...this.paymentView(row), status: input.outcome, attempt: { ...this.paymentView(row).attempt, status: input.outcome } };
     });

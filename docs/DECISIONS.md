@@ -38,6 +38,8 @@ BE-00 pada 13 Oktober 2026 menerapkan DEC-10 dan mencatat pilihan versi/penggera
 
 BE-07 pada 13 Oktober 2026 memakai filesystem privat lokal dan transport polling PostgreSQL, tanpa bucket, realtime, provider produksi, secret, atau transaksi finansial. Default batas media dapat diubah untuk development; kebijakan produksi DEC-17 tetap terbuka.
 
+BE-05 pada 19 Oktober 2026 menerapkan aturan booking, appointment, proposal, visit, dan completion dengan lock transaksi per dokter, version/idempotency guard, serta recheck consent/payment/verification. Payment hanya mengaktifkan request setelah hasil tersimpan `succeeded`; finalisasi catatan tidak menyelesaikan layanan. Komisi lokal disnapshot Rp0 karena DEC-13 belum menetapkan kebijakan komersial, dan rejection setelah payment sukses hanya mencatat `refund_needed`; tidak ada refund/provider nyata. Expiry hold, pembatalan, attachment sebelum booking, dan ledger BE-15 tetap terbuka atau di luar tiket.
+
 Untuk mengubah keputusan, tambah tanggal, alasan dan dampak pada PRD, model status, API, backlog dan acceptance criteria. Jangan menghapus riwayat keputusan pengguna tanpa mencatat penggantinya.
 
 
