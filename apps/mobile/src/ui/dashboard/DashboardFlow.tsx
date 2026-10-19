@@ -35,6 +35,7 @@ import { VetDirectoryFlow } from '../directory/VetDirectoryFlow';
 import { MarketplaceFlow, type MarketplaceRoute } from '../marketplace/MarketplaceFlow';
 import { OrdersFlow } from '../marketplace/OrdersFlow';
 import { PaymentPanel } from '../payment/PaymentPanel';
+import { EarningsFlow } from '../earnings/EarningsFlow';
 import type { OrderSnapshot } from '../../domain/commerce';
 import type { NotificationSnapshot } from '../../application/NotificationService';
 import { colors, fonts, layout, radii, roleTokens, spacing, typeScale } from '../theme/tokens';
@@ -57,6 +58,7 @@ type DashboardRoute =
   | { type: 'schedule' }
   | { type: 'orders'; orderId?: string }
   | { type: 'payment'; orderId: string; amount: number }
+  | { type: 'earnings' }
   | MarketplaceRoute
   | LivestockRoute;
 
@@ -129,7 +131,7 @@ export function DashboardFlow({ store, session, onOpenProfile, onOpenAccountSett
         setRoute({ type: 'detail', kind: 'consultation', id: route.consultationId });
         return true;
       }
-      if (route.type === 'livestock' || route.type === 'booking' || route.type === 'list' || route.type === 'recommendation' || route.type === 'marketplace' || route.type === 'care' || route.type === 'orders' || route.type === 'payment' || (route.type === 'detail' && route.kind === 'consultation')) return false;
+      if (route.type === 'livestock' || route.type === 'booking' || route.type === 'list' || route.type === 'recommendation' || route.type === 'marketplace' || route.type === 'care' || route.type === 'orders' || route.type === 'payment' || route.type === 'earnings' || (route.type === 'detail' && route.kind === 'consultation')) return false;
       if (route.type === 'farms') return false;
       if (route.type !== 'home') {
         setRoute({ type: 'home' });
@@ -185,6 +187,8 @@ export function DashboardFlow({ store, session, onOpenProfile, onOpenAccountSett
         />
       ) : route.type === 'payment' ? (
         <PaymentPanel key={route.orderId} store={store} session={session} payableType="order" payableId={route.orderId} amount={route.amount} onBack={() => setRoute({ type: 'orders' })} />
+      ) : route.type === 'earnings' ? (
+        <EarningsFlow store={store} session={session} onBack={() => { setRoute({ type: 'home' }); void reload(); }} onChanged={() => { void reload(); }} />
       ) : route.type === 'clinicalNote' ? (
         <ClinicalNoteFlow key={route.consultationId} store={store} session={session} consultationId={route.consultationId} onExit={() => setRoute({ type: 'detail', kind: 'consultation', id: route.consultationId })} />
       ) : route.type === 'recommendation' ? (
@@ -227,7 +231,7 @@ export function DashboardFlow({ store, session, onOpenProfile, onOpenAccountSett
         {route.type === 'home' ? (
           snapshot.role === 'farmer'
             ? <FarmerDashboard snapshot={snapshot} error={error} onOpenMenu={() => setMenuVisible(true)} onOpenNotifications={() => setRoute({ type: 'notifications' })} onOpenFarms={() => setRoute({ type: 'farms' })} onOpenList={(kind) => setRoute({ type: 'list', kind })} onAddLivestock={() => setRoute({ type: 'livestock', screen: 'form', mode: 'create', returnTo: 'list' })} onOpenContext={openContext} />
-            : <VetDashboard snapshot={snapshot} error={error} availabilityBusy={availabilityBusy} onAvailability={(value) => void changeAvailability(value)} onOpenList={(kind) => setRoute({ type: 'list', kind })} onOpenContext={openContext} onOpenMenu={() => setMenuVisible(true)} onOpenNotifications={() => setRoute({ type: 'notifications' })} />
+            : <VetDashboard snapshot={snapshot} error={error} availabilityBusy={availabilityBusy} onAvailability={(value) => void changeAvailability(value)} onOpenList={(kind) => setRoute({ type: 'list', kind })} onOpenContext={openContext} onOpenMenu={() => setMenuVisible(true)} onOpenNotifications={() => setRoute({ type: 'notifications' })} onOpenEarnings={() => setRoute({ type: 'earnings' })} />
         ) : null}
         {route.type === 'detail' ? (
           <DashboardDetail
@@ -259,7 +263,7 @@ export function DashboardFlow({ store, session, onOpenProfile, onOpenAccountSett
         ) : null}
       </ScrollView>
       )}
-      {route.type !== 'booking' && route.type !== 'schedule' && route.type !== 'farms' && route.type !== 'list' && route.type !== 'notifications' && route.type !== 'chat' && route.type !== 'clinicalNote' && route.type !== 'recommendation' && route.type !== 'marketplace' && route.type !== 'care' && route.type !== 'review' && route.type !== 'orders' && route.type !== 'payment' && !(route.type === 'detail' && route.kind === 'consultation') && !(route.type === 'patients' && route.patientId) && !(route.type === 'livestock' && route.screen !== 'list') && !(route.type === 'doctors' && route.vetId) ? (
+      {route.type !== 'booking' && route.type !== 'schedule' && route.type !== 'farms' && route.type !== 'list' && route.type !== 'notifications' && route.type !== 'chat' && route.type !== 'clinicalNote' && route.type !== 'recommendation' && route.type !== 'marketplace' && route.type !== 'care' && route.type !== 'review' && route.type !== 'orders' && route.type !== 'payment' && route.type !== 'earnings' && !(route.type === 'detail' && route.kind === 'consultation') && !(route.type === 'patients' && route.patientId) && !(route.type === 'livestock' && route.screen !== 'list') && !(route.type === 'doctors' && route.vetId) ? (
         <BottomNavigation role={role} route={route} onSelect={(next) => setRoute(next)} onOpenProfile={onOpenProfile} />
       ) : null}
       <AccountMenu
@@ -356,7 +360,7 @@ function FarmerDashboard({ snapshot, error, onOpenMenu, onOpenNotifications, onO
   );
 }
 
-function VetDashboard({ snapshot, error, availabilityBusy, onAvailability, onOpenList, onOpenContext, onOpenMenu, onOpenNotifications }: {
+function VetDashboard({ snapshot, error, availabilityBusy, onAvailability, onOpenList, onOpenContext, onOpenMenu, onOpenNotifications, onOpenEarnings }: {
   snapshot: VetDashboardSnapshot;
   error: string;
   availabilityBusy: boolean;
@@ -365,6 +369,7 @@ function VetDashboard({ snapshot, error, availabilityBusy, onAvailability, onOpe
   onOpenContext: (kind: 'consultation', id: string) => void;
   onOpenMenu: () => void;
   onOpenNotifications: () => void;
+  onOpenEarnings: () => void;
 }) {
   const verified = snapshot.verificationStatus === 'verified';
   const priority = snapshot.newRequests[0];
@@ -443,14 +448,15 @@ function VetDashboard({ snapshot, error, availabilityBusy, onAvailability, onOpe
         </View>
       ) : null}
 
-      <View style={styles.balanceCard}>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Buka pendapatan. Saldo tersedia ${formatRupiah(snapshot.availableBalance)}.`} onPress={onOpenEarnings} style={({ pressed }) => [styles.balanceCard, pressed && { opacity: 0.82 }]}>
         <View style={styles.balanceIcon}><Icon name="wallet" size={22} color={colors.brown} /></View>
         <View style={styles.balanceCopy}>
           <Text style={styles.cardBody}>Saldo tersedia</Text>
           <Text style={styles.balanceAmount}>{formatRupiah(snapshot.availableBalance)}</Text>
           <Text style={styles.balancePending}>Pendapatan menunggu: {formatRupiah(snapshot.pendingBalance)}</Text>
         </View>
-      </View>
+        <Icon name="chevron-right" size={20} color={colors.brown} />
+      </Pressable>
     </View>
   );
 }

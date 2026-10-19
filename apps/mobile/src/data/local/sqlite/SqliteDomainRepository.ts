@@ -15,6 +15,15 @@ export class SqliteDomainRepository implements DomainRepository {
     else await this.database.withExclusiveTransactionAsync(action);
   }
 
+  async transact<T>(work: (repository: DomainRepository) => Promise<T>): Promise<T> {
+    if (this.inTransaction) return work(this);
+    let result!: T;
+    await this.database.withExclusiveTransactionAsync(async (transaction) => {
+      result = await work(new SqliteDomainRepository(transaction, true));
+    });
+    return result;
+  }
+
   async create(entity: DomainEntity, relations: readonly EntityRelation[] = []): Promise<void> {
     assertValidFinalNote(entity);
     await this.write(async (transaction) => {

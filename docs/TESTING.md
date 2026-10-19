@@ -1,6 +1,6 @@
 # Strategi pengujian VetLink
 
-Status QA per 20 Oktober 2026: tahap aktif memakai frontend lokal tanpa autentikasi/backend jaringan; Pilih Peran membuka persona fiktif. Implementasi FE-22 tersedia dan `npm run check` lulus typecheck, lint, serta 119 tes domain/repository. Pemeriksaan ini belum mencakup build atau interaksi Android; QA FE-22 tertunda pada perangkat fisik. Backend BE-00–08 dan BE-10/11 memiliki route executable; BE-09 belum mulai dan mobile belum terhubung ke API. Pemeriksaan Android terdahulu bukan bukti integrasi backend. Interaksi fitur pada perangkat, viewport kecil/font besar, dan pembandingan visual 390 × 844 tetap tertunda; tidak ada pemanggilan Figma MCP baru.
+Status QA per 20 Oktober 2026: tahap aktif memakai frontend lokal tanpa autentikasi/backend jaringan; Pilih Peran membuka persona fiktif. Implementasi FE-23 tersedia dan `npm run check` lulus typecheck, lint, serta 126 tes domain/repository. Pemeriksaan ini belum mencakup build atau interaksi Android; QA FE-23 tertunda pada perangkat fisik. Backend BE-00–08 dan BE-10/11 memiliki route executable; BE-09 belum mulai dan mobile belum terhubung ke API. Pemeriksaan Android terdahulu bukan bukti integrasi backend. Interaksi fitur pada perangkat, viewport kecil/font besar, dan pembandingan visual 390 × 844 tetap tertunda; tidak ada pemanggilan Figma MCP baru.
 
 ## Level pengujian
 
@@ -688,3 +688,16 @@ FE-21 tetap **Sedang dikerjakan** sampai QA Android/interaksi dan visual dapat d
 | `git diff --check` | **Lulus** setelah perubahan kode dan dokumentasi FE-22. |
 
 FE-22 tetap **Sedang dikerjakan** sampai interaksi perangkat dan visual diterima. Tes domain/repository tidak membuktikan navigasi, dialog, scroll, atau tampilan React Native di Android.
+
+## Hasil pemeriksaan FE-23 — 20 Oktober 2026
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm ci` dari `apps/mobile` | **Lulus**; dependency dipulihkan dari lockfile setelah pemeriksaan awal tidak menemukan `tsc`. |
+| `npm run check` dari `apps/mobile` | **Lulus**: TypeScript typecheck, Expo lint, kompilasi tes TypeScript, dan 126 tes domain/repository (0 gagal). |
+| Tes FE-23 | **Lulus pada service/repository SQLite in-memory**: gross−commission=net dan bucket pending/available/reserved/paidOut; periode Asia/Jakarta dan detail; akses owner/role Dokter; amount invalid/zero; reservasi parsial; retry dan submit serentak idempoten; overspend serentak ditolak; rollback dapat dicoba ulang. |
+| `git diff --check` | **Lulus** setelah perubahan kode dan dokumentasi FE-23. |
+| Build/interaksi Android | Tidak dijalankan sesuai instruksi untuk tidak memakai emulator/AVD/ADB maupun `npm run android`. Sentuh, Back Android, keyboard, scroll, viewport 390 × 844, layar kecil, dan font besar **belum diuji**. |
+| Referensi desain | Inventory lokal memetakan earnings `46:28`, transaction `46:29`, withdraw `46:30`, review `46:31`, submitted `46:32` serta state `82:6376`–`82:6720`. Screenshot lokal `vet-earnings.png` dan `vet-withdrawal-review.png` ditinjau; Figma MCP tidak dipanggil. Perbandingan visual aplikasi tetap tertunda. |
+
+Tes domain/repository tidak membuktikan interaksi UI pada perangkat. FE-23 tetap **Sedang dikerjakan** sampai QA fisik dan visual dapat dijalankan.

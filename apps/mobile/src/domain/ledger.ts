@@ -50,6 +50,9 @@ export function calculateWalletBalances(entries: readonly LedgerMovement[]): Wal
         break;
     }
   }
+  if (Object.values(balances).some((amount) => !Number.isSafeInteger(amount))) {
+    throw new DomainError('VALIDATION_FAILED', 'Agregat ledger melebihi batas integer rupiah yang aman.');
+  }
   if (Object.values(balances).some((amount) => amount < 0)) {
     throw new DomainError('INVALID_STATE', 'Ledger menghasilkan saldo negatif.');
   }

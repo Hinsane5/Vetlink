@@ -87,6 +87,7 @@ test('wallet projections are derived from integer ledger entries', () => {
   });
   assert.deepEqual(calculateWalletBalances([]), { pending: 0, available: 0, reserved: 0, paidOut: 0 });
   assert.throws(() => calculateWalletBalances([{ kind: 'credit_available', amount: 10.5 }]), { code: 'VALIDATION_FAILED' });
+  assert.throws(() => calculateWalletBalances([{ kind: 'credit_available', amount: Number.MAX_SAFE_INTEGER }, { kind: 'credit_available', amount: 1 }]), { code: 'VALIDATION_FAILED' });
 });
 
 test('domain event retries create notification and health projections once', async () => {

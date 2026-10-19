@@ -17,6 +17,7 @@ import { CareCoordinationService } from '../../../application/CareCoordinationSe
 import { ReviewService } from '../../../application/ReviewService';
 import { NotificationService } from '../../../application/NotificationService';
 import { PreferencesService } from '../../../application/PreferencesService';
+import { EarningsService } from '../../../application/EarningsService';
 import { ChatService } from '../../../application/ChatService';
 import { ConsultationService } from '../../../application/ConsultationService';
 import { ClinicalNoteService } from '../../../application/ClinicalNoteService';
@@ -60,6 +61,7 @@ export interface LocalStore {
   reviews: ReviewService;
   notifications: NotificationService;
   preferences: PreferencesService;
+  earnings: EarningsService;
   authStore: ExpoSecureAuthStore;
   schemaVersion: number;
   fixtureSeedVersion: string | null;
@@ -129,6 +131,7 @@ async function createLocalStore(): Promise<LocalStore> {
   const reviews = new ReviewService(bookingRepository, profiles, new ExpoIdFactory());
   const notifications = new NotificationService(repositories);
   const preferences = new PreferencesService(repositories, new ExpoIdFactory());
+  const earnings = new EarningsService(repositories, new ExpoIdFactory());
   const counts = await repositories.countAll();
 
   if (__DEV__) {
@@ -138,5 +141,5 @@ async function createLocalStore(): Promise<LocalStore> {
     );
   }
 
-  return { database, repositories, events, auth, profiles, dashboard, farms, livestock, healthRecords, patients, preview, vetDirectory, catalog, commerce, payments, booking, consultations, clinicalNotes, recommendations, chat, availability, careCoordination, reviews, notifications, preferences, authStore, schemaVersion, fixtureSeedVersion, seedResult };
+  return { database, repositories, events, auth, profiles, dashboard, farms, livestock, healthRecords, patients, preview, vetDirectory, catalog, commerce, payments, booking, consultations, clinicalNotes, recommendations, chat, availability, careCoordination, reviews, notifications, preferences, earnings, authStore, schemaVersion, fixtureSeedVersion, seedResult };
 }
