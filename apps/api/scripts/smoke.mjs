@@ -17,6 +17,8 @@ import { CommerceService } from '../dist/commerce/commerce.service.js';
 import { LocalCheckoutShippingAdapter } from '../dist/commerce/shipping-quote.adapter.js';
 import { LocalShipmentAdapter } from '../dist/commerce/shipment.adapter.js';
 import { ShipmentService } from '../dist/commerce/shipment.service.js';
+import { EarningsService } from '../dist/earnings/earnings.service.js';
+import { LocalEarningSettlementAdapter, LocalWithdrawalSubmissionAdapter } from '../dist/earnings/earnings.adapter.js';
 
 const appPath = resolve(process.cwd(), 'dist/main.js');
 
@@ -189,6 +191,13 @@ try {
   assert.ok(openApi.paths['/v1/vets/{id}/slots']?.get);
   assert.ok(openApi.paths['/v1/me/vet/availability']?.put);
   assert.ok(openApi.paths['/v1/me/vet/blocked-times']?.post);
+  assert.ok(openApi.paths['/v1/me/vet/earnings']?.get);
+  assert.ok(openApi.paths['/v1/me/vet/transactions/{id}']?.get);
+  assert.ok(openApi.paths['/v1/me/vet/payout-destinations']?.get);
+  assert.ok(openApi.paths['/v1/me/vet/withdrawals']?.get);
+  assert.ok(openApi.paths['/v1/me/vet/withdrawals']?.post);
+  assert.ok(openApi.paths['/v1/me/vet/withdrawals/{id}']?.get);
+  assert.deepEqual(openApi.components.schemas.WithdrawalStatus.enum, ['submitting', 'submitted', 'processing', 'paid', 'rejected', 'failed']);
   assert.ok(openApi.paths['/v1/consultation-quotes']?.post);
   assert.ok(openApi.paths['/v1/consultations']?.post);
   assert.ok(openApi.paths['/v1/consultations']?.get);
@@ -264,7 +273,8 @@ try {
     const addressIds = [];
     const productIds = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
     const localDb = new DatabaseService();
-    const workflow = new ConsultationService(localDb, new PostgresConsultationActionAdapter());
+    const earnings = new EarningsService(localDb, new LocalEarningSettlementAdapter('pending'), new LocalWithdrawalSubmissionAdapter());
+    const workflow = new ConsultationService(localDb, new PostgresConsultationActionAdapter(), earnings);
     const shipments = new ShipmentService(localDb, new LocalShipmentAdapter());
     const commerce = new CommerceService(localDb, new LocalCheckoutShippingAdapter(), shipments);
     const localPayment = new PaymentsService(localDb, new LocalPaymentService(), workflow, commerce, shipments);
@@ -277,6 +287,21 @@ try {
       const outsider = await registerSmokeUser(healthy.baseUrl, 'farmer', 'Peternak Lain Fiktif BE-07');
       const unverifiedVet = await registerSmokeUser(healthy.baseUrl, 'vet', 'Dokter Belum Terverifikasi BE-04');
       actors.push(farmer.user.id, vet.user.id, outsider.user.id,unverifiedVet.user.id);
+      const payoutDestinationId = randomUUID();
+      await database.query(
+        `INSERT INTO payout_destinations(id,vet_id,label,bank_label,account_masked,account_holder)
+         VALUES($1,$2,'Tujuan Pencairan Fiktif','Bank Contoh','•••• 4567','Dokter Fiktif')`,
+        [payoutDestinationId, vet.user.id],
+      );
+      const initialEarningsResponse = await sendJson(healthy.baseUrl, '/v1/me/vet/earnings', vet.accessToken, 'GET');
+      assert.equal(initialEarningsResponse.status, 200);
+      const initialEarnings = await initialEarningsResponse.json();
+      assert.deepEqual(initialEarnings.balances, { pending: 0, available: 0, reserved: 0, paidOut: 0 });
+      assert.deepEqual(initialEarnings.transactions, []);
+      assert.equal(initialEarnings.destinations[0].accountMasked, '•••• 4567');
+      assert.equal('accountNumber' in initialEarnings.destinations[0], false);
+      assert.equal((await sendJson(healthy.baseUrl, '/v1/me/vet/earnings', farmer.accessToken, 'GET')).status, 403);
+      assert.deepEqual(await (await sendJson(healthy.baseUrl, '/v1/me/vet/payout-destinations', unverifiedVet.accessToken, 'GET')).json(), { items: [] });
 
       const catalogFixtures = [
         [productIds[0], 'BE-10 Sikat Kandang Seruni', 'perawatan', ['sapi', 'kambing'], 'Produk perawatan fiktif.', 18500, true],
@@ -790,6 +815,8 @@ try {
       assert.equal(visitBooking.response.status, 201);
       const visitConsultationId = (await visitBooking.response.json()).consultation.id;
       consultationIds.push(visitConsultationId);
+      // This fictional commission snapshot exercises exact integer arithmetic; it is not a commercial rate decision.
+      await database.query('UPDATE consultations SET commission_snapshot_idr=17501 WHERE id=$1', [visitConsultationId]);
       await markPaid(visitConsultationId, 400000);
       let visitConsultation = await getConsultation(visitConsultationId);
       assert.equal(visitConsultation.status, 'requested');
@@ -832,16 +859,171 @@ try {
       const timelineAfterFinal = await sendJson(healthy.baseUrl, `/v1/livestock/${animalId}/health-events`, farmer.accessToken, 'GET');
       assert.equal(timelineAfterFinal.status, 200);
       assert.ok((await timelineAfterFinal.json()).some((event) => event.description === 'Penilaian klinis fiktif'));
+      const beforeCompleteEarnings = await (await sendJson(healthy.baseUrl, '/v1/me/vet/earnings', vet.accessToken, 'GET')).json();
+      assert.equal(beforeCompleteEarnings.transactions.some((entry) => entry.consultationId === visitConsultationId), false);
       const unconfirmedComplete = await sendJson(healthy.baseUrl, `/v1/consultations/${visitConsultationId}/complete`, vet.accessToken, 'POST',
         { expectedVersion: examining.consultation.version, expectedVisitVersion: examining.visit.version, confirmation: false }, { 'idempotency-key': `be05-complete-${randomUUID()}` });
       assert.equal(unconfirmedComplete.status, 422);
+      const completionKey = `be15-complete-${randomUUID()}`;
       const completedVisitResponse = await sendJson(healthy.baseUrl, `/v1/consultations/${visitConsultationId}/complete`, vet.accessToken, 'POST',
-        { expectedVersion: examining.consultation.version, expectedVisitVersion: examining.visit.version, confirmation: true }, { 'idempotency-key': `be05-complete-${randomUUID()}` });
+        { expectedVersion: examining.consultation.version, expectedVisitVersion: examining.visit.version, confirmation: true }, { 'idempotency-key': completionKey });
       assert.equal(completedVisitResponse.status, 200, await completedVisitResponse.clone().text());
       const completedVisit = (await completedVisitResponse.json()).consultation;
       assert.equal(completedVisit.status, 'completed');
       assert.equal(completedVisit.visitStage, 'completed');
       assert.equal(completedVisit.completionAt != null, true);
+      const completedEarningRow = await database.query(
+        'SELECT id FROM earning_transactions WHERE consultation_id=$1', [visitConsultationId]);
+      assert.equal(completedEarningRow.rowCount, 1);
+      const earningId = completedEarningRow.rows[0].id;
+      const earningDetailResponse = await sendJson(healthy.baseUrl, `/v1/me/vet/transactions/${earningId}`, vet.accessToken, 'GET');
+      assert.equal(earningDetailResponse.status, 200);
+      const earningDetail = await earningDetailResponse.json();
+      assert.equal(earningDetail.gross, 400000);
+      assert.equal(earningDetail.commission, 17501);
+      assert.equal(earningDetail.net, 382499);
+      assert.equal(earningDetail.gross - earningDetail.commission, earningDetail.net);
+      assert.equal(earningDetail.status, 'pending');
+      const afterCompletePending = await (await sendJson(healthy.baseUrl, `/v1/me/vet/earnings?period=${new Date().toISOString().slice(0, 7)}`, vet.accessToken, 'GET')).json();
+      assert.equal(afterCompletePending.balances.pending, 382499);
+      assert.equal(afterCompletePending.balances.available, 0);
+      assert.equal(afterCompletePending.totals.net, 382499);
+      assert.ok(afterCompletePending.transactions.some((entry) => entry.id === earningId));
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/me/vet/transactions/${earningId}`, unverifiedVet.accessToken, 'GET')).status, 404);
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/me/vet/transactions/${earningId}`, farmer.accessToken, 'GET')).status, 403);
+      const completionReplay = await sendJson(healthy.baseUrl, `/v1/consultations/${visitConsultationId}/complete`, vet.accessToken, 'POST',
+        { expectedVersion: examining.consultation.version, expectedVisitVersion: examining.visit.version, confirmation: true }, { 'idempotency-key': completionKey });
+      assert.equal(completionReplay.status, 200);
+      assert.equal((await database.query('SELECT count(*)::int AS count FROM earning_transactions WHERE consultation_id=$1', [visitConsultationId])).rows[0].count, 1);
+      assert.equal((await database.query("SELECT count(*)::int AS count FROM ledger_entries WHERE earning_id=$1 AND kind='earn_pending'", [earningId])).rows[0].count, 1);
+
+      const pendingSettlement = adapterPending({ reference: `LOCAL-PENDING-${earningId}` });
+      const pendingSettlementResult = await earnings.recordEarningSettlementResult(earningId, pendingSettlement);
+      assert.equal(pendingSettlementResult.status, 'pending');
+      assert.equal((await earnings.recordEarningSettlementResult(earningId, pendingSettlement)).duplicate, true);
+      const successfulSettlement = adapterSucceeded({ reference: `LOCAL-SETTLED-${earningId}` });
+      const settled = await earnings.recordEarningSettlementResult(earningId, successfulSettlement);
+      assert.equal(settled.status, 'available');
+      assert.equal((await earnings.recordEarningSettlementResult(earningId, successfulSettlement)).duplicate, true);
+      await assert.rejects(earnings.recordEarningSettlementResult(earningId, {
+        ...adapterFailed('SETTLEMENT_CONFLICT', 'Fixture conflict.', true), operationId: successfulSettlement.operationId,
+      }));
+      assert.equal((await database.query('SELECT status FROM earning_transactions WHERE id=$1', [earningId])).rows[0].status, 'available');
+      for (const kind of ['release_pending', 'credit_available']) {
+        assert.equal((await database.query('SELECT count(*)::int AS count FROM ledger_entries WHERE earning_id=$1 AND kind=$2', [earningId, kind])).rows[0].count, 1);
+      }
+      const afterSettlement = await (await sendJson(healthy.baseUrl, '/v1/me/vet/earnings', vet.accessToken, 'GET')).json();
+      assert.deepEqual(afterSettlement.balances, { pending: 0, available: 382499, reserved: 0, paidOut: 0 });
+
+      const withdrawalKey = `be15-withdraw-${randomUUID()}`;
+      const firstWithdrawalResponse = await sendJson(healthy.baseUrl, '/v1/me/vet/withdrawals', vet.accessToken, 'POST',
+        { amount: 200000, destinationId: payoutDestinationId }, { 'idempotency-key': withdrawalKey });
+      assert.equal(firstWithdrawalResponse.status, 201, await firstWithdrawalResponse.clone().text());
+      const firstWithdrawalOperation = await firstWithdrawalResponse.json();
+      const firstWithdrawal = firstWithdrawalOperation.withdrawal;
+      assert.equal(firstWithdrawalOperation.adapterOutcome, 'succeeded');
+      assert.equal(firstWithdrawal.status, 'submitted');
+      assert.equal(firstWithdrawal.amount, 200000);
+      assert.equal(firstWithdrawal.fee, 0);
+      assert.equal(firstWithdrawal.netAmount, 200000);
+      assert.equal(firstWithdrawal.destination.accountMasked, '•••• 4567');
+      assert.equal(firstWithdrawal.destinationId, undefined);
+      const withdrawalReplayResponse = await sendJson(healthy.baseUrl, '/v1/me/vet/withdrawals', vet.accessToken, 'POST',
+        { amount: 200000, destinationId: payoutDestinationId }, { 'idempotency-key': withdrawalKey });
+      assert.equal(withdrawalReplayResponse.status, 201);
+      const withdrawalReplay = await withdrawalReplayResponse.json();
+      assert.equal(withdrawalReplay.replayed, true);
+      assert.equal(withdrawalReplay.withdrawal.id, firstWithdrawal.id);
+      assert.equal((await sendJson(healthy.baseUrl, '/v1/me/vet/withdrawals', vet.accessToken, 'POST',
+        { amount: 199999, destinationId: payoutDestinationId }, { 'idempotency-key': withdrawalKey })).status, 409);
+      assert.equal((await sendJson(healthy.baseUrl, '/v1/me/vet/withdrawals', farmer.accessToken, 'GET')).status, 403);
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/me/vet/withdrawals/${firstWithdrawal.id}`, unverifiedVet.accessToken, 'GET')).status, 404);
+      const afterFirstReserve = await (await sendJson(healthy.baseUrl, '/v1/me/vet/earnings', vet.accessToken, 'GET')).json();
+      assert.deepEqual(afterFirstReserve.balances, { pending: 0, available: 182499, reserved: 200000, paidOut: 0 });
+
+      const concurrentKeys = [`be15-race-a-${randomUUID()}`, `be15-race-b-${randomUUID()}`];
+      const concurrentResponses = await Promise.all(concurrentKeys.map((key) => sendJson(
+        healthy.baseUrl, '/v1/me/vet/withdrawals', vet.accessToken, 'POST',
+        { amount: 100000, destinationId: payoutDestinationId }, { 'idempotency-key': key },
+      )));
+      assert.deepEqual(concurrentResponses.map((response) => response.status).sort(), [201, 422]);
+      const concurrentSuccessIndex = concurrentResponses.findIndex((response) => response.status === 201);
+      const concurrentWithdrawal = (await concurrentResponses[concurrentSuccessIndex].json()).withdrawal;
+      const concurrentRejected = concurrentResponses[1 - concurrentSuccessIndex];
+      assert.equal((await concurrentRejected.json()).code, 'RULE_VIOLATION');
+      let currentBalances = (await (await sendJson(healthy.baseUrl, '/v1/me/vet/earnings', vet.accessToken, 'GET')).json()).balances;
+      assert.deepEqual(currentBalances, { pending: 0, available: 82499, reserved: 300000, paidOut: 0 });
+
+      const failedWithdrawalKey = `be15-failed-submit-${randomUUID()}`;
+      const failingWithdrawalService = new EarningsService(
+        localDb, new LocalEarningSettlementAdapter('pending'), new LocalWithdrawalSubmissionAdapter('failed'),
+      );
+      await assert.rejects(failingWithdrawalService.createWithdrawal(vetPrincipal, failedWithdrawalKey,
+        { amount: 50000, destinationId: payoutDestinationId }));
+      await assert.rejects(failingWithdrawalService.createWithdrawal(vetPrincipal, failedWithdrawalKey,
+        { amount: 50000, destinationId: payoutDestinationId }));
+      const failedWithdrawalRow = await database.query(
+        'SELECT id,status FROM withdrawals WHERE vet_id=$1 AND operation_key=$2', [vet.user.id, failedWithdrawalKey]);
+      assert.equal(failedWithdrawalRow.rows[0].status, 'failed');
+      assert.equal((await database.query("SELECT count(*)::int AS count FROM ledger_entries WHERE withdrawal_id=$1 AND kind='reserve_withdrawal'", [failedWithdrawalRow.rows[0].id])).rows[0].count, 1);
+      assert.equal((await database.query("SELECT count(*)::int AS count FROM ledger_entries WHERE withdrawal_id=$1 AND kind='release_withdrawal'", [failedWithdrawalRow.rows[0].id])).rows[0].count, 1);
+      currentBalances = (await (await sendJson(healthy.baseUrl, '/v1/me/vet/earnings', vet.accessToken, 'GET')).json()).balances;
+      assert.deepEqual(currentBalances, { pending: 0, available: 82499, reserved: 300000, paidOut: 0 });
+
+      const paidFirstEvent = adapterSucceeded({ status: 'paid', reference: `LOCAL-PAID-${firstWithdrawal.id}` });
+      const firstPaid = await earnings.recordPayoutAdapterResult(firstWithdrawal.id, paidFirstEvent);
+      assert.equal(firstPaid.withdrawal.status, 'paid');
+      assert.equal((await earnings.recordPayoutAdapterResult(firstWithdrawal.id, paidFirstEvent)).duplicate, true);
+      currentBalances = (await (await sendJson(healthy.baseUrl, '/v1/me/vet/earnings', vet.accessToken, 'GET')).json()).balances;
+      assert.deepEqual(currentBalances, { pending: 0, available: 82499, reserved: 100000, paidOut: 200000 });
+      const failedPayoutEvent = adapterFailed('LOCAL_PAYOUT_FAILED', 'Kegagalan payout fiktif.', true);
+      const failedPayout = await earnings.recordPayoutAdapterResult(concurrentWithdrawal.id, failedPayoutEvent);
+      assert.equal(failedPayout.withdrawal.status, 'failed');
+      assert.equal((await earnings.recordPayoutAdapterResult(concurrentWithdrawal.id, failedPayoutEvent)).duplicate, true);
+      assert.equal((await database.query("SELECT count(*)::int AS count FROM ledger_entries WHERE withdrawal_id=$1 AND kind='release_withdrawal'", [concurrentWithdrawal.id])).rows[0].count, 1);
+      currentBalances = (await (await sendJson(healthy.baseUrl, '/v1/me/vet/earnings', vet.accessToken, 'GET')).json()).balances;
+      assert.deepEqual(currentBalances, { pending: 0, available: 182499, reserved: 0, paidOut: 200000 });
+
+      const pendingWithdrawalService = new EarningsService(
+        localDb, new LocalEarningSettlementAdapter('pending'), new LocalWithdrawalSubmissionAdapter('pending'),
+      );
+      const pendingWithdrawalOperation = await pendingWithdrawalService.createWithdrawal(vetPrincipal, `be15-pending-${randomUUID()}`,
+        { amount: 50000, destinationId: payoutDestinationId });
+      assert.equal(pendingWithdrawalOperation.adapterOutcome, 'pending');
+      assert.equal(pendingWithdrawalOperation.withdrawal.status, 'submitting');
+      assert.equal(pendingWithdrawalOperation.withdrawal.submittedAt, null);
+      const submissionAccepted = adapterSucceeded({ reference: `LOCAL-ACCEPTED-${pendingWithdrawalOperation.operationId}` });
+      await pendingWithdrawalService.recordWithdrawalSubmissionResult(pendingWithdrawalOperation.operationId, submissionAccepted);
+      assert.equal((await pendingWithdrawalService.getWithdrawal(vetPrincipal, pendingWithdrawalOperation.operationId)).status, 'submitted');
+      const paidPendingEvent = adapterSucceeded({ status: 'paid', reference: `LOCAL-PAID-${pendingWithdrawalOperation.operationId}` });
+      await pendingWithdrawalService.recordPayoutAdapterResult(pendingWithdrawalOperation.operationId, paidPendingEvent);
+      assert.equal((await pendingWithdrawalService.getWithdrawal(vetPrincipal, pendingWithdrawalOperation.operationId)).status, 'paid');
+
+      const zeroingWithdrawalResponse = await sendJson(healthy.baseUrl, '/v1/me/vet/withdrawals', vet.accessToken, 'POST',
+        { amount: 132499, destinationId: payoutDestinationId }, { 'idempotency-key': `be15-zeroing-${randomUUID()}` });
+      assert.equal(zeroingWithdrawalResponse.status, 201);
+      const zeroingWithdrawal = (await zeroingWithdrawalResponse.json()).withdrawal;
+      currentBalances = (await (await sendJson(healthy.baseUrl, '/v1/me/vet/earnings', vet.accessToken, 'GET')).json()).balances;
+      assert.deepEqual(currentBalances, { pending: 0, available: 0, reserved: 132499, paidOut: 250000 });
+      const zeroBalanceAttemptKey = `be15-zero-balance-${randomUUID()}`;
+      const zeroBalanceAttempt = await sendJson(healthy.baseUrl, '/v1/me/vet/withdrawals', vet.accessToken, 'POST',
+        { amount: 1, destinationId: payoutDestinationId }, { 'idempotency-key': zeroBalanceAttemptKey });
+      assert.equal(zeroBalanceAttempt.status, 422);
+      assert.equal((await database.query('SELECT count(*)::int AS count FROM withdrawals WHERE operation_key=$1', [zeroBalanceAttemptKey])).rows[0].count, 0);
+      const paidZeroBalanceEvent = adapterSucceeded({ status: 'paid', reference: `LOCAL-PAID-${zeroingWithdrawal.id}` });
+      await earnings.recordPayoutAdapterResult(zeroingWithdrawal.id, paidZeroBalanceEvent);
+      currentBalances = (await (await sendJson(healthy.baseUrl, '/v1/me/vet/earnings', vet.accessToken, 'GET')).json()).balances;
+      assert.deepEqual(currentBalances, { pending: 0, available: 0, reserved: 0, paidOut: 382499 });
+
+      const withdrawalPageOneResponse = await sendJson(healthy.baseUrl, '/v1/me/vet/withdrawals?limit=2', vet.accessToken, 'GET');
+      assert.equal(withdrawalPageOneResponse.status, 200);
+      const withdrawalPageOne = await withdrawalPageOneResponse.json();
+      assert.equal(withdrawalPageOne.items.length, 2);
+      assert.equal(withdrawalPageOne.hasMore, true);
+      const withdrawalPageTwo = await (await sendJson(healthy.baseUrl,
+        `/v1/me/vet/withdrawals?limit=2&cursor=${encodeURIComponent(withdrawalPageOne.nextCursor)}`, vet.accessToken, 'GET')).json();
+      assert.equal(withdrawalPageTwo.items.length, 2);
+      assert.equal(new Set([...withdrawalPageOne.items, ...withdrawalPageTwo.items].map((row) => row.id)).size, 4);
       const history = await sendJson(healthy.baseUrl, '/v1/consultations?status=completed', farmer.accessToken, 'GET');
       assert.equal(history.status, 200);
       assert.ok((await history.json()).some((item) => item.id === visitConsultationId));
@@ -1148,7 +1330,7 @@ try {
       assert.equal(completeChat.status, 200, await completeChat.clone().text());
       assert.equal((await completeChat.json()).consultation.status, 'completed');
 
-      console.log('BE-03/04/05/06/07/08/10/11/12 smoke: owner/role scope; active catalog; cart/checkout/order snapshots and idempotency; payment and shipment adapter results; shipment timeline ordering, duplicate events, pending/failed, owner access; verified access, visit/completion, chat/media lulus.');
+      console.log('BE-03/04/05/06/07/08/10/11/12/15 smoke: owner/role scope; catalog, commerce and shipment; verified access, visit/completion; earning net/settlement/idempotency; withdrawal reserve/race/payout/failure/destination; chat/media lulus.');
     } finally {
       if (failedStorageServer) await stopServer(failedStorageServer.child);
       // Smoke teardown is a fixture reset; it must remove immutable final-note rows
@@ -1157,6 +1339,12 @@ try {
       const allConsultationIds = [...new Set([...consultationIds, consultationId, unpaidConsultationId].filter(Boolean))];
       const allOrderIds = [...new Set(orderIds)];
       try {
+        await database.query('DELETE FROM ledger_entries WHERE vet_id = ANY($1::uuid[])', [actors]);
+        await database.query('DELETE FROM earning_settlement_events WHERE earning_id IN (SELECT id FROM earning_transactions WHERE vet_id = ANY($1::uuid[]))', [actors]);
+        await database.query('DELETE FROM earning_transactions WHERE vet_id = ANY($1::uuid[])', [actors]);
+        await database.query('DELETE FROM withdrawal_adapter_events WHERE withdrawal_id IN (SELECT id FROM withdrawals WHERE vet_id = ANY($1::uuid[]))', [actors]);
+        await database.query('DELETE FROM withdrawals WHERE vet_id = ANY($1::uuid[])', [actors]);
+        await database.query('DELETE FROM payout_destinations WHERE vet_id = ANY($1::uuid[])', [actors]);
         await database.query('DELETE FROM shipment_events WHERE shipment_id IN (SELECT id FROM shipments WHERE order_id = ANY($1::uuid[]))', [allOrderIds]);
         await database.query('DELETE FROM shipments WHERE order_id = ANY($1::uuid[])', [allOrderIds]);
         await database.query('DELETE FROM order_items WHERE order_id = ANY($1::uuid[])', [allOrderIds]);

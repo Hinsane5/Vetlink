@@ -13,6 +13,8 @@ import type { PoolClient } from 'pg';
 import type { AuthenticatedPrincipal, UserRole } from '../auth/auth.types.js';
 import { adapterFailed, type AdapterResult } from '../communication/adapter-result.js';
 import { DatabaseService } from '../database/database.service.js';
+import type { ConsultationCompletionEarningsPort } from '../earnings/earnings-completion.port.js';
+import { CONSULTATION_COMPLETION_EARNINGS } from '../earnings/earnings-completion.port.js';
 import {
   CONSULTATION_ACTION_ADAPTER,
   type ConsultationActionAdapter,
@@ -96,6 +98,7 @@ export class ConsultationService implements ConsultationPaymentSucceededPort {
   constructor(
     private readonly database: DatabaseService,
     @Inject(CONSULTATION_ACTION_ADAPTER) private readonly actionAdapter: ConsultationActionAdapter,
+    @Inject(CONSULTATION_COMPLETION_EARNINGS) private readonly earnings: ConsultationCompletionEarningsPort,
   ) {}
 
   async createQuote(principal: AuthenticatedPrincipal, key: string | undefined, input: CreateConsultationQuoteDto) {
@@ -509,10 +512,13 @@ export class ConsultationService implements ConsultationPaymentSucceededPort {
     const idempotencyKey = this.requireKey(key);
     const scope = `consultation:${consultationId}:complete`;
     const fingerprint = sha256({ consultationId, expectedVersion: input.expectedVersion, confirmation: input.confirmation, expectedVisitVersion: input.expectedVisitVersion ?? null });
-    return this.database.transaction(async (client) => {
+    const completion = await this.database.transaction(async (client) => {
       const context = await this.context(principal, consultationId, client, true);
       const replay = await this.replay(client, principal, context, scope, idempotencyKey, fingerprint);
-      if (replay) return replay;
+      if (replay) {
+        const earningId = await this.earnings.createForCompletedConsultation(client, context.id);
+        return { result: replay, earningId };
+      }
       await this.assertVersion(context, input.expectedVersion);
       if (context.status !== 'in_progress') this.statusConflict('Layanan harus sedang berlangsung sebelum diselesaikan.');
       await this.assertVerified(client, context.vet_id);
@@ -549,8 +555,14 @@ export class ConsultationService implements ConsultationPaymentSucceededPort {
         ...(visitVersion === null ? {} : { fromVisitStage: 'examining', toVisitStage: 'completed' }),
         details: { clinicalNoteId: note.id, confirmed: input.confirmation },
       }));
-      return { operationId: action.id, replayed: false, consultation: await this.detailRow(client, principal, context.id) };
+      const earningId = await this.earnings.createForCompletedConsultation(client, context.id);
+      return {
+        result: { operationId: action.id, replayed: false, consultation: await this.detailRow(client, principal, context.id) },
+        earningId,
+      };
     });
+    await this.earnings.settleEarning(completion.earningId);
+    return completion.result;
   }
 
   async handlePaymentSucceeded(client: PoolClient, payment: {

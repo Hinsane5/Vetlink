@@ -1,12 +1,13 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module.js';
+import { EarningsModule } from '../earnings/earnings.module.js';
 import { CONSULTATION_ACTION_ADAPTER, PostgresConsultationActionAdapter } from './consultation-action.adapter.js';
 import { ConsultationController } from './consultation.controller.js';
 import { ConsultationService } from './consultation.service.js';
 import { CONSULTATION_PAYMENT_SUCCEEDED } from './consultation-payment.port.js';
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, EarningsModule],
   controllers: [ConsultationController],
   providers: [
     ConsultationService,

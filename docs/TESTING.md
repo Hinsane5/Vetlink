@@ -1,6 +1,6 @@
 # Strategi pengujian VetLink
 
-Status QA per 20 Oktober 2026: tahap aktif memakai frontend lokal tanpa autentikasi/backend jaringan; Pilih Peran membuka persona fiktif. Implementasi FE-23 tersedia dan `npm run check` lulus typecheck, lint, serta 126 tes domain/repository. Pemeriksaan ini belum mencakup build atau interaksi Android; QA FE-23 tertunda pada perangkat fisik. Backend BE-00–08 dan BE-10–12 memiliki route executable; BE-09 belum mulai dan mobile belum terhubung ke API. Pemeriksaan Android terdahulu bukan bukti integrasi backend. Interaksi fitur pada perangkat, viewport kecil/font besar, dan pembandingan visual 390 × 844 tetap tertunda; tidak ada pemanggilan Figma MCP baru.
+Status QA per 20 Oktober 2026: tahap aktif memakai frontend lokal tanpa autentikasi/backend jaringan; Pilih Peran membuka persona fiktif. Implementasi FE-23 tersedia dan `npm run check` lulus typecheck, lint, serta 126 tes domain/repository. Pemeriksaan ini belum mencakup build atau interaksi Android; QA FE-23 tertunda pada perangkat fisik. Backend BE-00–08, BE-10–12, dan BE-15 memiliki route executable; BE-09 dan BE-13/14 belum mulai, BE-16/17 tetap menunggu, dan mobile belum terhubung ke API. Pemeriksaan Android terdahulu bukan bukti integrasi backend. Interaksi fitur pada perangkat, viewport kecil/font besar, dan pembandingan visual 390 × 844 tetap tertunda; tidak ada pemanggilan Figma MCP baru.
 
 ## Level pengujian
 
@@ -67,6 +67,17 @@ Pemeriksaan backend dijalankan dari `apps/api` pada Node `24.10.0` / npm `11.6.0
 - `npm run api:smoke` — **Lulus**. Smoke memeriksa OpenAPI route owner-only; order unpaid memiliki shipment `null`; callback pembayaran internal yang `succeeded` memulai adapter lokal setelah transaksi tersimpan; `processing → shipped → delivered` berurutan; event ID/payload sama diabaikan sementara event ID dengan payload berbeda ditolak; adapter `pending`/`failed` tidak memajukan atau mengklaim delivered; owner lain mendapat 404, Dokter mendapat 403; serta update langsung status order/shipment ditolak trigger PostgreSQL. Teardown menghapus seluruh event, shipment dan order fixture.
 - Dua percobaan smoke awal berhenti pada server terakhir untuk pemeriksaan health 503 sebelum melewati batas startup 15 detik. Smoke terakhir lulus setelah helper tersebut memakai port baru untuk retry startup; pemeriksaan live/ready dan error 503 ikut lulus.
 - Tidak ada script `npm test` atau lint terpisah pada manifest. Tidak ada provider kurir/produksi, callback HTTP publik, transaksi finansial, deployment, atau integrasi API mobile.
+
+## Bukti BE-15 (20 Oktober 2026)
+
+Pemeriksaan dijalankan dari `apps/api` dengan Node `24.10.0` / npm `11.6.0`; `.nvmrc` meminta Node `24.15.0`, sehingga instalasi paket menampilkan peringatan engine. PostgreSQL `17.4` dijalankan sebagai cluster lokal terisolasi pada port `55557`; server dihentikan setelah pemeriksaan.
+
+- `npm ci --no-audit --no-fund` — **Lulus**, 253 paket dipasang; ada peringatan engine Node.
+- `npm run check` — **Lulus**: `tsc --noEmit` dan `nest build`.
+- `npm run db:migrate` — **Lulus** pada cluster baru; seluruh 15 migrasi diterapkan, termasuk `20261020_000015_earnings_withdrawals.sql`.
+- `npm run db:seed` — **Lulus**; destination payout fiktif termasking dan fixture lain tersedia melalui seed non-destruktif.
+- `npm run api:smoke` — **Lulus**. Smoke memeriksa earning dibuat sekali setelah konsultasi completed dan pembayaran succeeded (gross Rp400.000 − komisi snapshot Rp17.501 = net Rp382.499); earning pending tidak masuk available dan settlement pending tidak memberi kredit. Settlement succeeded memindahkan saldo sekali meskipun diulang. Withdrawal Rp200.000 mengunci saldo reserved; dua pengajuan Rp100.000 bersamaan menghasilkan satu sukses dan satu penolakan, sehingga saldo tidak overspend. Kegagalan pengajuan melepas reservasi satu kali; pending adapter mempertahankan reservasi; payout paid tidak mendebit available lagi; payout gagal melepas reservasi sekali. Smoke juga memeriksa akses pemilik/role, detail dan cursor, key/payload idempotency, serta saldo nol.
+- Suite smoke menjalankan fixture fiktif dan melakukan cleanup. Tidak ada script `npm test` atau lint terpisah pada manifest; tidak ada UI/Android test, provider payout produksi, secret, transaksi finansial nyata, callback payout publik, atau deployment.
 
 ## Bukti BE-03 (19 Oktober 2026)
 

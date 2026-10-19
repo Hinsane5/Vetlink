@@ -74,8 +74,8 @@ export const domainStatusSchemas = {
   },
   WithdrawalStatus: {
     type: 'string',
-    enum: ['submitted', 'processing', 'paid', 'rejected', 'failed'],
-    description: 'Submitted means funds are reserved; it does not mean funds have been received.',
+    enum: ['submitting', 'submitted', 'processing', 'paid', 'rejected', 'failed'],
+    description: 'Submitting keeps funds reserved while the adapter result is pending; submitted means the request was accepted; paid is a separate saved payout result.',
   },
   AdapterOutcome: {
     type: 'string',
