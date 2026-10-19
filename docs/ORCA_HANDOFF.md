@@ -27,6 +27,8 @@ Catatan ini dibuat pada **20 Oktober 2026, sekitar 00.15 WIB** agar pekerjaan da
 
 BE-10: `worker_done` sukses; commit `3981b5a` sudah ditinjau dan digabung ke `main`, terminal dilepas dan delivery di-ack.
 
+Keputusan koordinasi BE-11 (`msg_5f02a1775a30`, dijawab): gunakan route cart/quote/order dalam `docs/API_CONTRACT.md`. Quote dan order membaca ulang cart, produk aktif/harga integer, dan alamat milik Peternak. Quote stale menghasilkan 409 dengan rincian terbaru untuk ditinjau; tidak membuat order. `Idempotency-Key` mengikat actor dan payload; retry identik mengembalikan order sama, payload berbeda ditolak. Snapshot order dan pengosongan cart atomik. Tanpa provider atau uang nyata.
+
 Gate pending: FE-24 `gate_4f4a203373eb`, FE-26 `gate_a45625245c55`, FE-21 `gate_cd625efb4b2d`. Semua memerlukan bukti perangkat/visual yang belum ada. Opsi emulator yang tercatat pada gate FE-24 sudah tidak berlaku karena instruksi pengguna terbaru melarangnya.
 
 ## Melanjutkan setelah pergantian akun
