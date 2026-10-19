@@ -1,6 +1,6 @@
 # Strategi pengujian VetLink
 
-Status QA per 19 Oktober 2026: tahap aktif memakai frontend lokal tanpa autentikasi/backend jaringan; Pilih Peran membuka persona fiktif. UI FE-06–18 tersedia dan pemeriksaan FE-18 `npm run check` lulus typecheck, lint, serta 103 tes domain/repository. `npm run android` FE-18 berhenti sebelum build karena Android SDK/ADB tidak tersedia. Backend BE-00/01/02/03/04/07 memiliki route executable; mobile belum terhubung ke API. Pemeriksaan Android terdahulu bukan bukti integrasi backend. Interaksi fitur pada perangkat, viewport kecil/font besar, dan pembandingan visual 390 × 844 tetap tertunda; tidak ada pemanggilan Figma MCP baru.
+Status QA per 19 Oktober 2026: tahap aktif memakai frontend lokal tanpa autentikasi/backend jaringan; Pilih Peran membuka persona fiktif. UI FE-06–18 tersedia dan pemeriksaan FE-18 `npm run check` lulus typecheck, lint, serta 103 tes domain/repository. `npm run android` FE-18 berhenti sebelum build karena Android SDK/ADB tidak tersedia. Backend BE-00–08 memiliki route executable; mobile belum terhubung ke API. Pemeriksaan Android terdahulu bukan bukti integrasi backend. Interaksi fitur pada perangkat, viewport kecil/font besar, dan pembandingan visual 390 × 844 tetap tertunda; tidak ada pemanggilan Figma MCP baru.
 
 ## Level pengujian
 
@@ -14,6 +14,19 @@ Status QA per 19 Oktober 2026: tahap aktif memakai frontend lokal tanpa autentik
 | Backend/security/concurrency | Role/owner access, race slot/payout, duplicate callbacks | Pada vertical slice backend terkait |
 
 Framework tes domain/UI dan E2E pada [Tech](TECH.md) belum dipasang. Jalankan script yang benar-benar tersedia dari manifest; backend belum memiliki `npm test`, sehingga pemeriksaan runtime BE-07 memakai `npm run api:smoke` yang memang ada pada manifest.
+
+## Bukti BE-05 (19 Oktober 2026)
+
+Review koordinator setelah laporan worker menambah relasi `farms.visit_address_id` dengan FK komposit owner. Quote kunjungan ke alamat yang belum tertaut pada Farm ditolak; `PATCH /me/farms/{id}` hanya dapat menautkan alamat milik Peternak yang sama. Submit quote mengulang kecocokan Farm/alamat. `npm run check`, migrasi sepuluh file, seed fiktif, dan `npm run api:smoke` lulus pada PostgreSQL 17.4 lokal port 55444; kontainer review dihentikan sesudah pemeriksaan. QA mobile/perangkat tetap terpisah.
+
+Pemeriksaan dijalankan dari `apps/api` pada Node `24.10.0` / npm `11.6.0`; `.nvmrc` meminta Node `24.15.0`. `npm ci --no-audit --no-fund` berhasil dengan peringatan engine. PostgreSQL `17.4-alpine` dijalankan sebagai container uji sementara pada port `55444` dengan data `tmpfs`; sepuluh migrasi dan seed fiktif berhasil, lalu container dihentikan.
+
+- `npm run check` — **Lulus** (`tsc --noEmit` dan `nest build`).
+- `npm run db:migrate` — **Lulus**, termasuk migrasi `20261019_000010_consultation_workflow.sql`.
+- `npm run db:seed` — **Lulus**, fixture Budi/Yuda dipertahankan tanpa menimpa row.
+- `npm run api:smoke` — **Lulus** pada PostgreSQL lokal sementara: quote tarif server/integer IDR dan idempotency key, dua submit pada slot yang sama hanya membuat satu booking, slot menunggu pembayaran tersembunyi dari daftar Dokter, pembayaran `pending` tidak mengaktifkan layanan lalu callback internal lokal `succeeded` mengubahnya menjadi request, dokter belum verified ditolak, accept berulang tidak menggandakan action, dan kegagalan adapter outbox me-rollback perubahan status. Smoke juga memeriksa rejection reason + `refund_needed`, proposal menahan slot serta mengulang pemeriksaan consent/verifikasi/konflik saat Peternak menyetujui, tahap Visit berurutan, catatan final tidak otomatis menyelesaikan layanan, confirmation dan Visit `examining` wajib sebelum complete, riwayat HealthEvent satu kali, dan akses role/assignment. Pemeriksaan BE-03/04/06/07/08 tetap berjalan dalam script yang sama.
+- Semua akun, alamat, booking, quote, payment, action, catatan, event riwayat, pesan dan media uji dibersihkan pada teardown smoke. Pembayaran sukses dipanggil melalui service callback internal lokal untuk uji transisi; tidak ada provider, uang, deployment, atau akses produksi.
+- Tidak ada `npm test` pada manifest dan tidak ada pemeriksaan mobile/Android untuk tiket backend ini. Kebijakan expiry slot, cancellation, refund aktual, komisi komersial, ledger/pencairan BE-15, serta upload lampiran pada tahap booking tetap di luar implementasi ini.
 
 ## Bukti BE-08 (19 Oktober 2026)
 

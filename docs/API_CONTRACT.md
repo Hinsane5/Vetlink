@@ -1,6 +1,6 @@
 # Kontrak integrasi backend v1
 
-Status: OpenAPI executable memuat healthcheck/auth BE-00/01, profil/verifikasi BE-02, ternak/pasien/riwayat BE-03, dan chat/media BE-07. Route domain selain kelompok tersebut tetap kontrak target tiket berikutnya. Aplikasi mobile belum memakai backend jaringan.
+Status: OpenAPI executable memuat route BE-00–08: health/auth, profil/verifikasi, ternak/pasien/riwayat, vet discovery/availability, booking/request/proposal/visit/completion, payment quote/create, chat/media, dan note/recommendation. Domain setelah BE-08 tetap kontrak target tiket berikutnya. Aplikasi mobile belum memakai backend jaringan.
 
 ## Konvensi
 
@@ -10,7 +10,7 @@ Mutasi concurrency-sensitive menerima `expectedVersion`. Mutasi pembayaran, orde
 
 Gunakan action endpoint untuk transisi yang membutuhkan syarat; jangan menyediakan PATCH umum yang membolehkan client mengatur `verified`, `completed`, `paid`, `balance`, atau `finalizedAt`.
 
-## OpenAPI executable BE-00/01/07
+## OpenAPI executable BE-00–08
 
 NestJS melayani Swagger UI di `/docs` dan JSON di `/openapi.json`. Endpoint runtime yang tersedia:
 
@@ -131,7 +131,7 @@ BE-07 memakai adapter filesystem privat lokal di luar static web root dan adapte
 | Booking | POST `/consultation-quotes`, `/consultations`; GET `/consultations`, `/consultations/{id}` | Peternak owner, doctor assigned; fee dari server |
 | Request | POST `/consultations/{id}/accept`, `/reject`, `/schedule-proposals` | Dokter assigned verified untuk accept; reject reason wajib |
 | Reschedule | POST `/consultations/{id}/schedule-proposals/{proposalId}/respond` | Peternak owner; accepted/rejected + version |
-| Mulai/selesai | POST `/consultations/{id}/start`, `/complete`, `/cancel` | Explicit role/state guard; complete butuh note final dan confirmation |
+| Mulai/selesai | POST `/consultations/{id}/start`, `/complete` | Dokter assigned; complete butuh catatan final dan confirmation. Cancellation menunggu kebijakan produk |
 | Kunjungan | GET `/consultations/{id}/visit`; POST `.../visit/depart`, `/arrive`, `/start-examination` | Dokter assigned, stage berurutan; complete melalui complete consultation |
 | Chat | GET/POST `/consultations/{id}/messages`; GET `/attachments/{id}` | Kedua pihak; clientMessageId idempotent; private media |
 | Media | POST `/attachments/uploads`; POST `/attachments/{id}/commit` | Type/size/ownership check; URL/storageKey, bukan base64 video JSON |
@@ -150,6 +150,24 @@ BE-07 memakai adapter filesystem privat lokal di luar static web root dan adapte
 | Notifikasi | GET `/me/notifications`; POST `.../{id}/read`; GET/PATCH `/me/preferences` | Recipient/owner |
 
 Tooling admin review, catalog management dan provider callbacks adalah internal backend/operasional berikutnya, bukan fitur mobile dokter atau toko dokter. Integrasi callbacks nyata diblokir sampai provider/security contract tersedia.
+
+### BE-05 executable contract
+
+Semua route booking memerlukan bearer dan active role membership. Quote dan booking hanya Peternak; detail/list dibatasi ke farmer owner atau dokter assigned, dan dokter tidak menerima status `draft`/`awaiting_payment`. Ganti active role tidak mengubah predicate owner/assignment yang dipakai service.
+
+`POST /consultation-quotes` menerima `vetId`, `animalId`, `serviceType`, `startsAt`, `complaint`, serta `addressId` wajib untuk `visit`. `Idempotency-Key` 8–128 karakter mengulang quote yang sama; payload berbeda memakai key yang sama mendapat 409. Server memvalidasi ownership ternak/alamat, alamat kunjungan yang tertaut pada Farm ternak (`PATCH /me/farms/{id}` menerima `visitAddressId` milik akun), status verified, layanan, accepting flag, tarif integer rupiah aktif, timezone, slot masa depan dan konflik interval. Durasi/akhir slot dihitung server. Quote disimpan sebagai snapshot tetapi belum mereservasi slot; submit mengulang validasi Farm/alamat dan jadwal.
+
+`POST /consultations` menerima `quoteId` dan `Idempotency-Key`. Satu transaksi mengunci quote dan advisory lock dokter, memeriksa ulang slot terhadap konsultasi, proposal, dan blocked time aktif, membuat konsultasi `awaiting_payment`, mengonsumsi quote, menyimpan audit, dan menandai operation idempoten. Booking yang berhasil menahan slot sampai statusnya berubah; kebijakan expiry hold tetap terbuka. Tarif pada quote dan konsultasi tetap integer rupiah. Karena DEC-13 belum menetapkan komisi, BE-05 lokal menyimpan `commission_snapshot_idr=0`; ini bukan kebijakan tarif produksi.
+
+Saat hasil `PaymentService` menjadi `succeeded`, `ConsultationPaymentSucceededPort` dipanggil dalam transaksi pembayaran yang sama. Hanya pembayaran dengan owner, payable dan amount yang cocok mengubah `awaiting_payment → requested`; pending/failed tidak mengaktifkan request. Callback tetap internal, tanpa route publik. Accept memerlukan Dokter assigned dan verified, request `requested`, payment succeeded sesuai snapshot, versi terkini, slot future yang masih sesuai availability, serta tidak ada overlap. Advisory lock per Dokter mencegah dua mutation menerima slot yang sama; Visit dibuat satu kali bila service `visit`.
+
+Reject hanya berlaku untuk request `requested` dan memerlukan `reason` 1–500 karakter setelah trim. Jika pembayaran sudah sukses, respons menyimpan `refundStatus=refund_needed`; uang tidak diklaim sudah kembali. Dokter verified dapat membuat satu proposal pending dari status `requested`/`scheduled`; jadwal lama tetap dipakai dan slot proposal ikut ditahan. Peternak harus mengirim `decision=accept|decline`, `expectedVersion`, dan `consent`. Accept mensyaratkan `consent=true`, payment dan verifikasi aktif, serta menjalankan ulang cek slot/konflik saat transaksi; decline mengembalikan status sebelumnya. Kedua keputusan menggunakan proposal pending dan version guard yang sama.
+
+`POST /consultations/{id}/start` hanya memulai chat dari `scheduled`. Untuk Visit, `depart`, `arrive`, dan `start-examination` hanya menerima urutan `scheduled → en_route → arrived → examining`; payload menyertakan `expectedVersion` dan `expectedVisitVersion`. `en_route`/`arrived` mempertahankan status Consultation `scheduled`; mulai pemeriksaan mengubahnya menjadi `in_progress`.
+
+`POST /consultations/{id}/complete` menerima `confirmation=true`, `expectedVersion`, `Idempotency-Key`, dan `expectedVisitVersion` untuk Visit. Server menolak jika Dokter tidak assigned/verified, payment tidak cocok, layanan belum `in_progress`, catatan belum final, atau Visit belum `examining`. Penyelesaian Consultation dan Visit, audit action, serta completion time ditulis dalam satu transaksi. Finalisasi catatan tetap tidak mengubah status layanan; note final membuat satu `HealthEvent` yang dapat dibaca pemilik ternak dan dokter assigned. Earnings/ledger menunggu BE-15.
+
+Semua mutasi BE-05 menggunakan `expectedVersion` dan idempotency key; replay payload sama mengembalikan hasil tersimpan, payload berbeda mendapat 409. `PostgresConsultationActionAdapter` menyimpan audit/outbox lokal sebagai append-only dalam transaksi; hasil adapter `failed`/`pending` menjadi 503 dan rollback, sehingga status tidak sukses sebelum action tersimpan. Adapter ini tidak mengirim notifikasi. Route cancel belum diaktifkan karena aturan pembatalan/refund pada DEC-17 masih terbuka; attachment upload sebelum request juga belum menjadi bagian payload quote/create.
 
 ### BE-08 executable contract
 
@@ -191,4 +209,4 @@ Payload event minimal: eventId, aggregateId, actorId, occurredAt, version. Efek 
 
 Jalankan suite yang sama terhadap repository lokal dan API: scope ownership, verified guard, slot conflicts, final-note immutability, complete guard, sequence visit, computed totals, earning once, withdrawal reservation/retry, notification recipient. Perbedaan teknis error harus dinormalisasi ke domain error yang sama.
 
-OpenAPI executable BE-00/01/02/03/04/07 memuat healthcheck, auth, profil/verifikasi, livestock/patient, vet discovery/availability/slots/blocked-times/schedule, chat, dan media. Domain endpoint yang tersisa pada tabel masih usulan. Request/response serta validation constraints untuk tiap domain tetap harus diturunkan dari Data model dan direview bersama mobile sebelum implementasi.
+OpenAPI executable BE-00–08 memuat healthcheck, auth, profil/verifikasi, livestock/patient, vet discovery/availability/slots/blocked-times/schedule, booking/request/proposal/visit/completion, payment quote/create, chat/media, serta note/recommendation. Domain endpoint yang tersisa pada tabel masih usulan. Request/response serta validation constraints untuk tiap domain tetap harus diturunkan dari Data model dan direview bersama mobile sebelum implementasi.

@@ -117,6 +117,9 @@ export class VetService {
     SELECT slot_start AS "startsAt",slot_start+make_interval(mins=>duration) AS "endsAt"
     FROM slots WHERE slot_start>now() AND NOT EXISTS(SELECT 1 FROM consultations c WHERE c.vet_id=$1 AND c.status IN ${ACTIVE}
       AND tstzrange(c.starts_at,c.ends_at,'[)') && tstzrange(slot_start,slot_start+make_interval(mins=>duration),'[)'))
+      AND NOT EXISTS(SELECT 1 FROM consultation_schedule_proposals p JOIN consultations c ON c.id=p.consultation_id
+        WHERE c.vet_id=$1 AND p.status='pending'
+        AND tstzrange(p.starts_at,p.ends_at,'[)') && tstzrange(slot_start,slot_start+make_interval(mins=>duration),'[)'))
       AND NOT EXISTS(SELECT 1 FROM vet_blocked_times b WHERE b.vet_id=$1 AND b.status='active'
       AND tstzrange(b.starts_at,b.ends_at,'[)') && tstzrange(slot_start,slot_start+make_interval(mins=>duration),'[)'))
     ORDER BY slot_start`,[id,q.service,q.dateFrom,q.dateTo]);
@@ -134,7 +137,9 @@ export class VetService {
     LEFT JOIN LATERAL (SELECT jsonb_object_agg(service_type,fee_idr) fees FROM (SELECT DISTINCT ON(service_type) service_type,fee_idr FROM vet_service_rates WHERE vet_id=a.vet_id AND effective_at<=now() ORDER BY service_type,effective_at DESC) x) rates ON true WHERE a.vet_id=$1`,[id])).rows[0];}
   private async lockVet(c:PoolClient,id:string){await c.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[id]);}
   private async assertNoOverlap(c:PoolClient,id:string,start:Date,end:Date,exceptId?:string){const r=await c.query(`SELECT 1 FROM vet_blocked_times WHERE vet_id=$1 AND status='active' AND id<>COALESCE($4::uuid,'00000000-0000-0000-0000-000000000000') AND starts_at<$3 AND ends_at>$2
-    UNION ALL SELECT 1 FROM consultations WHERE vet_id=$1 AND status IN ${ACTIVE} AND starts_at<$3 AND ends_at>$2 LIMIT 1`,[id,start.toISOString(),end.toISOString(),exceptId??null]);if(r.rowCount)throw new ConflictException({code:'CONFLICT',message:'Interval berbenturan dengan blokir atau layanan yang masih aktif.'});}
+    UNION ALL SELECT 1 FROM consultations WHERE vet_id=$1 AND status IN ${ACTIVE} AND starts_at<$3 AND ends_at>$2
+    UNION ALL SELECT 1 FROM consultation_schedule_proposals p JOIN consultations c ON c.id=p.consultation_id
+      WHERE c.vet_id=$1 AND p.status='pending' AND c.id<>COALESCE($4::uuid,'00000000-0000-0000-0000-000000000000') AND p.starts_at<$3 AND p.ends_at>$2 LIMIT 1`,[id,start.toISOString(),end.toISOString(),exceptId??null]);if(r.rowCount)throw new ConflictException({code:'CONFLICT',message:'Interval berbenturan dengan blokir, proposal, atau layanan yang masih aktif.'});}
   private validateAvailability(x:VetAvailabilityDto){
     try{new Intl.DateTimeFormat('en',{timeZone:x.timezone});}catch{throw new UnprocessableEntityException({code:'VALIDATION_FAILED',message:'Timezone IANA tidak valid.'});}
     if(new Set(x.services).size!==x.services.length||new Set(x.weekdayRules.map(r=>r.weekday)).size!==x.weekdayRules.length)throw new UnprocessableEntityException({code:'VALIDATION_FAILED',message:'Layanan dan aturan weekday tidak boleh duplikat.'});

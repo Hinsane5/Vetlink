@@ -8,6 +8,9 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { join, resolve } from 'node:path';
 import { Pool } from 'pg';
 import { DatabaseService } from '../dist/database/database.service.js';
+import { adapterFailed } from '../dist/communication/adapter-result.js';
+import { PostgresConsultationActionAdapter } from '../dist/consultation/consultation-action.adapter.js';
+import { ConsultationService } from '../dist/consultation/consultation.service.js';
 import { LocalPaymentService } from '../dist/payment/payment.adapter.js';
 import { PaymentsService } from '../dist/payment/payment.service.js';
 
@@ -156,6 +159,13 @@ try {
   assert.ok(openApi.paths['/v1/vets/{id}/slots']?.get);
   assert.ok(openApi.paths['/v1/me/vet/availability']?.put);
   assert.ok(openApi.paths['/v1/me/vet/blocked-times']?.post);
+  assert.ok(openApi.paths['/v1/consultation-quotes']?.post);
+  assert.ok(openApi.paths['/v1/consultations']?.post);
+  assert.ok(openApi.paths['/v1/consultations']?.get);
+  assert.ok(openApi.paths['/v1/consultations/{consultationId}/accept']?.post);
+  assert.ok(openApi.paths['/v1/consultations/{consultationId}/schedule-proposals/{proposalId}/respond']?.post);
+  assert.ok(openApi.paths['/v1/consultations/{consultationId}/visit/depart']?.post);
+  assert.ok(openApi.paths['/v1/consultations/{consultationId}/complete']?.post);
   assert.ok(openApi.paths['/v1/attachments/uploads']?.post);
   assert.ok(openApi.paths['/v1/attachments/{id}/commit']?.post);
   assert.ok(openApi.paths['/v1/attachments/{id}/content']?.get);
@@ -217,6 +227,12 @@ try {
       ssl: process.env.DATABASE_SSL === 'true',
     });
     const actors = [];
+    const consultationIds = [];
+    const quoteIds = [];
+    const addressIds = [];
+    const localDb = new DatabaseService();
+    const workflow = new ConsultationService(localDb, new PostgresConsultationActionAdapter());
+    const localPayment = new PaymentsService(localDb, new LocalPaymentService(), workflow);
     let consultationId;
     let unpaidConsultationId;
     let failedStorageServer;
@@ -272,6 +288,7 @@ try {
       const farmId = randomUUID();
       const animalId = randomUUID();
       consultationId = randomUUID();
+      consultationIds.push(consultationId);
       await database.query(
         `INSERT INTO farms (id, owner_id, name, species, timezone)
          VALUES ($1, $2, 'Farm Fiktif BE-07', ARRAY['sapi'], 'Asia/Jakarta')`,
@@ -282,6 +299,266 @@ try {
          VALUES ($1, $2, $3, 'BE07-001', 'Ternak Fiktif BE-07', 'sapi', 'female')`,
         [animalId, farmer.user.id, farmId],
       );
+
+      const addQuote = async (startsAt, serviceType, complaint, addressId, key = `be05-quote-${randomUUID()}`) => {
+        const body = { vetId: vet.user.id, animalId, serviceType, startsAt, complaint, ...(addressId ? { addressId } : {}) };
+        const response = await sendJson(healthy.baseUrl, '/v1/consultation-quotes', farmer.accessToken, 'POST', body, { 'idempotency-key': key });
+        assert.equal(response.status, 201, await response.clone().text());
+        const quote = await response.json();
+        quoteIds.push(quote.id);
+        return { body, key, quote };
+      };
+      const submitQuote = async (quote, key = `be05-booking-${randomUUID()}`) => {
+        const response = await sendJson(healthy.baseUrl, '/v1/consultations', farmer.accessToken, 'POST', { quoteId: quote.id }, { 'idempotency-key': key });
+        return { response, key, quote };
+      };
+      const markPaid = async (id, amountIdr) => {
+        const paymentResponse = await sendJson(healthy.baseUrl, '/v1/payments', farmer.accessToken, 'POST',
+          { payableType: 'consultation', payableId: id, method: 'bank_transfer' }, { 'idempotency-key': `be05-payment-${randomUUID()}` });
+        assert.equal(paymentResponse.status, 201, await paymentResponse.clone().text());
+        const payment = await paymentResponse.json();
+        assert.equal(payment.status, 'pending');
+        assert.equal(payment.amountIdr, amountIdr);
+        await localPayment.localCallback({
+          paymentId: payment.id,
+          attemptId: payment.attempt.id,
+          reference: payment.attempt.reference,
+          amountIdr: String(amountIdr),
+          eventId: `be05-success-${randomUUID()}`,
+          outcome: 'succeeded',
+        });
+      };
+      const getConsultation = async (id, token = farmer.accessToken) => {
+        const response = await sendJson(healthy.baseUrl, `/v1/consultations/${id}`, token, 'GET');
+        assert.equal(response.status, 200, await response.clone().text());
+        return response.json();
+      };
+
+      const chatStart = new Date(`${localDate}T06:00:00+07:00`).toISOString();
+      const chatQuoteKey = `be05-quote-${randomUUID()}`;
+      const chatQuoteA = await addQuote(chatStart, 'chat', 'Keluhan fiktif untuk booking A', undefined, chatQuoteKey);
+      const quoteReplay = await sendJson(healthy.baseUrl, '/v1/consultation-quotes', farmer.accessToken, 'POST', chatQuoteA.body, { 'idempotency-key': chatQuoteA.key });
+      assert.equal(quoteReplay.status, 201);
+      assert.equal((await quoteReplay.json()).id, chatQuoteA.quote.id);
+      const quoteFingerprintConflict = await sendJson(healthy.baseUrl, '/v1/consultation-quotes', farmer.accessToken, 'POST',
+        { ...chatQuoteA.body, complaint: 'Keluhan berbeda' }, { 'idempotency-key': chatQuoteA.key });
+      assert.equal(quoteFingerprintConflict.status, 409);
+      const chatQuoteB = await addQuote(chatStart, 'chat', 'Keluhan fiktif untuk booking B');
+      assert.equal(chatQuoteA.quote.feeIdr, 125000);
+      assert.equal(chatQuoteA.quote.currency, 'IDR');
+      assert.equal(chatQuoteA.quote.commissionIdr, 0);
+      const parallelBookings = await Promise.all([
+        submitQuote(chatQuoteA.quote, `be05-create-${randomUUID()}`),
+        submitQuote(chatQuoteB.quote, `be05-create-${randomUUID()}`),
+      ]);
+      assert.deepEqual(parallelBookings.map(({ response }) => response.status).sort(), [201, 409]);
+      const winningBooking = parallelBookings.find(({ response }) => response.status === 201);
+      const bookingResult = await winningBooking.response.json();
+      const chatConsultationId = bookingResult.consultation.id;
+      consultationIds.push(chatConsultationId);
+      assert.equal(bookingResult.consultation.status, 'awaiting_payment');
+      assert.equal(bookingResult.consultation.feeIdr, '125000');
+      const bookingReplay = await sendJson(healthy.baseUrl, '/v1/consultations', farmer.accessToken, 'POST',
+        { quoteId: winningBooking.quote.id }, { 'idempotency-key': winningBooking.key });
+      assert.equal(bookingReplay.status, 201);
+      assert.equal((await bookingReplay.json()).consultation.id, chatConsultationId);
+      const unpaidVetList = await sendJson(healthy.baseUrl, '/v1/consultations', vet.accessToken, 'GET');
+      assert.equal(unpaidVetList.status, 200);
+      assert.ok(!(await unpaidVetList.json()).some((item) => item.id === chatConsultationId));
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/consultations/${chatConsultationId}`, outsider.accessToken, 'GET')).status, 404);
+      await markPaid(chatConsultationId, 125000);
+      assert.equal((await getConsultation(chatConsultationId)).status, 'requested');
+
+      const vetPrincipal = { userId: vet.user.id, email: 'dokter-fiktif@example.invalid', fullName: 'Dokter Fiktif', roles: ['vet'], activeRole: 'vet', sessionId: randomUUID() };
+      const failedActionAdapter = new ConsultationService(localDb, {
+        record: async () => adapterFailed('LOCAL_OUTBOX_FAILED', 'Perubahan layanan belum tersimpan.', true),
+      });
+      const failedAcceptKey = `be05-event-fail-${randomUUID()}`;
+      await assert.rejects(
+        failedActionAdapter.accept(vetPrincipal, chatConsultationId, failedAcceptKey, { expectedVersion: 2 }),
+        (error) => error?.getStatus?.() === 503,
+      );
+      assert.equal((await getConsultation(chatConsultationId)).status, 'requested');
+      const acceptKey = `be05-accept-${randomUUID()}`;
+      const acceptedPair = await Promise.all([
+        sendJson(healthy.baseUrl, `/v1/consultations/${chatConsultationId}/accept`, vet.accessToken, 'POST', { expectedVersion: 2 }, { 'idempotency-key': acceptKey }),
+        sendJson(healthy.baseUrl, `/v1/consultations/${chatConsultationId}/accept`, vet.accessToken, 'POST', { expectedVersion: 2 }, { 'idempotency-key': acceptKey }),
+      ]);
+      assert.deepEqual(acceptedPair.map((response) => response.status), [200, 200]);
+      const acceptedBodies = await Promise.all(acceptedPair.map((response) => response.json()));
+      assert.equal(acceptedBodies[0].operationId, acceptedBodies[1].operationId);
+      assert.equal(acceptedBodies.filter((body) => body.replayed).length, 1);
+      assert.equal(acceptedBodies[0].consultation.status, 'scheduled');
+      const startChat = await sendJson(healthy.baseUrl, `/v1/consultations/${chatConsultationId}/start`, vet.accessToken, 'POST',
+        { expectedVersion: 3 }, { 'idempotency-key': `be05-start-${randomUUID()}` });
+      assert.equal(startChat.status, 200, await startChat.clone().text());
+      assert.equal((await startChat.json()).consultation.status, 'in_progress');
+
+      const proposalStart = new Date(`${localDate}T08:00:00+07:00`).toISOString();
+      const proposalBooking = await addQuote(proposalStart, 'chat', 'Keluhan jadwal proposal fiktif');
+      const proposalCreate = await submitQuote(proposalBooking.quote);
+      assert.equal(proposalCreate.response.status, 201);
+      const proposalConsultationId = (await proposalCreate.response.json()).consultation.id;
+      consultationIds.push(proposalConsultationId);
+      await markPaid(proposalConsultationId, 125000);
+      let proposalConsultation = await getConsultation(proposalConsultationId);
+      const proposalAccept = await sendJson(healthy.baseUrl, `/v1/consultations/${proposalConsultationId}/accept`, vet.accessToken, 'POST',
+        { expectedVersion: proposalConsultation.version }, { 'idempotency-key': `be05-accept-${randomUUID()}` });
+      assert.equal(proposalAccept.status, 200);
+      proposalConsultation = (await proposalAccept.json()).consultation;
+      const proposalStartAt = new Date(`${localDate}T09:00:00+07:00`).toISOString();
+      const scheduleProposal = await sendJson(healthy.baseUrl, `/v1/consultations/${proposalConsultationId}/schedule-proposals`, vet.accessToken, 'POST',
+        { expectedVersion: proposalConsultation.version, startsAt: proposalStartAt }, { 'idempotency-key': `be05-propose-${randomUUID()}` });
+      assert.equal(scheduleProposal.status, 200, await scheduleProposal.clone().text());
+      const proposalResult = await scheduleProposal.json();
+      assert.equal(proposalResult.consultation.status, 'reschedule_pending');
+      const overlappingQuote = await sendJson(healthy.baseUrl, '/v1/consultation-quotes', farmer.accessToken, 'POST',
+        { vetId: vet.user.id, animalId, serviceType: 'chat', startsAt: proposalStartAt, complaint: 'Slot proposal terpakai' },
+        { 'idempotency-key': `be05-overlap-${randomUUID()}` });
+      assert.equal(overlappingQuote.status, 409);
+      const proposalResponsePath = `/v1/consultations/${proposalConsultationId}/schedule-proposals/${proposalResult.proposalId}/respond`;
+      const missingConsent = await sendJson(healthy.baseUrl, proposalResponsePath, farmer.accessToken, 'POST',
+        { expectedVersion: proposalResult.consultation.version, decision: 'accept', consent: false }, { 'idempotency-key': `be05-consent-${randomUUID()}` });
+      assert.equal(missingConsent.status, 422);
+      await database.query("UPDATE vet_profiles SET verification_status='pending' WHERE user_id=$1", [vet.user.id]);
+      const staleVerification = await sendJson(healthy.baseUrl, proposalResponsePath, farmer.accessToken, 'POST',
+        { expectedVersion: proposalResult.consultation.version, decision: 'accept', consent: true }, { 'idempotency-key': `be05-verify-${randomUUID()}` });
+      assert.equal(staleVerification.status, 403);
+      await database.query("UPDATE vet_profiles SET verification_status='verified' WHERE user_id=$1", [vet.user.id]);
+      await database.query("INSERT INTO vet_blocked_times(vet_id,starts_at,ends_at,reason) VALUES($1,$2,$3,'Blokir uji fiktif')",
+        [vet.user.id, proposalStartAt, new Date(Date.parse(proposalStartAt) + 60 * 60_000).toISOString()]);
+      const staleSlot = await sendJson(healthy.baseUrl, proposalResponsePath, farmer.accessToken, 'POST',
+        { expectedVersion: proposalResult.consultation.version, decision: 'accept', consent: true }, { 'idempotency-key': `be05-slot-${randomUUID()}` });
+      assert.equal(staleSlot.status, 409);
+      await database.query("DELETE FROM vet_blocked_times WHERE vet_id=$1 AND reason='Blokir uji fiktif'", [vet.user.id]);
+      const acceptProposal = await sendJson(healthy.baseUrl, proposalResponsePath, farmer.accessToken, 'POST',
+        { expectedVersion: proposalResult.consultation.version, decision: 'accept', consent: true }, { 'idempotency-key': `be05-consent-${randomUUID()}` });
+      assert.equal(acceptProposal.status, 200, await acceptProposal.clone().text());
+      const acceptedProposal = await acceptProposal.json();
+      assert.equal(acceptedProposal.consultation.status, 'scheduled');
+      assert.equal(new Date(acceptedProposal.consultation.startsAt).toISOString(), proposalStartAt);
+
+      const rejectStart = new Date(`${localDate}T10:00:00+07:00`).toISOString();
+      const rejectQuote = await addQuote(rejectStart, 'chat', 'Keluhan untuk penolakan fiktif');
+      const rejectBooking = await submitQuote(rejectQuote.quote);
+      assert.equal(rejectBooking.response.status, 201);
+      const rejectConsultationId = (await rejectBooking.response.json()).consultation.id;
+      consultationIds.push(rejectConsultationId);
+      await markPaid(rejectConsultationId, 125000);
+      const rejectContext = await getConsultation(rejectConsultationId);
+      const missingReason = await sendJson(healthy.baseUrl, `/v1/consultations/${rejectConsultationId}/reject`, vet.accessToken, 'POST',
+        { expectedVersion: rejectContext.version, reason: '   ' }, { 'idempotency-key': `be05-reject-${randomUUID()}` });
+      assert.equal(missingReason.status, 400);
+      const rejectedResponse = await sendJson(healthy.baseUrl, `/v1/consultations/${rejectConsultationId}/reject`, vet.accessToken, 'POST',
+        { expectedVersion: rejectContext.version, reason: 'Jadwal dokter berubah; silakan pilih dokter lain.' }, { 'idempotency-key': `be05-reject-${randomUUID()}` });
+      assert.equal(rejectedResponse.status, 200);
+      const rejectedConsultation = (await rejectedResponse.json()).consultation;
+      assert.equal(rejectedConsultation.status, 'rejected');
+      assert.equal(rejectedConsultation.refundStatus, 'refund_needed');
+      assert.equal(rejectedConsultation.rejectionReason, 'Jadwal dokter berubah; silakan pilih dokter lain.');
+
+      const unverifiedConsultationId = randomUUID();
+      consultationIds.push(unverifiedConsultationId);
+      const unverifiedStart = new Date(`${localDate}T17:00:00+07:00`).toISOString();
+      await database.query(
+        `INSERT INTO consultations(id,display_code,farmer_id,vet_id,animal_id,service_type,complaint,status,starts_at,ends_at,fee_snapshot_idr,commission_snapshot_idr)
+         VALUES($1,$2,$3,$4,$5,'chat','Request fiktif untuk guard verifikasi','requested',$6,$7,1000,0)`,
+        [unverifiedConsultationId, `BE05-${unverifiedConsultationId}`, farmer.user.id, unverifiedVet.user.id, animalId, unverifiedStart, new Date(Date.parse(unverifiedStart) + 60 * 60_000).toISOString()],
+      );
+      await database.query("INSERT INTO payments(owner_id,payable_type,payable_id,method,amount_idr,status,operation_key) VALUES($1,'consultation',$2,'local-test',1000,'succeeded',$3)",
+        [farmer.user.id, unverifiedConsultationId, `be05-unverified-${unverifiedConsultationId}`]);
+      const unverifiedAccept = await sendJson(healthy.baseUrl, `/v1/consultations/${unverifiedConsultationId}/accept`, unverifiedVet.accessToken, 'POST',
+        { expectedVersion: 1 }, { 'idempotency-key': `be05-unverified-${randomUUID()}` });
+      assert.equal(unverifiedAccept.status, 403);
+      assert.equal((await database.query('SELECT status FROM consultations WHERE id=$1', [unverifiedConsultationId])).rows[0].status, 'requested');
+
+      await database.query("INSERT INTO role_memberships(user_id,role) VALUES($1,'vet') ON CONFLICT DO NOTHING", [outsider.user.id]);
+      await database.query("INSERT INTO vet_profiles(user_id,verification_status) VALUES($1,'pending') ON CONFLICT DO NOTHING", [outsider.user.id]);
+      const dualRoleLogin = await fetch(`${healthy.baseUrl}/v1/auth/login`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: outsider.user.email, password: 'smoke-only-password-not-secret', activeRole: 'vet' }),
+      });
+      assert.equal(dualRoleLogin.status, 200);
+      const dualRole = await dualRoleLogin.json();
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/consultations/${chatConsultationId}`, dualRole.accessToken, 'GET')).status, 404);
+
+      const visitAddressResponse = await sendJson(healthy.baseUrl, '/v1/me/addresses', farmer.accessToken, 'POST', {
+        label: 'Kandang Fiktif', recipientName: 'Peternak Fiktif', phone: '080000000000',
+        addressLine: 'Jalan Contoh Tanpa Nomor', city: 'Bogor', province: 'Jawa Barat', postalCode: '16111',
+      });
+      assert.equal(visitAddressResponse.status, 201);
+      const visitAddress = await visitAddressResponse.json();
+      addressIds.push(visitAddress.id);
+      const visitStart = new Date(`${localDate}T15:00:00+07:00`).toISOString();
+      const unlinkedVisitQuote = await sendJson(healthy.baseUrl, '/v1/consultation-quotes', farmer.accessToken, 'POST',
+        { vetId: vet.user.id, animalId, serviceType: 'visit', startsAt: visitStart, complaint: 'Alamat belum tertaut', addressId: visitAddress.id },
+        { 'idempotency-key': `be05-unlinked-${randomUUID()}` });
+      assert.equal(unlinkedVisitQuote.status, 400);
+      const linkedFarm = await sendJson(healthy.baseUrl, `/v1/me/farms/${farmId}`, farmer.accessToken, 'PATCH',
+        { name: 'Farm Fiktif BE-07', expectedVersion: 1, visitAddressId: visitAddress.id });
+      assert.equal(linkedFarm.status, 200, await linkedFarm.clone().text());
+      assert.equal((await linkedFarm.json()).visit_address_id, visitAddress.id);
+      const visitQuote = await addQuote(visitStart, 'visit', 'Pemeriksaan ternak fiktif', visitAddress.id);
+      assert.equal(visitQuote.quote.visitAddressSnapshot.addressLine, 'Jalan Contoh Tanpa Nomor');
+      const visitBooking = await submitQuote(visitQuote.quote);
+      assert.equal(visitBooking.response.status, 201);
+      const visitConsultationId = (await visitBooking.response.json()).consultation.id;
+      consultationIds.push(visitConsultationId);
+      await markPaid(visitConsultationId, 400000);
+      let visitConsultation = await getConsultation(visitConsultationId);
+      assert.equal(visitConsultation.status, 'requested');
+      const visitAccept = await sendJson(healthy.baseUrl, `/v1/consultations/${visitConsultationId}/accept`, vet.accessToken, 'POST',
+        { expectedVersion: visitConsultation.version }, { 'idempotency-key': `be05-accept-${randomUUID()}` });
+      assert.equal(visitAccept.status, 200);
+      visitConsultation = (await visitAccept.json()).consultation;
+      assert.equal(visitConsultation.visitStage, 'scheduled');
+      const outOfOrderArrive = await sendJson(healthy.baseUrl, `/v1/consultations/${visitConsultationId}/visit/arrive`, vet.accessToken, 'POST',
+        { expectedVersion: visitConsultation.version, expectedVisitVersion: visitConsultation.visitVersion }, { 'idempotency-key': `be05-arrive-${randomUUID()}` });
+      assert.equal(outOfOrderArrive.status, 409);
+      const depart = await sendJson(healthy.baseUrl, `/v1/consultations/${visitConsultationId}/visit/depart`, vet.accessToken, 'POST',
+        { expectedVersion: visitConsultation.version, expectedVisitVersion: visitConsultation.visitVersion }, { 'idempotency-key': `be05-depart-${randomUUID()}` });
+      assert.equal(depart.status, 200, await depart.clone().text());
+      const departed = await depart.json();
+      assert.equal(departed.visit.stage, 'en_route');
+      const arrive = await sendJson(healthy.baseUrl, `/v1/consultations/${visitConsultationId}/visit/arrive`, vet.accessToken, 'POST',
+        { expectedVersion: departed.consultation.version, expectedVisitVersion: departed.visit.version }, { 'idempotency-key': `be05-arrive-${randomUUID()}` });
+      assert.equal(arrive.status, 200);
+      const arrived = await arrive.json();
+      assert.equal(arrived.visit.stage, 'arrived');
+      const examination = await sendJson(healthy.baseUrl, `/v1/consultations/${visitConsultationId}/visit/start-examination`, vet.accessToken, 'POST',
+        { expectedVersion: arrived.consultation.version, expectedVisitVersion: arrived.visit.version }, { 'idempotency-key': `be05-exam-${randomUUID()}` });
+      assert.equal(examination.status, 200);
+      const examining = await examination.json();
+      assert.equal(examining.consultation.status, 'in_progress');
+      assert.equal(examining.visit.stage, 'examining');
+      const missingFinalNote = await sendJson(healthy.baseUrl, `/v1/consultations/${visitConsultationId}/complete`, vet.accessToken, 'POST',
+        { expectedVersion: examining.consultation.version, expectedVisitVersion: examining.visit.version, confirmation: true }, { 'idempotency-key': `be05-no-note-${randomUUID()}` });
+      assert.equal(missingFinalNote.status, 422);
+      const notePathVisit = `/v1/consultations/${visitConsultationId}/note`;
+      const finalDraft = await sendJson(healthy.baseUrl, notePathVisit, vet.accessToken, 'PUT', {
+        expectedVersion: 1, complaint: 'Perubahan perilaku fiktif', findings: 'Temuan pemeriksaan fiktif',
+        assessment: 'Penilaian klinis fiktif', actions: 'Tindakan pemeriksaan fiktif', careInstructions: 'Instruksi perawatan fiktif tanpa dosis',
+      });
+      assert.equal(finalDraft.status, 200);
+      const finalize = await sendJson(healthy.baseUrl, `${notePathVisit}/finalize`, vet.accessToken, 'POST', { expectedVersion: 1 });
+      assert.equal(finalize.status, 201);
+      assert.equal((await getConsultation(visitConsultationId)).status, 'in_progress');
+      const timelineAfterFinal = await sendJson(healthy.baseUrl, `/v1/livestock/${animalId}/health-events`, farmer.accessToken, 'GET');
+      assert.equal(timelineAfterFinal.status, 200);
+      assert.ok((await timelineAfterFinal.json()).some((event) => event.description === 'Penilaian klinis fiktif'));
+      const unconfirmedComplete = await sendJson(healthy.baseUrl, `/v1/consultations/${visitConsultationId}/complete`, vet.accessToken, 'POST',
+        { expectedVersion: examining.consultation.version, expectedVisitVersion: examining.visit.version, confirmation: false }, { 'idempotency-key': `be05-complete-${randomUUID()}` });
+      assert.equal(unconfirmedComplete.status, 422);
+      const completedVisitResponse = await sendJson(healthy.baseUrl, `/v1/consultations/${visitConsultationId}/complete`, vet.accessToken, 'POST',
+        { expectedVersion: examining.consultation.version, expectedVisitVersion: examining.visit.version, confirmation: true }, { 'idempotency-key': `be05-complete-${randomUUID()}` });
+      assert.equal(completedVisitResponse.status, 200, await completedVisitResponse.clone().text());
+      const completedVisit = (await completedVisitResponse.json()).consultation;
+      assert.equal(completedVisit.status, 'completed');
+      assert.equal(completedVisit.visitStage, 'completed');
+      assert.equal(completedVisit.completionAt != null, true);
+      const history = await sendJson(healthy.baseUrl, '/v1/consultations?status=completed', farmer.accessToken, 'GET');
+      assert.equal(history.status, 200);
+      assert.ok((await history.json()).some((item) => item.id === visitConsultationId));
       await database.query(
         `INSERT INTO consultations
            (id, display_code, farmer_id, vet_id, animal_id, service_type, complaint, status,
@@ -302,7 +579,6 @@ try {
       const updatedAvailability=await sendJson(healthy.baseUrl,'/v1/me/vet/availability',vet.accessToken,'PUT',{...availBody,expectedVersion:Number(availabilityResult.value.version),acceptingNewRequests:false});
       assert.equal(updatedAvailability.status,200,await updatedAvailability.clone().text());
       assert.equal(Number((await database.query('SELECT count(*)::int AS count FROM consultations WHERE vet_id=$1',[vet.user.id])).rows[0].count),Number(vetProfileBefore.rows[0].count));
-
       const createdAnimalResponse = await sendJson(healthy.baseUrl, '/v1/livestock', farmer.accessToken, 'POST', {
         farmId, displayCode: 'new-001', name: 'Anak Fiktif', species: 'sapi', sex: 'unknown', estimatedAgeMonths: 2, weightKg: 12.5,
       });
@@ -310,6 +586,7 @@ try {
       const createdAnimal = await createdAnimalResponse.json();
       assert.equal(createdAnimal.display_code, 'NEW-001');
       unpaidConsultationId = randomUUID();
+      consultationIds.push(unpaidConsultationId);
       await database.query(`INSERT INTO consultations
         (id, display_code, farmer_id, vet_id, animal_id, service_type, complaint, status,
          starts_at, ends_at, fee_snapshot_idr, commission_snapshot_idr)
@@ -333,9 +610,7 @@ try {
       assert.equal((await replayResponse.json()).id, firstPayment.id);
       const parallelPending = await sendJson(healthy.baseUrl, '/v1/payments', farmer.accessToken, 'POST', paymentBody, { 'idempotency-key': `be06-other-${randomUUID()}` });
       assert.equal(parallelPending.status, 409);
-      const localDb = new DatabaseService();
-      try {
-        const localPayment = new PaymentsService(localDb, new LocalPaymentService());
+      {
         const callbackBase = { paymentId: firstPayment.id, attemptId: firstPayment.attempt.id, reference: firstPayment.attempt.reference, amountIdr: '1000' };
         await assert.rejects(localPayment.localCallback({ ...callbackBase, eventId: `be06-wrong-${randomUUID()}`, outcome: 'failed', amountIdr: '999' }));
         await assert.rejects(localPayment.localCallback({ ...callbackBase, eventId: `be06-reference-${randomUUID()}`, outcome: 'failed', reference: 'local:wrong' }));
@@ -357,23 +632,23 @@ try {
         const counts = await database.query(`SELECT count(DISTINCT p.id)::int payments,count(a.id)::int attempts
           FROM payments p JOIN payment_attempts a ON a.payment_id=p.id WHERE p.payable_id=$1`, [unpaidConsultationId]);
         assert.deepEqual(counts.rows[0], { payments: 1, attempts: 2 });
-      } finally { await localDb.onModuleDestroy(); }
+      }
       const scheduleFrom=new Date().toISOString();
       const scheduleTo=new Date(Date.now()+5*60*60*1000).toISOString();
       const vetSchedule=await sendJson(healthy.baseUrl,`/v1/me/vet/schedule?from=${encodeURIComponent(scheduleFrom)}&to=${encodeURIComponent(scheduleTo)}`,vet.accessToken,'GET');
       assert.equal(vetSchedule.status,200);
-      assert.deepEqual((await vetSchedule.json()).appointments.map(item=>item.id),[consultationId]);
+      assert.deepEqual((await vetSchedule.json()).appointments.map(item=>item.id).sort(),[consultationId,unpaidConsultationId].sort());
       const farmTakeover = await sendJson(healthy.baseUrl, '/v1/livestock', outsider.accessToken, 'POST', {
         farmId, displayCode: 'TAKE-001', name: 'Tidak boleh', species: 'sapi', sex: 'female',
       });
       assert.equal(farmTakeover.status, 404);
       const outsiderAnimal = await sendJson(healthy.baseUrl, `/v1/livestock/${animalId}`, outsider.accessToken, 'GET');
       assert.equal(outsiderAnimal.status, 404);
-      const vetUnrelatedAnimal = await sendJson(healthy.baseUrl, `/v1/livestock/${createdAnimal.id}`, vet.accessToken, 'GET');
+      const vetUnrelatedAnimal = await sendJson(healthy.baseUrl, `/v1/livestock/${createdAnimal.id}`, unverifiedVet.accessToken, 'GET');
       assert.equal(vetUnrelatedAnimal.status, 404);
       const vetPatientList = await sendJson(healthy.baseUrl, '/v1/patients', vet.accessToken, 'GET');
       assert.equal(vetPatientList.status, 200);
-      assert.deepEqual((await vetPatientList.json()).map((item) => item.id), [animalId]);
+      assert.deepEqual((await vetPatientList.json()).map((item) => item.id).sort(), [animalId, createdAnimal.id].sort());
       const outsiderPatientList = await sendJson(healthy.baseUrl, '/v1/patients', outsider.accessToken, 'GET');
       assert.equal(outsiderPatientList.status, 403);
       const patchAnimal = await sendJson(healthy.baseUrl, `/v1/livestock/${createdAnimal.id}`, farmer.accessToken, 'PATCH', { expectedVersion: 1, name: 'Anak Fiktif Revisi' });
@@ -427,13 +702,13 @@ try {
       assert.equal((await sendJson(healthy.baseUrl, '/v1/orders', vet.accessToken, 'GET')).status, 404);
       const hiddenDraftTimeline = await sendJson(healthy.baseUrl, `/v1/livestock/${animalId}/health-events`, farmer.accessToken, 'GET');
       assert.equal(hiddenDraftTimeline.status, 200);
-      assert.equal((await hiddenDraftTimeline.json()).length, 1);
+      assert.equal((await hiddenDraftTimeline.json()).length, 2);
       const finalTimeline = await sendJson(healthy.baseUrl, `/v1/livestock/${animalId}/health-events`, vet.accessToken, 'GET');
       assert.equal(finalTimeline.status, 200);
       const finalEvents = await finalTimeline.json();
-      assert.equal(finalEvents.length, 1);
-      assert.equal(finalEvents[0].description, 'Penilaian fiktif akhir');
-      assert.equal('attachments' in finalEvents[0], false);
+      assert.equal(finalEvents.length, 2);
+      assert.ok(finalEvents.some((event) => event.description === 'Penilaian fiktif akhir'));
+      assert.ok(finalEvents.every((event) => !('attachments' in event)));
 
       const messagesPath = `/v1/consultations/${consultationId}/messages`;
       const ownerList = await sendJson(healthy.baseUrl, `${messagesPath}?limit=2`, farmer.accessToken, 'GET');
@@ -564,43 +839,54 @@ try {
       assert.equal(pageTwo.items.length, 2);
       assert.equal(new Set([...pageOne.items, ...pageTwo.items].map((item) => item.id)).size, 4);
 
-      console.log('BE-03/04/06/07/08 smoke: livestock/patient and vet scope; availability/slot conflicts; payment quote owner, pending, retry attempts, callback dedupe; care-event idempotency; chat/media scope and retry; clinical note version/final immutability and recommendation edit/review/send lulus.');
+      const chatVersion = Number((await database.query('SELECT version FROM consultations WHERE id=$1', [consultationId])).rows[0].version);
+      const completeChat = await sendJson(healthy.baseUrl, `/v1/consultations/${consultationId}/complete`, vet.accessToken, 'POST',
+        { expectedVersion: chatVersion, confirmation: true }, { 'idempotency-key': `be05-complete-chat-${randomUUID()}` });
+      assert.equal(completeChat.status, 200, await completeChat.clone().text());
+      assert.equal((await completeChat.json()).consultation.status, 'completed');
+
+      console.log('BE-03/04/05/06/07/08 smoke: scope/role; booking quote and concurrent slot create; payment pending-to-request transition; verified accept/idempotency; proposal consent plus verification/slot rechecks; rejection reason/refund-needed; visit ordering; final-note/confirmation completion and history; payment retry; chat/media; clinical immutability/recommendation lulus.');
     } finally {
       if (failedStorageServer) await stopServer(failedStorageServer.child);
       // Smoke teardown is a fixture reset; it must remove immutable final-note rows
       // without weakening the production immutability trigger.
       await database.query("SET session_replication_role = 'replica'");
-      if (consultationId) {
-        await database.query('DELETE FROM recommendation_items WHERE recommendation_id IN (SELECT id FROM recommendations WHERE consultation_id=$1)', [consultationId]);
-        await database.query('DELETE FROM recommendations WHERE consultation_id=$1', [consultationId]);
-        await database.query('DELETE FROM message_attachments WHERE consultation_id = $1', [consultationId]);
-        await database.query('DELETE FROM consultation_messages WHERE consultation_id = $1', [consultationId]);
-        await database.query('DELETE FROM attachments WHERE consultation_id = $1', [consultationId]);
+      const allConsultationIds = [...new Set([...consultationIds, consultationId, unpaidConsultationId].filter(Boolean))];
+      try {
+        await database.query('DELETE FROM recommendation_items WHERE recommendation_id IN (SELECT id FROM recommendations WHERE consultation_id = ANY($1::uuid[]))', [allConsultationIds]);
+        await database.query('DELETE FROM recommendations WHERE consultation_id = ANY($1::uuid[])', [allConsultationIds]);
+        await database.query('DELETE FROM message_attachments WHERE consultation_id = ANY($1::uuid[])', [allConsultationIds]);
+        await database.query('DELETE FROM consultation_messages WHERE consultation_id = ANY($1::uuid[])', [allConsultationIds]);
+        await database.query('DELETE FROM attachments WHERE consultation_id = ANY($1::uuid[])', [allConsultationIds]);
         await database.query('DELETE FROM health_events WHERE actor_id = ANY($1::uuid[])', [actors]);
-        await database.query('DELETE FROM clinical_notes WHERE consultation_id = $1', [consultationId]);
-        await database.query('DELETE FROM payments WHERE payable_type = \'consultation\' AND payable_id = $1', [consultationId]);
-        await database.query('DELETE FROM consultations WHERE id = $1', [consultationId]);
+        await database.query('DELETE FROM clinical_notes WHERE consultation_id = ANY($1::uuid[])', [allConsultationIds]);
+        await database.query('DELETE FROM payment_callback_events WHERE payment_id IN (SELECT id FROM payments WHERE payable_type=\'consultation\' AND payable_id = ANY($1::uuid[]))', [allConsultationIds]);
+        await database.query('DELETE FROM payment_attempts WHERE payment_id IN (SELECT id FROM payments WHERE payable_type=\'consultation\' AND payable_id = ANY($1::uuid[]))', [allConsultationIds]);
+        await database.query('DELETE FROM payments WHERE payable_type=\'consultation\' AND payable_id = ANY($1::uuid[])', [allConsultationIds]);
+        await database.query('DELETE FROM consultation_actions WHERE consultation_id = ANY($1::uuid[])', [allConsultationIds]);
+        await database.query('DELETE FROM consultation_schedule_proposals WHERE consultation_id = ANY($1::uuid[])', [allConsultationIds]);
+        await database.query('DELETE FROM consultation_visits WHERE consultation_id = ANY($1::uuid[])', [allConsultationIds]);
+        await database.query('DELETE FROM idempotency_operations WHERE actor_id = ANY($1::uuid[])', [actors]);
+        await database.query('DELETE FROM consultations WHERE id = ANY($1::uuid[])', [allConsultationIds]);
+        await database.query('DELETE FROM consultation_quotes WHERE id = ANY($1::uuid[])', [quoteIds]);
+        if (actors.length > 0) {
+          await database.query('DELETE FROM addresses WHERE owner_id = ANY($1::uuid[])', [actors]);
+          await database.query('DELETE FROM livestock WHERE farmer_id = ANY($1::uuid[])', [actors]);
+          await database.query('DELETE FROM farms WHERE owner_id = ANY($1::uuid[])', [actors]);
+          await database.query('DELETE FROM auth_sessions WHERE user_id = ANY($1::uuid[])', [actors]);
+          await database.query('DELETE FROM vet_blocked_times WHERE vet_id = ANY($1::uuid[])', [actors]);
+          await database.query('DELETE FROM vet_service_rates WHERE vet_id = ANY($1::uuid[])', [actors]);
+          await database.query('DELETE FROM vet_availabilities WHERE vet_id = ANY($1::uuid[])', [actors]);
+          await database.query('DELETE FROM vet_directory_profiles WHERE vet_id = ANY($1::uuid[])', [actors]);
+          await database.query('DELETE FROM farmer_profiles WHERE user_id = ANY($1::uuid[])', [actors]);
+          await database.query('DELETE FROM vet_profiles WHERE user_id = ANY($1::uuid[])', [actors]);
+          await database.query('DELETE FROM users WHERE id = ANY($1::uuid[])', [actors]);
+        }
+      } finally {
+        await database.query("SET session_replication_role = 'origin'").catch(() => undefined);
+        await localDb.onModuleDestroy();
+        await database.end();
       }
-      if (unpaidConsultationId) {
-        await database.query('DELETE FROM payment_callback_events WHERE payment_id IN (SELECT id FROM payments WHERE payable_type=\'consultation\' AND payable_id=$1)', [unpaidConsultationId]);
-        await database.query('DELETE FROM payment_attempts WHERE payment_id IN (SELECT id FROM payments WHERE payable_type=\'consultation\' AND payable_id=$1)', [unpaidConsultationId]);
-        await database.query('DELETE FROM payments WHERE payable_type=\'consultation\' AND payable_id=$1', [unpaidConsultationId]);
-        await database.query('DELETE FROM consultations WHERE id = $1', [unpaidConsultationId]);
-      }
-      if (actors.length > 0) {
-        await database.query('DELETE FROM livestock WHERE farmer_id = ANY($1::uuid[])', [actors]);
-        await database.query('DELETE FROM farms WHERE owner_id = ANY($1::uuid[])', [actors]);
-        await database.query('DELETE FROM auth_sessions WHERE user_id = ANY($1::uuid[])', [actors]);
-        await database.query('DELETE FROM vet_blocked_times WHERE vet_id = ANY($1::uuid[])', [actors]);
-        await database.query('DELETE FROM vet_service_rates WHERE vet_id = ANY($1::uuid[])', [actors]);
-        await database.query('DELETE FROM vet_availabilities WHERE vet_id = ANY($1::uuid[])', [actors]);
-        await database.query('DELETE FROM vet_directory_profiles WHERE vet_id = ANY($1::uuid[])', [actors]);
-        await database.query('DELETE FROM farmer_profiles WHERE user_id = ANY($1::uuid[])', [actors]);
-        await database.query('DELETE FROM vet_profiles WHERE user_id = ANY($1::uuid[])', [actors]);
-        await database.query('DELETE FROM users WHERE id = ANY($1::uuid[])', [actors]);
-      }
-      await database.query("SET session_replication_role = 'origin'");
-      await database.end();
     }
   } else {
     console.log('BE-07 runtime smoke tidak dijalankan karena PostgreSQL readiness mengembalikan 503.');

@@ -62,7 +62,14 @@ export class ClinicalService {
       const empty = fields.filter(field => typeof note[field] !== 'string' || !(note[field] as string).trim());
       if (empty.length) throw new UnprocessableEntityException({ code: 'REQUIRED_FIELDS', message: 'Lengkapi semua bagian sebelum finalisasi.', fieldErrors: Object.fromEntries(empty.map(field => [field, ['Wajib diisi.']])) });
       const finalized = await client.query(`UPDATE clinical_notes SET status='final',finalized_at=now(),finalized_by=$2,version=version+1,updated_at=now() WHERE id=$1 RETURNING *`, [note.id, principal.userId]);
-      return finalized.rows[0];
+      const finalNote = finalized.rows[0];
+      await client.query(
+        `INSERT INTO health_events(animal_id,kind,occurred_at,description,actor_id,provenance,source_key,clinical_note_id)
+         VALUES($1,'examination',$2,$3,$4,'clinical_note',$5,$6)
+         ON CONFLICT DO NOTHING`,
+        [context.animal_id, finalNote.finalized_at, finalNote.assessment, principal.userId, `clinical-note-${finalNote.id}`, finalNote.id],
+      );
+      return finalNote;
     });
   }
 
