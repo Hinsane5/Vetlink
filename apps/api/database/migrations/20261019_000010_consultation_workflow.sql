@@ -1,5 +1,10 @@
 CREATE TYPE schedule_proposal_status AS ENUM ('pending', 'accepted', 'declined', 'superseded');
 
+ALTER TABLE addresses ADD CONSTRAINT addresses_id_owner_uq UNIQUE (id, owner_id);
+ALTER TABLE farms ADD COLUMN visit_address_id uuid;
+ALTER TABLE farms ADD CONSTRAINT farms_visit_address_owned_fk
+  FOREIGN KEY (visit_address_id, owner_id) REFERENCES addresses(id, owner_id) ON DELETE RESTRICT;
+
 CREATE TABLE consultation_quotes (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   farmer_id uuid NOT NULL REFERENCES farmer_profiles(user_id) ON DELETE RESTRICT,

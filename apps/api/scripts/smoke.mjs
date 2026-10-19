@@ -490,6 +490,14 @@ try {
       const visitAddress = await visitAddressResponse.json();
       addressIds.push(visitAddress.id);
       const visitStart = new Date(`${localDate}T15:00:00+07:00`).toISOString();
+      const unlinkedVisitQuote = await sendJson(healthy.baseUrl, '/v1/consultation-quotes', farmer.accessToken, 'POST',
+        { vetId: vet.user.id, animalId, serviceType: 'visit', startsAt: visitStart, complaint: 'Alamat belum tertaut', addressId: visitAddress.id },
+        { 'idempotency-key': `be05-unlinked-${randomUUID()}` });
+      assert.equal(unlinkedVisitQuote.status, 400);
+      const linkedFarm = await sendJson(healthy.baseUrl, `/v1/me/farms/${farmId}`, farmer.accessToken, 'PATCH',
+        { name: 'Farm Fiktif BE-07', expectedVersion: 1, visitAddressId: visitAddress.id });
+      assert.equal(linkedFarm.status, 200, await linkedFarm.clone().text());
+      assert.equal((await linkedFarm.json()).visit_address_id, visitAddress.id);
       const visitQuote = await addQuote(visitStart, 'visit', 'Pemeriksaan ternak fiktif', visitAddress.id);
       assert.equal(visitQuote.quote.visitAddressSnapshot.addressLine, 'Jalan Contoh Tanpa Nomor');
       const visitBooking = await submitQuote(visitQuote.quote);

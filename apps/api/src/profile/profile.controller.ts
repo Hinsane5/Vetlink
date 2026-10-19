@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Res, StreamableFile, UploadedFile, UseGuards, UseInterceptors, UnprocessableEntityException } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger';
-import { IsArray, IsInt, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
+import { IsArray, IsInt, IsOptional, IsString, IsUUID, MaxLength, Min, MinLength } from 'class-validator';
 import { AccessTokenGuard, RoleGuard } from '../auth/auth.guards.js';
 import { AuthenticatedUser, RequireRoles } from '../auth/auth.decorators.js';
 import type { AuthenticatedPrincipal } from '../auth/auth.types.js';
@@ -10,7 +10,7 @@ import type { Response } from 'express';
 
 class AddressDto { @IsString() @MinLength(1) @MaxLength(80) label!:string; @IsString() @MinLength(1) @MaxLength(120) recipientName!:string; @IsString() @MinLength(5) @MaxLength(32) phone!:string; @IsString() @MinLength(1) @MaxLength(500) addressLine!:string; @IsString() @MaxLength(120) city!:string; @IsString() @MaxLength(120) province!:string; @IsString() @MaxLength(16) postalCode!:string; @IsOptional() latitude?:number; @IsOptional() longitude?:number; }
 class AddressPatchDto extends AddressDto { @IsInt() @Min(1) expectedVersion!:number; }
-class FarmDto { @IsString() @MinLength(1) @MaxLength(120) name!:string; @IsOptional() @IsArray() species?:string[]; @IsOptional() @IsString() @MaxLength(80) timezone?:string; @IsOptional() location?:Record<string,unknown>; }
+class FarmDto { @IsString() @MinLength(1) @MaxLength(120) name!:string; @IsOptional() @IsArray() species?:string[]; @IsOptional() @IsString() @MaxLength(80) timezone?:string; @IsOptional() location?:Record<string,unknown>; @IsOptional() @IsUUID() visitAddressId?:string; }
 class SubmissionDto { @IsArray() @IsString({each:true}) documentIds!:string[]; }
 class ReviewDto { @IsString() status!: 'verified'|'revision_required'; @IsOptional() @IsString() @MaxLength(1000) reason?:string; }
 class ProfileDto { @IsOptional() @IsString() @MaxLength(120) fullName?:string; @IsOptional() @IsString() @MaxLength(120) professionalName?:string; @IsOptional() @IsString() @MaxLength(120) registrationReference?:string; }

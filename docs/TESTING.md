@@ -17,6 +17,8 @@ Framework tes domain/UI dan E2E pada [Tech](TECH.md) belum dipasang. Jalankan sc
 
 ## Bukti BE-05 (19 Oktober 2026)
 
+Review koordinator setelah laporan worker menambah relasi `farms.visit_address_id` dengan FK komposit owner. Quote kunjungan ke alamat yang belum tertaut pada Farm ditolak; `PATCH /me/farms/{id}` hanya dapat menautkan alamat milik Peternak yang sama. Submit quote mengulang kecocokan Farm/alamat. `npm run check`, migrasi sepuluh file, seed fiktif, dan `npm run api:smoke` lulus pada PostgreSQL 17.4 lokal port 55444; kontainer review dihentikan sesudah pemeriksaan. QA mobile/perangkat tetap terpisah.
+
 Pemeriksaan dijalankan dari `apps/api` pada Node `24.10.0` / npm `11.6.0`; `.nvmrc` meminta Node `24.15.0`. `npm ci --no-audit --no-fund` berhasil dengan peringatan engine. PostgreSQL `17.4-alpine` dijalankan sebagai container uji sementara pada port `55444` dengan data `tmpfs`; sepuluh migrasi dan seed fiktif berhasil, lalu container dihentikan.
 
 - `npm run check` — **Lulus** (`tsc --noEmit` dan `nest build`).

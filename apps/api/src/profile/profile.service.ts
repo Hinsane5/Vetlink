@@ -7,7 +7,7 @@ import { MEDIA_STORAGE_ADAPTER, type PrivateMediaStorageAdapter } from '../commu
 import type { AuthenticatedPrincipal } from '../auth/auth.types.js';
 
 type AddressInput = { label: string; recipientName: string; phone: string; addressLine: string; city: string; province: string; postalCode: string; latitude?: number; longitude?: number };
-type FarmInput = { name: string; species?: string[]; timezone?: string; location?: Record<string, unknown> };
+type FarmInput = { name: string; species?: string[]; timezone?: string; location?: Record<string, unknown>; visitAddressId?: string };
 type IncomingFile = { originalname: string; mimetype: string; buffer: Buffer; size: number };
 
 @Injectable()
@@ -48,8 +48,9 @@ export class ProfileService {
   }
   async deleteAddress(p: AuthenticatedPrincipal, id: string) { this.farmer(p); const r = await this.db.query('DELETE FROM addresses WHERE id=$1 AND owner_id=$2 RETURNING id', [id,p.userId]); if (!r.rowCount) throw new NotFoundException({ code:'RESOURCE_NOT_FOUND', message:'Alamat tidak ditemukan.' }); }
   async farms(p: AuthenticatedPrincipal) { this.farmer(p); return (await this.db.query('SELECT * FROM farms WHERE owner_id=$1 ORDER BY created_at', [p.userId])).rows; }
-  async addFarm(p: AuthenticatedPrincipal, x: FarmInput) { this.farmer(p); const r=await this.db.query('INSERT INTO farms(owner_id,name,species,timezone,location) VALUES($1,$2,$3,$4,$5) RETURNING *',[p.userId,x.name,x.species??[],x.timezone??'Asia/Jakarta',x.location??null]); return r.rows[0]; }
-  async patchFarm(p: AuthenticatedPrincipal, id: string, x: Partial<FarmInput>, version: number) { this.farmer(p); const r=await this.db.query('UPDATE farms SET name=COALESCE($3,name), species=COALESCE($4,species),timezone=COALESCE($5,timezone),location=COALESCE($6,location),updated_at=now(),version=version+1 WHERE id=$1 AND owner_id=$2 AND version=$7 RETURNING *',[id,p.userId,x.name??null,x.species??null,x.timezone??null,x.location??null,version]); if(!r.rows[0]) throw new NotFoundException({code:'RESOURCE_NOT_FOUND',message:'Farm tidak ditemukan atau versinya berubah.'}); return r.rows[0]; }
+  async addFarm(p: AuthenticatedPrincipal, x: FarmInput) { this.farmer(p); const r=await this.db.query(`INSERT INTO farms(owner_id,name,species,timezone,location,visit_address_id)
+    SELECT $1,$2,$3,$4,$5,$6 WHERE $6::uuid IS NULL OR EXISTS(SELECT 1 FROM addresses WHERE id=$6 AND owner_id=$1) RETURNING *`,[p.userId,x.name,x.species??[],x.timezone??'Asia/Jakarta',x.location??null,x.visitAddressId??null]); if (!r.rows[0]) throw new NotFoundException({code:'RESOURCE_NOT_FOUND',message:'Alamat kunjungan bukan milik Peternak.'}); return r.rows[0]; }
+  async patchFarm(p: AuthenticatedPrincipal, id: string, x: Partial<FarmInput>, version: number) { this.farmer(p); const r=await this.db.query(`UPDATE farms SET name=COALESCE($3,name), species=COALESCE($4,species),timezone=COALESCE($5,timezone),location=COALESCE($6,location),visit_address_id=COALESCE($8,visit_address_id),updated_at=now(),version=version+1 WHERE id=$1 AND owner_id=$2 AND version=$7 AND ($8::uuid IS NULL OR EXISTS(SELECT 1 FROM addresses WHERE id=$8 AND owner_id=$2)) RETURNING *`,[id,p.userId,x.name??null,x.species??null,x.timezone??null,x.location??null,version,x.visitAddressId??null]); if(!r.rows[0]) throw new NotFoundException({code:'RESOURCE_NOT_FOUND',message:'Farm/alamat tidak ditemukan atau versinya berubah.'}); return r.rows[0]; }
 
   async uploadDocument(p: AuthenticatedPrincipal, file?: IncomingFile) {
     this.vet(p); if (!file?.buffer?.length || file.size > 10 * 1024 * 1024) throw new UnprocessableEntityException({code:'VALIDATION_FAILED',message:'Dokumen kosong atau melewati batas 10 MiB.'});

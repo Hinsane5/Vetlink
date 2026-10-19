@@ -126,7 +126,7 @@ export class ConsultationService implements ConsultationPaymentSucceededPort {
       }
 
       await this.lockVet(client, input.vetId);
-      const animal = await client.query('SELECT 1 FROM livestock WHERE id=$1 AND farmer_id=$2', [input.animalId, principal.userId]);
+      const animal = await client.query<{ farm_id: string; visit_address_id: string | null }>(`SELECT l.farm_id,f.visit_address_id FROM livestock l JOIN farms f ON f.id=l.farm_id AND f.owner_id=l.farmer_id WHERE l.id=$1 AND l.farmer_id=$2`, [input.animalId, principal.userId]);
       if (!animal.rowCount) throw this.notFound();
       const schedule = await this.loadScheduleSlot(client, input.vetId, input.serviceType, startsAt, true);
       const endsAt = new Date(startsAt.getTime() + schedule.durationMinutes * 60_000);
@@ -135,6 +135,7 @@ export class ConsultationService implements ConsultationPaymentSucceededPort {
       let addressSnapshot: Record<string, unknown> | null = null;
       if (input.serviceType === 'visit') {
         if (!input.addressId) validation('addressId', 'Alamat kunjungan wajib dipilih.');
+        if (animal.rows[0].visit_address_id !== input.addressId) validation('addressId', 'Alamat kunjungan harus terhubung dengan peternakan ternak ini.');
         const address = await client.query<Record<string, unknown>>(
           `SELECT id,label,recipient_name AS "recipientName",phone,address_line AS "addressLine",
                   city,province,postal_code AS "postalCode",latitude,longitude
@@ -197,6 +198,13 @@ export class ConsultationService implements ConsultationPaymentSucceededPort {
       const quote = quoteResult.rows[0];
       if (!quote) throw this.notFound();
       if (quote.consumed_at) throw new ConflictException(err('QUOTE_CONSUMED', 'Quote ini sudah digunakan untuk booking.'));
+      const currentFarm = await client.query<{ visit_address_id: string | null }>(
+        `SELECT f.visit_address_id FROM livestock l JOIN farms f ON f.id=l.farm_id AND f.owner_id=l.farmer_id
+         WHERE l.id=$1 AND l.farmer_id=$2`, [quote.animal_id, principal.userId]);
+      if (!currentFarm.rows[0]) throw this.notFound();
+      if (quote.service_type === 'visit' && currentFarm.rows[0].visit_address_id !== quote.visit_address_snapshot?.id) {
+        throw new ConflictException(err('ADDRESS_CHANGED', 'Alamat kunjungan peternakan berubah; buat quote baru.'));
+      }
       await this.lockVet(client, quote.vet_id);
       await this.loadScheduleSlot(client, quote.vet_id, quote.service_type, quote.starts_at, true);
       const fee = safeIdr(quote.fee_snapshot_idr);
