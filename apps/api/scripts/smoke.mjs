@@ -392,6 +392,8 @@ try {
       const emptyDraft = await sendJson(healthy.baseUrl, notePath, vet.accessToken, 'GET');
       assert.equal(emptyDraft.status, 200);
       assert.equal((await emptyDraft.json()).version, 1);
+      assert.equal((await sendJson(healthy.baseUrl, notePath, vet.accessToken, 'PUT', { expectedVersion: 1, assessment: 'Terlalu dini' })).status, 422);
+      await database.query("UPDATE consultations SET status='in_progress' WHERE id=$1", [consultationId]);
       const partialNote = await sendJson(healthy.baseUrl, notePath, vet.accessToken, 'PUT', { expectedVersion: 1, assessment: 'Penilaian fiktif awal' });
       assert.equal(partialNote.status, 200);
       const requiredFailure = await sendJson(healthy.baseUrl, `${notePath}/finalize`, vet.accessToken, 'POST', { expectedVersion: 1 });
@@ -403,7 +405,7 @@ try {
       const finalizedNote = await sendJson(healthy.baseUrl, `${notePath}/finalize`, vet.accessToken, 'POST', { expectedVersion: 2 });
       assert.equal(finalizedNote.status, 201);
       assert.equal((await finalizedNote.json()).status, 'final');
-      assert.equal((await database.query('SELECT status FROM consultations WHERE id=$1', [consultationId])).rows[0].status, 'scheduled');
+      assert.equal((await database.query('SELECT status FROM consultations WHERE id=$1', [consultationId])).rows[0].status, 'in_progress');
       assert.equal((await sendJson(healthy.baseUrl, notePath, farmer.accessToken, 'GET')).status, 200);
       assert.equal((await sendJson(healthy.baseUrl, notePath, vet.accessToken, 'PUT', { expectedVersion: 3, assessment: 'Tidak dapat mengubah final' })).status, 409);
       const recommendationPath = `/v1/consultations/${consultationId}/recommendation`;

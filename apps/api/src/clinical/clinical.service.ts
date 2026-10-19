@@ -37,7 +37,7 @@ export class ClinicalService {
     if (principal.activeRole !== 'vet') throw new ForbiddenException(error('ROLE_FORBIDDEN', 'Hanya Dokter yang dapat menulis catatan klinis.'));
     return this.database.transaction(async client => {
       const context = await this.context(principal, consultationId, 'vet', client);
-      if (['completed','cancelled','rejected'].includes(context.status)) throw new UnprocessableEntityException(error('RULE_VIOLATION', 'Catatan hanya dapat ditulis selama layanan aktif.'));
+      if (context.status !== 'in_progress') throw new UnprocessableEntityException(error('RULE_VIOLATION', 'Catatan hanya dapat ditulis ketika layanan berlangsung.'));
       const found = await client.query<{id:string;version:number;status:string;complaint:string;findings:string;assessment:string;actions:string;care_instructions:string}>(`SELECT id,version,status,complaint,findings,assessment,actions,care_instructions FROM clinical_notes WHERE consultation_id=$1 FOR UPDATE`, [context.id]);
       if (found.rows[0]?.status === 'final') throw new ConflictException(error('IMMUTABLE', 'Catatan final hanya dapat dibaca.'));
       if ((found.rows[0]?.version ?? 1) !== input.expectedVersion) stale();
@@ -52,6 +52,7 @@ export class ClinicalService {
     if (principal.activeRole !== 'vet') throw new ForbiddenException(error('ROLE_FORBIDDEN', 'Hanya Dokter yang dapat memfinalkan catatan.'));
     return this.database.transaction(async client => {
       const context = await this.context(principal, consultationId, 'vet', client);
+      if (context.status !== 'in_progress') throw new UnprocessableEntityException(error('RULE_VIOLATION', 'Catatan hanya dapat difinalkan ketika layanan berlangsung.'));
       const result = await client.query<Record<string, unknown> & {version:number;status:string}>(`SELECT * FROM clinical_notes WHERE consultation_id=$1 FOR UPDATE`, [context.id]);
       const note = result.rows[0];
       if (!note) throw new NotFoundException(error('NOT_FOUND', 'Draft catatan tidak ditemukan.'));
@@ -84,6 +85,7 @@ export class ClinicalService {
     if (principal.activeRole !== 'vet') throw new ForbiddenException(error('ROLE_FORBIDDEN', 'Hanya Dokter dapat menyusun rekomendasi.'));
     return this.database.transaction(async client => {
       const context = await this.context(principal, consultationId, 'vet', client);
+      if (context.status !== 'in_progress') throw new UnprocessableEntityException(error('RULE_VIOLATION', 'Rekomendasi hanya dapat disusun ketika layanan berlangsung.'));
       const old = await this.loadRecommendation(client, context);
       if (old?.status === 'sent') throw new ConflictException(error('IMMUTABLE', 'Rekomendasi terkirim hanya dapat dibaca.'));
       if ((old?.version ?? 1) !== input.expectedVersion) stale();
@@ -111,6 +113,7 @@ export class ClinicalService {
     if (principal.activeRole !== 'vet') throw new ForbiddenException(error('ROLE_FORBIDDEN', 'Hanya Dokter dapat mengirim rekomendasi.'));
     return this.database.transaction(async client => {
       const context = await this.context(principal, consultationId, 'vet', client);
+      if (context.status !== 'in_progress') throw new UnprocessableEntityException(error('RULE_VIOLATION', 'Rekomendasi hanya dapat dikirim ketika layanan berlangsung.'));
       const rec = await this.loadRecommendation(client, context);
       if (!rec) throw new UnprocessableEntityException(error('RULE_VIOLATION', 'Simpan setidaknya satu item sebelum mengirim rekomendasi.'));
       if (rec.status === 'sent') return { ...rec, alreadySent: true };
