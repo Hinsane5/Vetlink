@@ -1,6 +1,6 @@
-# VetLink API (BE-00/01/02/03/07)
+# VetLink API (BE-00/01/02/03/04/07)
 
-Backend ini adalah modular monolith NestJS + PostgreSQL. BE-00 menyediakan healthcheck, migrasi awal, seed fiktif non-destruktif, dan kontrak OpenAPI. BE-01 menambahkan register/login/logout/refresh/reset, sesi bearer dan role guard. BE-02 menambahkan profil, Farm/Address, dokumen profesi privat dan review tepercaya. BE-03 menyediakan CRUD ternak, timeline kesehatan dan daftar pasien dokter dengan scope owner/assignment. BE-07 menyediakan storage media privat lokal, upload/commit/download terotorisasi, persistensi pesan dan transport polling. Domain lain, integrasi payment, dan provider produksi belum tersedia. Mobile belum terhubung ke API.
+Backend ini adalah modular monolith NestJS + PostgreSQL. BE-00 menyediakan healthcheck, migrasi awal, seed fiktif non-destruktif, dan kontrak OpenAPI. BE-01 menambahkan register/login/logout/refresh/reset, sesi bearer dan role guard. BE-02 menambahkan profil, Farm/Address, dokumen profesi privat dan review tepercaya. BE-03 menyediakan CRUD ternak, timeline kesehatan dan daftar pasien dokter dengan scope owner/assignment. BE-04 menyediakan discovery dokter, availability, tarif efektif-dated, blocked intervals, kalender dan slot timezone. BE-07 menyediakan storage media privat lokal, upload/commit/download terotorisasi, persistensi pesan dan transport polling. Domain lain, integrasi payment, dan provider produksi belum tersedia. Mobile belum terhubung ke API.
 
 ## Versi yang dipilih
 
@@ -60,9 +60,9 @@ Rate limit berjalan di process memory; detail batas ada di [kontrak API](../../d
 
 Reset mengembalikan status/message generik tanpa membocorkan apakah email terdaftar. Adapter `UnconfiguredPasswordResetDeliveryAdapter` mengembalikan hasil `failed`, tidak mengirim email/SMS dan tidak mengembalikan token. Konfirmasi reset hanya menerima token yang adapter-nya berhasil dan tersimpan sebagai `succeeded`; provider pengiriman belum dipilih. Karena itu endpoint reset aman terhadap enumeration, tetapi pengiriman reset yang dapat digunakan menunggu pilihan provider.
 
-## Batas OpenAPI BE-00/01/07
+## Batas OpenAPI BE-00/01/02/03/04/07
 
-Route aktif adalah health, endpoint Auth BE-01/`GET /v1/me`, dan chat/media BE-07. Response, status HTTP, error envelope, pagination, enum status, dan adapter `pending/succeeded/failed` tercantum di OpenAPI. Route domain lain yang ada di [kontrak integrasi](../../docs/API_CONTRACT.md) menunggu tiket backend masing-masing.
+Route aktif adalah health, Auth BE-01/`GET /v1/me`, profil/verifikasi BE-02, ternak/pasien BE-03, vet discovery/availability/slot BE-04, dan chat/media BE-07. Response, status HTTP, error envelope, pagination, enum status, dan adapter `pending/succeeded/failed` tercantum di OpenAPI. Route domain lain yang ada di [kontrak integrasi](../../docs/API_CONTRACT.md) menunggu tiket backend masing-masing.
 
 ## Script yang tersedia
 
@@ -74,3 +74,9 @@ Route aktif adalah health, endpoint Auth BE-01/`GET /v1/me`, dan chat/media BE-0
 | `npm run api:smoke` | Smoke live/ready, OpenAPI/auth, rate-limit/no-password-log, reset enumeration-safe dan 503. Saat PostgreSQL ready, script juga memeriksa owner/related scope, vet verification guard, dedupe/retry, MIME/size, private download, dan cursor pagination; fixture account/media sementara dibersihkan |
 
 CI menjalankan script tersebut dengan PostgreSQL sementara. Tidak ada script reset/drop database.
+
+## Discovery dan availability BE-04
+
+Route BE-04 aktif: `GET /v1/vets`, `GET /v1/vets/{id}`, `GET /v1/vets/{id}/slots`, `GET/PUT /v1/me/vet/availability`, `GET/POST/PUT/DELETE /v1/me/vet/blocked-times`, dan `GET /v1/me/vet/schedule`. Discovery menampilkan Dokter yang terverifikasi dan memiliki availability/tarif. Filter name/species/service/location/available/minFee/maxFee dapat digabungkan. Tarif integer rupiah dan durasi menjadi sumber slot di backend; konfigurasi memakai `expectedVersion`, sementara timezone memakai identifier IANA.
+
+Slot dihitung untuk tanggal lokal dokter dengan interval setengah terbuka, menghindari konsultasi aktif dan blokir. Blokir diserialisasi per Dokter, menolak overlap, dan penghapusan membatalkan record tanpa menghilangkan histori. Availability change tidak mengubah janji yang sudah ada. Tidak ada harga atau slot yang dipercaya dari klaim client pada tahap quote/booking mendatang; BE-05 perlu mengulang pemeriksaan konflik pada mutasi penerimaan.

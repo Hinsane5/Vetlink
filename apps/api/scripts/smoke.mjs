@@ -147,6 +147,11 @@ try {
   assert.ok(openApi.paths['/v1/auth/password-reset']?.post);
   assert.ok(openApi.paths['/v1/auth/password-reset/confirm']?.post);
   assert.ok(openApi.paths['/v1/me']?.get);
+  assert.ok(openApi.paths['/v1/vets']?.get);
+  assert.ok(openApi.paths['/v1/vets/{id}']?.get);
+  assert.ok(openApi.paths['/v1/vets/{id}/slots']?.get);
+  assert.ok(openApi.paths['/v1/me/vet/availability']?.put);
+  assert.ok(openApi.paths['/v1/me/vet/blocked-times']?.post);
   assert.ok(openApi.paths['/v1/attachments/uploads']?.post);
   assert.ok(openApi.paths['/v1/attachments/{id}/commit']?.post);
   assert.ok(openApi.paths['/v1/attachments/{id}/content']?.get);
@@ -215,8 +220,49 @@ try {
       const farmer = await registerSmokeUser(healthy.baseUrl, 'farmer', 'Peternak Fiktif BE-07');
       const vet = await registerSmokeUser(healthy.baseUrl, 'vet', 'Dokter Fiktif BE-07');
       const outsider = await registerSmokeUser(healthy.baseUrl, 'farmer', 'Peternak Lain Fiktif BE-07');
-      actors.push(farmer.user.id, vet.user.id, outsider.user.id);
+      const unverifiedVet = await registerSmokeUser(healthy.baseUrl, 'vet', 'Dokter Belum Terverifikasi BE-04');
+      actors.push(farmer.user.id, vet.user.id, outsider.user.id,unverifiedVet.user.id);
 
+      // BE-04 directory fixture is explicitly verified by this test setup, never by a vet-facing API.
+      await database.query("UPDATE vet_profiles SET verification_status='verified',professional_name='Dokter Uji Fiktif BE-04' WHERE user_id=$1",[vet.user.id]);
+      const localDate = new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Jakarta',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(Date.now()+48*60*60*1000));
+      const weekday = Number(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Jakarta',weekday:'short'}).format(new Date(`${localDate}T12:00:00+07:00`)).replace(/^Sun$/,'0').replace(/^Mon$/,'1').replace(/^Tue$/,'2').replace(/^Wed$/,'3').replace(/^Thu$/,'4').replace(/^Fri$/,'5').replace(/^Sat$/,'6'));
+      const availBody={expectedVersion:1,acceptingNewRequests:true,services:['chat','visit'],timezone:'Asia/Jakarta',weekdayRules:[{weekday,start:'00:00',end:'23:59'}],chatDurationMinutes:60,visitDurationMinutes:60,rates:{chat:125000,visit:400000},experienceYears:7,specialties:['hewan besar'],species:['sapi'],practiceLocation:'Bogor',serviceAreas:['Bogor']};
+      const savedAvailability=await sendJson(healthy.baseUrl,'/v1/me/vet/availability',vet.accessToken,'PUT',availBody);
+      assert.equal(savedAvailability.status,200);
+      const availabilityResult=await savedAvailability.json();
+      assert.equal(availabilityResult.status,'succeeded');
+      assert.equal(Number(availabilityResult.value.rates.chat),125000);
+      const filteredDirectory=await sendJson(healthy.baseUrl,'/v1/vets?name=Uji&species=sapi&service=chat&location=Bogor&available=true&minFee=100000&maxFee=130000',farmer.accessToken,'GET');
+      assert.equal(filteredDirectory.status,200);
+      assert.deepEqual((await filteredDirectory.json()).map(x=>x.id),[vet.user.id]);
+      const selectedServiceRate=await sendJson(healthy.baseUrl,'/v1/vets?service=visit&minFee=100000&maxFee=130000',farmer.accessToken,'GET');
+      assert.deepEqual(await selectedServiceRate.json(),[]);
+      const pendingDirectory=await sendJson(healthy.baseUrl,'/v1/vets?name=Belum%20Terverifikasi',outsider.accessToken,'GET');
+      assert.equal(pendingDirectory.status,200);
+      assert.deepEqual(await pendingDirectory.json(),[]);
+      const slotResponse=await sendJson(healthy.baseUrl,`/v1/vets/${vet.user.id}/slots?dateFrom=${localDate}&dateTo=${localDate}&service=chat`,farmer.accessToken,'GET');
+      assert.equal(slotResponse.status,200,`${await slotResponse.clone().text()}\n${healthy.output()}`);
+      const availableSlots=await slotResponse.json();
+      assert.ok(availableSlots.length>0);
+      assert.ok(availableSlots.every(s=>Date.parse(s.startsAt)<Date.parse(s.endsAt)));
+      assert.ok(availableSlots.every(s=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Jakarta',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(s.startsAt))===localDate));
+      const blockedStart=`${localDate}T12:00:00+07:00`,blockedEnd=`${localDate}T13:00:00+07:00`;
+      const blockedResponse=await sendJson(healthy.baseUrl,'/v1/me/vet/blocked-times',vet.accessToken,'POST',{startsAt:blockedStart,endsAt:blockedEnd,reason:'Jadwal pribadi fiktif'});
+      assert.equal(blockedResponse.status,201);
+      const blocked=await blockedResponse.json();
+      const adjacentBlock=await sendJson(healthy.baseUrl,'/v1/me/vet/blocked-times',vet.accessToken,'POST',{startsAt:blockedEnd,endsAt:`${localDate}T14:00:00+07:00`,reason:'Blokir bersebelahan fiktif'});
+      assert.equal(adjacentBlock.status,201);
+      const adjacent=await adjacentBlock.json();
+      const farmerBlocked=await sendJson(healthy.baseUrl,'/v1/me/vet/blocked-times',farmer.accessToken,'GET');
+      assert.equal(farmerBlocked.status,403);
+      const cancelAdjacent=await sendJson(healthy.baseUrl,`/v1/me/vet/blocked-times/${adjacent.value.id}?expectedVersion=1`,vet.accessToken,'DELETE');
+      assert.equal(cancelAdjacent.status,200);
+      assert.equal((await cancelAdjacent.json()).status,'cancelled');
+      const overlappingBlock=await sendJson(healthy.baseUrl,'/v1/me/vet/blocked-times',vet.accessToken,'POST',{startsAt:`${localDate}T12:30:00+07:00`,endsAt:`${localDate}T13:30:00+07:00`,reason:'Blokir overlap fiktif'});
+      assert.equal(overlappingBlock.status,409);
+      const afterBlock=await (await sendJson(healthy.baseUrl,`/v1/vets/${vet.user.id}/slots?dateFrom=${localDate}&dateTo=${localDate}&service=chat`,farmer.accessToken,'GET')).json();
+      assert.ok(!afterBlock.some(s=>Date.parse(s.startsAt)<Date.parse(blocked.value.endsAt)&&Date.parse(s.endsAt)>Date.parse(blocked.value.startsAt)));
       const farmId = randomUUID();
       const animalId = randomUUID();
       consultationId = randomUUID();
@@ -243,6 +289,13 @@ try {
          VALUES ($1, 'consultation', $2, 'local-test', 1000, 'succeeded', $3)`,
         [farmer.user.id, consultationId, `be07-smoke-${consultationId}`],
       );
+      const acceptedInterval=await database.query('SELECT starts_at,ends_at FROM consultations WHERE id=$1',[consultationId]);
+      const conflictingBlock=await sendJson(healthy.baseUrl,'/v1/me/vet/blocked-times',vet.accessToken,'POST',{startsAt:acceptedInterval.rows[0].starts_at.toISOString(),endsAt:acceptedInterval.rows[0].ends_at.toISOString(),reason:'Konflik interval fiktif'});
+      assert.equal(conflictingBlock.status,409);
+      const vetProfileBefore=await database.query('SELECT count(*)::int AS count FROM consultations WHERE vet_id=$1',[vet.user.id]);
+      const updatedAvailability=await sendJson(healthy.baseUrl,'/v1/me/vet/availability',vet.accessToken,'PUT',{...availBody,expectedVersion:Number(availabilityResult.value.version),acceptingNewRequests:false});
+      assert.equal(updatedAvailability.status,200,await updatedAvailability.clone().text());
+      assert.equal(Number((await database.query('SELECT count(*)::int AS count FROM consultations WHERE vet_id=$1',[vet.user.id])).rows[0].count),Number(vetProfileBefore.rows[0].count));
 
       const createdAnimalResponse = await sendJson(healthy.baseUrl, '/v1/livestock', farmer.accessToken, 'POST', {
         farmId, displayCode: 'new-001', name: 'Anak Fiktif', species: 'sapi', sex: 'unknown', estimatedAgeMonths: 2, weightKg: 12.5,
@@ -304,6 +357,7 @@ try {
 
       const clientMessageId = randomUUID();
       const firstBody = { clientMessageId, text: 'Pesan fiktif untuk retry BE-07' };
+      await database.query("UPDATE vet_profiles SET verification_status='pending' WHERE user_id=$1",[vet.user.id]);
       const unverifiedSend = await sendJson(healthy.baseUrl, messagesPath, vet.accessToken, 'POST', firstBody);
       assert.equal(unverifiedSend.status, 403);
       const farmerToUnverifiedVet = await sendJson(healthy.baseUrl, messagesPath, farmer.accessToken, 'POST', firstBody);
@@ -421,7 +475,7 @@ try {
       assert.equal(pageTwo.items.length, 2);
       assert.equal(new Set([...pageOne.items, ...pageTwo.items].map((item) => item.id)).size, 4);
 
-      console.log('BE-03/07 smoke: livestock owner/version scope, doctor patient scope, care-event idempotency, draft-hidden/final-once health timeline; chat/media scope, retry, validation, private download, and pagination lulus.');
+      console.log('BE-03/04/07 smoke: livestock and patient scopes; vet verification/discovery filters; availability/rates, timezone slots and blocked half-open conflicts; accepted appointment preservation; care-event idempotency; chat/media scope, retry, validation, private download, and pagination lulus.');
     } finally {
       if (failedStorageServer) await stopServer(failedStorageServer.child);
       // Smoke teardown is a fixture reset; it must remove immutable final-note rows
@@ -441,6 +495,10 @@ try {
         await database.query('DELETE FROM livestock WHERE farmer_id = ANY($1::uuid[])', [actors]);
         await database.query('DELETE FROM farms WHERE owner_id = ANY($1::uuid[])', [actors]);
         await database.query('DELETE FROM auth_sessions WHERE user_id = ANY($1::uuid[])', [actors]);
+        await database.query('DELETE FROM vet_blocked_times WHERE vet_id = ANY($1::uuid[])', [actors]);
+        await database.query('DELETE FROM vet_service_rates WHERE vet_id = ANY($1::uuid[])', [actors]);
+        await database.query('DELETE FROM vet_availabilities WHERE vet_id = ANY($1::uuid[])', [actors]);
+        await database.query('DELETE FROM vet_directory_profiles WHERE vet_id = ANY($1::uuid[])', [actors]);
         await database.query('DELETE FROM farmer_profiles WHERE user_id = ANY($1::uuid[])', [actors]);
         await database.query('DELETE FROM vet_profiles WHERE user_id = ANY($1::uuid[])', [actors]);
         await database.query('DELETE FROM users WHERE id = ANY($1::uuid[])', [actors]);

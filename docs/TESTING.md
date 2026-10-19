@@ -1,6 +1,6 @@
 # Strategi pengujian VetLink
 
-Status QA per 19 Oktober 2026: tahap aktif memakai frontend lokal tanpa autentikasi/backend jaringan; Pilih Peran membuka persona fiktif. UI FE-06–18 tersedia dan pemeriksaan FE-18 `npm run check` lulus typecheck, lint, serta 103 tes domain/repository. `npm run android` FE-18 berhenti sebelum build karena Android SDK/ADB tidak tersedia. Backend BE-00/01/02/03/07 memiliki route executable; mobile belum terhubung ke API. Pemeriksaan Android terdahulu bukan bukti integrasi backend. Interaksi fitur pada perangkat, viewport kecil/font besar, dan pembandingan visual 390 × 844 tetap tertunda; tidak ada pemanggilan Figma MCP baru.
+Status QA per 19 Oktober 2026: tahap aktif memakai frontend lokal tanpa autentikasi/backend jaringan; Pilih Peran membuka persona fiktif. UI FE-06–18 tersedia dan pemeriksaan FE-18 `npm run check` lulus typecheck, lint, serta 103 tes domain/repository. `npm run android` FE-18 berhenti sebelum build karena Android SDK/ADB tidak tersedia. Backend BE-00/01/02/03/04/07 memiliki route executable; mobile belum terhubung ke API. Pemeriksaan Android terdahulu bukan bukti integrasi backend. Interaksi fitur pada perangkat, viewport kecil/font besar, dan pembandingan visual 390 × 844 tetap tertunda; tidak ada pemanggilan Figma MCP baru.
 
 ## Level pengujian
 
@@ -62,7 +62,7 @@ Pemeriksaan BE-02 dilakukan dari `apps/api`. `npm ci` berhasil (0 vulnerability)
 
 - `npm run check` — **Lulus** (`tsc --noEmit`, `nest build`).
 - `npm run db:migrate` — **Lulus**, empat migrasi pada database lokal baru.
-- `npm run api:smoke` — **Lulus** dengan nilai placeholder `.env.example`; ini menjalankan smoke BE-00/01/07 yang tersedia. Tidak ada smoke khusus untuk route BE-02, sehingga akses owner, upload profesi, submission/review dan reason belum divalidasi lewat request end-to-end.
+- `npm run api:smoke` — **Lulus** dengan nilai placeholder `.env.example`; saat itu mencakup BE-00/01/07. Pada BE-04, smoke backend yang sama diperluas untuk menguji endpoint discovery dan availability.
 - `trusted_reviewers` hanya dapat diberi grant lewat administrasi database; tidak ada endpoint grant. Dokumen disimpan privat oleh adapter BE-07 dan alat internal menampilkan queue, stream dokumen submission pending, serta menerima keputusan reviewer. Belum ada audit log terpisah untuk tindakan reviewer.
 - Review koordinator menambahkan batas satu submission pending per dokter di service dan migrasi terpisah untuk unique partial index. `npm run check` lulus setelah perubahan. `DATABASE_PORT=55432 npm run db:migrate` lulus pada database lokal yang telah memuat migrasi 000001–000004, lalu menerapkan 000005. Container dihentikan kembali.
 - Compose DB lokal dihentikan tanpa menghapus volume. Tidak ada provider produksi, credential nyata, transaksi finansial, deployment, atau integrasi mobile.
@@ -581,3 +581,13 @@ Review koordinator menolak pengajuan kedua untuk payable yang sudah memiliki pem
 FE-20 tetap **Sedang dikerjakan** sampai QA perangkat/visual tersedia. Payment adapter aktif masih mengembalikan `pending`; layar checkout baru karena itu tetap menunggu pembayaran. GET order API tetap usulan kontrak berikutnya dan lane backend tidak diubah.
 
 Review koordinator memperketat proyeksi order: status pengiriman hanya mengikuti record shipment tersimpan; jika shipment gagal atau tidak ada, order yang sudah dibayar tetap ditampilkan `paid`, sekalipun status order tersimpan lebih maju. Tes regresi mencakup status order `delivered` yang bertentangan dengan shipment `failed`. `npm run check` dijalankan ulang dan lulus: typecheck, lint, 107 tes, 0 gagal.
+
+## Bukti BE-04 (19 Oktober 2026)
+
+Dari `apps/api`, `npm ci` lulus tanpa vulnerability; runtime tersedia Node `24.10.0` / npm `11.6.0`, sedangkan `.nvmrc` meminta Node `24.15.0`, sehingga npm memberi peringatan engine. `npm run check` lulus (`tsc --noEmit`, `nest build`). PostgreSQL `17.4-alpine` sementara dijalankan di port `55444`, terpisah dari container yang sudah tersedia; ketujuh migrasi, termasuk `20261019_000007_vet_discovery_availability.sql`, dan seed fiktif berhasil. Container uji dihentikan sesudah smoke.
+
+- `npm run db:migrate` — **Lulus**, tujuh migrasi diterapkan.
+- `npm run db:seed` — **Lulus**, seed fixture fiktif non-destruktif.
+- `npm run api:smoke` — **Lulus**: OpenAPI route BE-04; seluruh filter discovery digabung; profil dokter pending tidak tampil; availability/rate integer IDR; slot pada tanggal lokal dokter; blokir menghilangkan slot; blokir bersebelahan diterima dan overlap ditolak; overlap dengan consultation aktif ditolak; perubahan availability mempertahankan consultation scheduled. Smoke lama BE-03/07 tetap lulus.
+- Smoke awal menangkap perbandingan enum service rate dengan parameter text/array; query diperbaiki dengan cast tipe yang sesuai, lalu seluruh smoke dijalankan ulang hingga lulus. Tidak ada endpoint yang dapat menandai dokter verified; fixture smoke diotorisasi langsung lewat setup SQL test lalu dipulihkan untuk memeriksa guard BE-07.
+- Tidak ada `npm test` pada manifest. Tidak ada provider produksi, secret, deployment, integrasi mobile, transaksi finansial, atau layanan eksternal.

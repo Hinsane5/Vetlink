@@ -1,6 +1,6 @@
 # Teknologi dan bahan diskusi
 
-Status per 13 Oktober 2026: FE-00/02 selesai; FE-01/03–16 masih dikerjakan; BE-00/01/07 selesai. Mobile tetap memakai persona lokal tanpa autentikasi/backend jaringan. Backend memiliki scaffold NestJS + PostgreSQL, migrasi, seed, OpenAPI health/auth/chat/media, CI, dan adapter media privat/polling lokal; domain backend selain auth/chat/media belum tersedia. Bukti backend ada di [Testing](TESTING.md). QA visual/interaksi Android FE-14 sebelumnya belum terverifikasi karena MIUI menolak tap ADB (`INJECT_EVENTS`).
+Status per 19 Oktober 2026: FE-00/02 selesai; penerimaan FE-01/04–19 masih berjalan dan FE-03 ditunda sesuai DEC-23; BE-00/01/02/03/04/07 selesai. Mobile tetap memakai persona lokal tanpa autentikasi/backend jaringan. Backend NestJS + PostgreSQL memiliki route health/auth/profile-verification/livestock/patients/vet discovery & availability/chat/media dengan migrasi dan smoke lokal. Bukti backend ada di [Testing](TESTING.md). QA visual/interaksi Android FE-14 sebelumnya belum terverifikasi karena MIUI menolak tap ADB (`INJECT_EVENTS`).
 
 ## Keputusan mobile
 
@@ -124,7 +124,7 @@ Harness diagnostik FE-02 hanya tampil saat development dengan `EXPO_PUBLIC_FE02_
 
 Paket Expo yang benar-benar terpasang dan keterkaitannya dengan FE-01–04 dicatat di README. Form/test framework dan seluruh kandidat lain tetap usulan; tidak ada kewajiban menginstall semua kandidat state/form/test sekaligus.
 
-## Pilihan backend dan realisasi BE-00/01/07
+## Pilihan backend dan realisasi BE-00/01/02/03/04/07
 
 | Kandidat | Kesesuaian untuk VetLink | Tradeoff yang perlu dibahas |
 | --- | --- | --- |
@@ -134,7 +134,7 @@ Paket Expo yang benar-benar terpasang dan keterkaitannya dengan FE-01–04 dicat
 
 **Dipilih pengguna 13 Oktober 2026: NestJS + PostgreSQL** untuk backend modular monolith BE-00–16. Baseline stack memilih Node.js 24.15.0, NestJS 12.1.3, Nest CLI 12.0.8, TypeScript 6.0.3, driver `pg` 8.23.1, dan PostgreSQL 17.4. PostgreSQL 18.x dicatat sebagai upgrade gate sebelum integrasi berikutnya. Nest memakai ESM; project memakai NodeNext. Database diakses lewat port infrastructure dan SQL eksplisit, belum memilih ORM. Migrasi berjalan eksplisit dengan advisory lock, checksum, dan transaksi; seed fiktif hanya insert conflict-do-nothing. BE-01 memilih password auth internal `scrypt`, hash token opaque di PostgreSQL, dan role guard; email reset gagal tertutup tanpa adapter/provider terpilih. BE-01 check lokal berjalan pada Node 24.10 karena Node 24.15 tidak tersedia di shell, lihat [Testing](TESTING.md). Hosting dan izin deploy tetap belum dipilih. Lihat [panduan backend](../apps/api/README.md), [NestJS](https://docs.nestjs.com/), dan [kebijakan versi PostgreSQL](https://www.postgresql.org/support/versioning/).
 
-Port HTTP aktual memakai adapter Express NestJS; module Health dan Auth menyediakan healthcheck, auth, bearer `/me`, serta role membership guard. Module Communication menyediakan chat/media BE-07; domain backend lain akan mengikuti boundary use case/repository pada API masing-masing. Shared error response dan status domain ada di OpenAPI. Provider credential eksternal, reset delivery, media produksi, realtime, queue, hosting dan provider produksi tetap belum dipilih. Modular monolith dipakai untuk awal; microservices belum dibutuhkan oleh scope ini.
+Port HTTP aktual memakai adapter Express NestJS; module Health dan Auth menyediakan healthcheck, auth, bearer `/me`, serta role membership guard. Module Profile menangani profil/verifikasi, Livestock menangani ternak/timeline pasien, Vet menangani directory/availability/rates/slots, dan Communication menyediakan chat/media BE-07. Domain lain mengikuti boundary use case/repository pada API masing-masing. Shared error response dan status domain ada di OpenAPI. Provider credential eksternal, reset delivery, media produksi, realtime, queue, hosting dan provider produksi tetap belum dipilih. Modular monolith dipakai untuk awal; microservices belum dibutuhkan oleh scope ini.
 
 ## Realisasi backend BE-07: private media dan chat
 
