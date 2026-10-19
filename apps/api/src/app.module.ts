@@ -4,9 +4,10 @@ import { DatabaseModule } from './database/database.module.js';
 import { HealthModule } from './health/health.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { CommunicationModule } from './communication/communication.module.js';
+import { ProfileModule } from './profile/profile.module.js';
 
 @Module({
-  imports: [DatabaseModule, HealthModule, AuthModule, CommunicationModule],
+  imports: [DatabaseModule, HealthModule, AuthModule, CommunicationModule, ProfileModule],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {

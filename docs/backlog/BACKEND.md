@@ -1,6 +1,6 @@
 # Backlog backend
 
-Status keseluruhan saat ini: BE-00–01 dan BE-07 **Selesai**; BE-02–06 dan BE-08–17 **Belum mulai**. Stack backend dipilih melalui DEC-10; hosting/provider produksi dan integrasi mobile tetap belum dipilih.
+Status keseluruhan saat ini: BE-00–02 dan BE-07 **Selesai**; BE-03–06 dan BE-08–17 **Belum mulai**. Stack backend dipilih melalui DEC-10; hosting/provider produksi dan integrasi mobile tetap belum dipilih.
 
 Status setiap tiket: **Selesai** berarti seluruh acceptance criteria terpenuhi dan buktinya dicatat; **Sedang dikerjakan** berarti ada progres tetapi acceptance belum lengkap; **Belum mulai** berarti implementasi belum dimulai.
 
@@ -12,7 +12,7 @@ P0 = fondasi dan aturan kritis integrasi; P1 = kelengkapan fitur backend; P2 = p
 | --- | --- | --- | --- | --- | --- |
 | BE-00 | Selesai | P0 | NestJS + PostgreSQL modular monolith; scaffold, migration, config, OpenAPI, CI, healthcheck | DEC-10 | Versi Node/Nest/PostgreSQL dicatat; langkah lokal diverifikasi; `.env.example` hanya memakai nilai lokal terbuka; OpenAPI mendokumentasikan route aktif, error, request/response generik, dan enum status; seed fiktif idempoten/non-destruktif. Bukti run ada di [Testing](../TESTING.md). |
 | BE-01 | Selesai | P0 | Register/login/logout/refresh/reset dan authorization | BE-00 | Provider password internal dipilih (`scrypt`); password/token hanya tersimpan sebagai hash; logout, refresh replay, dan reset sukses mencabut sesi; reset request enumeration-safe; active role dibatasi membership lewat guard; auth rate-limit; tidak log password/token. Adapter email reset lokal gagal tertutup sampai provider dipilih; [bukti](../TESTING.md#bukti-be-01-13-oktober-2026). |
-| BE-02 | Belum mulai | P0 | Profil, Farm/Address, upload profesi, review/revision | BE-01/07 media foundation | Owner scoped; dokter tidak self-verify; verified hanya trusted reviewer; alasan revisi tersimpan; alat reviewer minimal internal, bukan toko dokter |
+| BE-02 | Selesai | P0 | Profil, Farm/Address, upload profesi, review/revision | BE-01/07 media foundation | Owner scoped; dokter tidak self-verify; verified hanya trusted reviewer; alasan revisi tersimpan; alat reviewer minimal internal, bukan toko dokter. Implementasi lokal dan batas pemeriksaannya di [Testing](../TESTING.md#bukti-be-02-19-oktober-2026). |
 | BE-03 | Belum mulai | P0 | Livestock CRUD, health timeline, doctor patient scope | BE-01/02 | Semua field/ownership validated; pasien terkait saja; arbitrary ID denied; draft/private media tidak bocor; note klinis terhubung sekali ke history |
 | BE-04 | Belum mulai | P0 | Vet discovery, availability/rates/blocked intervals, slots | BE-02 | Filters lengkap; half-open intervals; timezone; overlap ditolak; availability change tidak menghapus accepted appointments; tarif/slot bukan dari client |
 | BE-05 | Belum mulai | P0 | Booking/request/accept/reject/proposals, visit progression, completion/history | BE-03/04/06/08 | Transisi valid saja; verified accept; rejection reason; concurrent slot acceptance tidak ganda; proposal consent rechecks; final/confirmation complete guard; role assignment |

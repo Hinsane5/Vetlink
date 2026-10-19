@@ -1,6 +1,6 @@
 # Kontrak integrasi backend v1
 
-Status: OpenAPI executable memuat healthcheck/auth BE-00/01 dan chat/media BE-07. Route domain selain auth, chat, dan media tetap kontrak target untuk tiket berikutnya. Aplikasi mobile belum memakai backend jaringan.
+Status: OpenAPI executable memuat healthcheck/auth BE-00/01, profil/verifikasi BE-02, dan chat/media BE-07. Route domain selain auth, profil/verifikasi, chat, dan media tetap kontrak target untuk tiket berikutnya. Aplikasi mobile belum memakai backend jaringan.
 
 ## Konvensi
 
@@ -32,6 +32,21 @@ NestJS melayani Swagger UI di `/docs` dan JSON di `/openapi.json`. Endpoint runt
 | `GET /v1/consultations/{consultationId}/messages` | `cursor` opsional; `limit` 1–100, default 20 | 200 pesan lama-ke-baru per halaman, `nextCursor`, `hasMore` | 400/401/403/404/422 |
 | `POST /v1/consultations/{consultationId}/messages` | `clientMessageId`, `text?`, `attachmentIds?` | 201 record pesan dan `deliveryStatus` | 400/401/403/404/409/422/503 |
 | `POST /v1/consultations/{consultationId}/messages/{messageId}/retry` | ID pesan pengirim | 200 record yang sama dan attempt terbaru | 401/403/404/422/503 |
+
+## Profil dan verifikasi BE-02
+
+Semua route memakai bearer; actor ID selalu berasal dari sesi. Farm dan address hanya Peternak pemilik yang dapat membaca/mengubah. Profil Dokter tidak menerima `verificationStatus`/`verified`. Dokumen profesi dibatasi PDF/JPEG/PNG/WebP, 10 MiB, signature byte harus sesuai MIME, dan disimpan melalui private media adapter; storage gagal menghasilkan 503. Submission menerima 1–5 ID dokumen milik dokter sendiri dan mengubah status ke `pending` secara transaksional. Hanya satu submission boleh pending per dokter. Revisi membuat submission baru setelah keputusan reviewer; histori review lama tidak ditimpa.
+
+| Method / path | Request → response | Otorisasi / aturan |
+| --- | --- | --- |
+| `GET/PATCH /v1/me/farmer`, `/v1/me/vet` | profil; PATCH nama dan field profesi terbatas | owner sesi; status verifikasi dan owner tidak dapat diubah |
+| `GET/POST /v1/me/farms`; `PATCH /v1/me/farms/{id}` | farm; PATCH wajib `expectedVersion` | Peternak owner, update hanya saat versi cocok |
+| `GET/POST /v1/me/addresses`; `PATCH /v1/me/addresses/{id}`; `DELETE /v1/me/addresses/{id}` | address tersimpan; PATCH wajib `expectedVersion` | Peternak owner; arbitrary ID mendapat 404 |
+| `POST /v1/me/vet/professional-documents` | multipart `file` → metadata privat | Dokter pemilik; signature MIME, ukuran dan adapter storage diperiksa |
+| `POST /v1/me/vet/verification-submissions`; `GET /v1/me/vet/verification` | `documentIds[]` → riwayat submission | Dokter sendiri; verified tidak dapat submit ulang |
+| `GET /v1/me/internal/reviews`; `GET /v1/me/internal/reviews/documents/{id}/content`; `POST /v1/me/internal/reviews/{id}` | queue; byte dokumen; `{status: verified|revision_required, reason?}` | Hanya user yang ada di `trusted_reviewers`; grant diadministrasikan di luar API. Dokumen disajikan privat untuk submission pending. Revisi wajib menyimpan alasan. Status pending hanya dapat diputus sekali. |
+
+`trusted_reviewers` tidak memiliki endpoint pemberian hak. Tidak ada alat toko/katalog Dokter. Akses dokumen review memakai streaming privat dengan `no-store` dan pemeriksaan ulang trusted reviewer.
 
 Error menggunakan `{code, message, fieldErrors?, requestId}`. `fieldErrors` adalah object dari nama field ke daftar pesan; exception filter tidak mengirim stack trace. Setiap response juga mengirim header `X-Request-Id`. Shared error code/status, request pagination (`cursor`, `limit` 1–100), base `expectedVersion`, dan parameter header `Idempotency-Key` terdokumentasi sebagai schema/response reusable. `AdapterOperationResult` memiliki outcome `pending/succeeded/failed`; outcome gagal membawa `{code, message, retryable}`, dan pemanggil harus menyimpan hasil adapter sebelum memberi respons sukses.
 
