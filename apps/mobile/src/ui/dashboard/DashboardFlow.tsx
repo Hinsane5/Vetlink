@@ -21,6 +21,7 @@ import { Icon, type IconName } from '../components/Icon';
 import { StatusBadge, type StatusTone } from '../components/StatusBadge';
 import { ConfirmationDialog } from '../components/ConfirmationDialog';
 import { LivestockFlow, type LivestockRoute } from '../livestock/LivestockFlow';
+import { FarmFlow } from '../farms/FarmFlow';
 import { PatientFlow } from '../patients/PatientFlow';
 import { VetScheduleFlow } from '../availability/VetScheduleFlow';
 import { ConsultationFlow } from '../consultations/ConsultationFlow';
@@ -38,6 +39,7 @@ import { colors, fonts, layout, radii, roleTokens, spacing, typeScale } from '..
 
 type DashboardRoute =
   | { type: 'home' }
+  | { type: 'farms' }
   | { type: 'list'; kind: 'consultations' | 'appointments' }
   | { type: 'detail'; kind: 'consultation' | 'reminder'; id: string }
   | { type: 'chat'; consultationId: string }
@@ -118,6 +120,7 @@ export function DashboardFlow({ store, session, onOpenProfile, onSwitchRole, onL
         return true;
       }
       if (route.type === 'livestock' || route.type === 'booking' || route.type === 'list' || route.type === 'recommendation' || route.type === 'marketplace' || route.type === 'care' || route.type === 'orders' || route.type === 'payment' || (route.type === 'detail' && route.kind === 'consultation')) return false;
+      if (route.type === 'farms') return false;
       if (route.type !== 'home') {
         setRoute({ type: 'home' });
         return true;
@@ -173,6 +176,8 @@ export function DashboardFlow({ store, session, onOpenProfile, onSwitchRole, onL
         <ChatFlow key={route.consultationId} store={store} session={session} consultationId={route.consultationId} onExit={() => setRoute({ type: 'detail', kind: 'consultation', id: route.consultationId })} />
       ) : route.type === 'schedule' ? (
         <VetScheduleFlow store={store} session={session} onExit={() => { setRoute({ type: 'home' }); void reload(); }} />
+      ) : route.type === 'farms' ? (
+        <FarmFlow store={store} userId={session.userId} onExit={() => { setRoute({ type: 'home' }); void reload(); }} onChanged={() => { void reload(); }} />
       ) : route.type === 'list' || (route.type === 'detail' && route.kind === 'consultation') ? (
         <ConsultationFlow key={route.type === 'detail' ? route.id : route.kind} store={store} session={session} initialId={route.type === 'detail' ? route.id : undefined} initialTab={route.type === 'list' && route.kind === 'appointments' ? 'appointments' : 'requests'} onExit={() => { setRoute({ type: 'home' }); void reload(); }} onOpenAnimal={(id) => setRoute(role === 'vet' ? { type: 'patients', patientId: id } : { type: 'livestock', screen: 'detail', livestockId: id })} onOpenChat={(consultationId) => setRoute({ type: 'chat', consultationId })} onOpenClinicalNote={(consultationId) => setRoute({ type: 'clinicalNote', consultationId })} onOpenRecommendation={(consultationId) => setRoute({ type: 'recommendation', consultationId })} onOpenCare={(consultationId) => setRoute({ type: 'care', consultationId })} onOpenMarketplace={(context) => setRoute({ type: 'marketplace', ...context, entry: context.productId ? 'recommendation' : 'catalog' })} />
       ) : route.type === 'booking' ? (
@@ -185,6 +190,7 @@ export function DashboardFlow({ store, session, onOpenProfile, onSwitchRole, onL
           onNavigate={setRoute}
           onExit={() => setRoute({ type: 'home' })}
           onOpenProfile={onOpenProfile}
+          onOpenFarms={() => setRoute({ type: 'farms' })}
         />
       ) : route.type === 'doctors' ? (
         <VetDirectoryFlow store={store} onBook={(vetId) => setRoute({ type: 'booking', vetId })} vetId={route.vetId} onOpenVet={(vetId) => setRoute({ type: 'doctors', vetId })} onBack={() => setRoute(route.vetId ? { type: 'doctors' } : { type: 'home' })} />
@@ -197,7 +203,7 @@ export function DashboardFlow({ store, session, onOpenProfile, onSwitchRole, onL
       >
         {route.type === 'home' ? (
           snapshot.role === 'farmer'
-            ? <FarmerDashboard snapshot={snapshot} error={error} onOpenMenu={() => setMenuVisible(true)} onOpenList={(kind) => setRoute({ type: 'list', kind })} onAddLivestock={() => setRoute({ type: 'livestock', screen: 'form', mode: 'create', returnTo: 'list' })} onOpenContext={openContext} />
+            ? <FarmerDashboard snapshot={snapshot} error={error} onOpenMenu={() => setMenuVisible(true)} onOpenFarms={() => setRoute({ type: 'farms' })} onOpenList={(kind) => setRoute({ type: 'list', kind })} onAddLivestock={() => setRoute({ type: 'livestock', screen: 'form', mode: 'create', returnTo: 'list' })} onOpenContext={openContext} />
             : <VetDashboard snapshot={snapshot} error={error} availabilityBusy={availabilityBusy} onAvailability={(value) => void changeAvailability(value)} onOpenList={(kind) => setRoute({ type: 'list', kind })} onOpenContext={openContext} onOpenMenu={() => setMenuVisible(true)} />
         ) : null}
         {route.type === 'detail' ? (
@@ -230,7 +236,7 @@ export function DashboardFlow({ store, session, onOpenProfile, onSwitchRole, onL
         ) : null}
       </ScrollView>
       )}
-      {route.type !== 'booking' && route.type !== 'schedule' && route.type !== 'list' && route.type !== 'chat' && route.type !== 'clinicalNote' && route.type !== 'recommendation' && route.type !== 'marketplace' && route.type !== 'care' && route.type !== 'orders' && route.type !== 'payment' && !(route.type === 'detail' && route.kind === 'consultation') && !(route.type === 'patients' && route.patientId) && !(route.type === 'livestock' && route.screen !== 'list') && !(route.type === 'doctors' && route.vetId) ? (
+      {route.type !== 'booking' && route.type !== 'schedule' && route.type !== 'farms' && route.type !== 'list' && route.type !== 'chat' && route.type !== 'clinicalNote' && route.type !== 'recommendation' && route.type !== 'marketplace' && route.type !== 'care' && route.type !== 'orders' && route.type !== 'payment' && !(route.type === 'detail' && route.kind === 'consultation') && !(route.type === 'patients' && route.patientId) && !(route.type === 'livestock' && route.screen !== 'list') && !(route.type === 'doctors' && route.vetId) ? (
         <BottomNavigation role={role} route={route} onSelect={(next) => setRoute(next)} onOpenProfile={onOpenProfile} />
       ) : null}
       <AccountMenu
@@ -245,10 +251,11 @@ export function DashboardFlow({ store, session, onOpenProfile, onSwitchRole, onL
   );
 }
 
-function FarmerDashboard({ snapshot, error, onOpenMenu, onOpenList, onAddLivestock, onOpenContext }: {
+function FarmerDashboard({ snapshot, error, onOpenMenu, onOpenFarms, onOpenList, onAddLivestock, onOpenContext }: {
   snapshot: FarmerDashboardSnapshot;
   error: string;
   onOpenMenu: () => void;
+  onOpenFarms: () => void;
   onOpenList: (kind: 'consultations') => void;
   onAddLivestock: () => void;
   onOpenContext: (kind: 'consultation' | 'reminder', id: string) => void;
@@ -279,6 +286,7 @@ function FarmerDashboard({ snapshot, error, onOpenMenu, onOpenList, onAddLivesto
         <Button label="Tambah ternak" role="farmer" variant="accent" onPress={onAddLivestock} style={styles.actionButton} />
         <Button label="Konsultasi saya" role="farmer" onPress={() => onOpenList('consultations')} style={styles.actionButton} />
       </View>
+      <Button label="Kelola Peternakan" role="farmer" variant="secondary" onPress={onOpenFarms} />
 
       {reminder ? (
         <View style={styles.reminderCard}>
@@ -554,7 +562,7 @@ function BottomNavigation({ role, route, onSelect, onOpenProfile }: {
   onSelect: (route: DashboardRoute) => void;
   onOpenProfile: () => void;
 }) {
-  const active = route.type === 'home' || route.type === 'chat' || route.type === 'clinicalNote' || route.type === 'recommendation' || route.type === 'care' ? 'home' : route.type === 'marketplace' ? 'consultations' : route.type === 'schedule' ? 'appointments' : route.type === 'patients' ? 'patients' : route.type === 'livestock' ? 'livestock' : route.type === 'doctors' || route.type === 'booking' ? 'consultations' : route.type === 'orders' || route.type === 'payment' ? 'orders' : route.type === 'detail' ? 'home' : route.kind;
+  const active = route.type === 'home' || route.type === 'chat' || route.type === 'clinicalNote' || route.type === 'recommendation' || route.type === 'care' ? 'home' : route.type === 'marketplace' ? 'consultations' : route.type === 'schedule' ? 'appointments' : route.type === 'patients' ? 'patients' : route.type === 'livestock' ? 'livestock' : route.type === 'doctors' || route.type === 'booking' ? 'consultations' : route.type === 'orders' || route.type === 'payment' ? 'orders' : route.type === 'detail' || route.type === 'farms' ? 'home' : route.type === 'list' ? route.kind : 'home';
   const tabs: { key: string; label: string; icon: IconName; route?: DashboardRoute; action?: () => void; disabled?: boolean }[] = role === 'farmer'
     ? [
       { key: 'home', label: 'Beranda', icon: 'house', route: { type: 'home' } },

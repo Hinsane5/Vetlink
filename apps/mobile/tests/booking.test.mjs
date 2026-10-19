@@ -7,6 +7,10 @@ import { VetDirectoryService } from '../.test-build/src/application/VetDirectory
 import { ProfileService } from '../.test-build/src/application/ProfileService.js';
 import { migrateDatabase } from '../.test-build/src/data/local/sqlite/migrations.js';
 import { seedFixturesIfEmpty } from '../.test-build/src/data/local/sqlite/seed.js';
+import { FarmService } from '../.test-build/src/application/FarmService.js';
+import { LivestockService } from '../.test-build/src/application/LivestockService.js';
+import { SqliteDomainRepository } from '../.test-build/src/data/local/sqlite/SqliteDomainRepository.js';
+import { SqliteProfileRepository } from '../.test-build/src/data/local/sqlite/SqliteProfileRepository.js';
 import { fixtureIds as ids } from '../.test-build/src/testing/fixtures.js';
 import { listVetPatientAssignments } from '../.test-build/src/application/vetPatientAccess.js';
 const now = () => new Date('2026-10-05T00:00:00Z');
@@ -39,6 +43,45 @@ test('booking validates ownership, required visit address, service and real futu
     const unavailable = await s.service.open(ids.budi, ids.damar);
     const unverified = await s.service.save(ids.budi, unavailable.draft, { ...draft.input });
     await assert.rejects(s.service.review(ids.budi, unverified), { code: 'FORBIDDEN' });
+  } finally { s.db.close(); }
+});
+
+test('visit booking follows the selected animal farm and rejects mismatched farm or address', async () => {
+  const s = await setup();
+  try {
+    let farmSequence = 0;
+    const profiles = new SqliteProfileRepository(s.db);
+    const repository = new SqliteDomainRepository(s.db);
+    const farm = await new FarmService(repository, profiles, { create: () => `booking-farm-${++farmSequence}` }, now).create(ids.budi, {
+      name: 'Peternakan Budi Selatan', species: ['cattle'], location: 'Ciawi, Bogor',
+      addressLabel: 'Kandang Selatan', recipient: 'Budi Santoso', phone: '081234567890',
+      address: 'Jalan Lembah Fiktif Nomor 4', city: 'Bogor', province: 'Jawa Barat', postalCode: '16720',
+    });
+    const animal = await new LivestockService(repository, profiles, s.media, { create: () => 'booking-farm-animal' }, now)
+      .create(ids.budi, farm.id, { displayCode: 'BUD-01', name: 'Teratai', species: 'cattle', breed: 'Sapi fiktif', sex: 'female', estimatedAgeMonths: 20, weightKg: 240 });
+
+    const { draft, animals } = await s.service.open(ids.budi, ids.vetZero);
+    assert.ok(animals.some((item) => item.id === animal.id));
+    const originalAnimal = animals.find((item) => item.id === ids.cow);
+    assert.ok(originalAnimal);
+    const slot = (await s.directory.slots(ids.vetZero, 'visit')).slots[0];
+    const mismatched = await s.service.save(ids.budi, draft, {
+      ...draft.input, service: 'visit', animalId: animal.id, farmId: ids.budiFarm,
+      startsAt: slot.startsAt, endsAt: slot.endsAt, complaint: 'Pemeriksaan di peternakan terpilih.',
+      visitAddress: originalAnimal.farmVisitAddress,
+    });
+    await assert.rejects(s.service.review(ids.budi, mismatched), { code: 'FORBIDDEN' });
+
+    const selected = await s.service.save(ids.budi, mismatched, { ...mismatched.input, farmId: farm.id, visitAddress: animal.farmVisitAddress });
+    const review = await s.service.review(ids.budi, selected);
+    assert.equal(review.farmName, farm.name);
+    assert.equal(review.input.farmId, farm.id);
+    assert.equal(review.input.visitAddress, farm.visitAddress);
+    const consultationId = await s.service.submit(ids.budi, review);
+    const consultation = await s.storage.read.repository.findById('consultation', consultationId);
+    assert.equal(consultation.payload.farmId, farm.id);
+    assert.equal(consultation.payload.visitAddressSnapshot, farm.visitAddress);
+    assert.equal((await s.storage.read.repository.listRelated('consultation', consultationId, 'farm'))[0].id, farm.id);
   } finally { s.db.close(); }
 });
 
@@ -181,7 +224,8 @@ async function validDraft(s, userId = ids.budi, vetId = ids.rani) {
   const service = vetId === ids.vetZero ? 'visit' : 'chat';
   const slot = (await s.directory.slots(vetId, service)).slots[0];
   assert.ok(slot);
-  return s.service.save(userId, draft, { ...draft.input, service, animalId: animals[0].id, startsAt: slot.startsAt, endsAt: slot.endsAt, complaint: 'Nafsu makan ternak berkurang sejak kemarin.', visitAddress: 'Jalan Kandang Contoh 12, Bogor. Gerbang biru.' });
+  const animal = animals[0];
+  return s.service.save(userId, draft, { ...draft.input, service, animalId: animal.id, farmId: animal.farmId, startsAt: slot.startsAt, endsAt: slot.endsAt, complaint: 'Nafsu makan ternak berkurang sejak kemarin.', visitAddress: service === 'visit' ? animal.farmVisitAddress : '' });
 }
 async function setup() {
   const db = new SQLiteAdapter();

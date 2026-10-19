@@ -15,6 +15,7 @@ import {
 import type { LocalStore } from '../../data/local/sqlite/LocalStore';
 import type { SessionSnapshot } from '../../domain/auth';
 import type { LivestockSex, LivestockSnapshot } from '../../domain/livestock';
+import type { FarmSnapshot } from '../../domain/farms';
 import { livestockSpecies, type LivestockSpecies, type SelectedAsset } from '../../domain/profiles';
 import { Button } from '../components/Button';
 import { EmptyState, ErrorState, InlineFeedback, LoadingState } from '../components/Feedback';
@@ -38,6 +39,7 @@ type Props = {
   onNavigate: (route: LivestockRoute) => void;
   onExit: () => void;
   onOpenProfile: () => void;
+  onOpenFarms: () => void;
 };
 
 type SpeciesFilter = LivestockSpecies | 'all';
@@ -78,7 +80,7 @@ const emptyForm: FormValues = {
   weightKg: '',
 };
 
-export function LivestockFlow({ store, session, route, onNavigate, onExit, onOpenProfile }: Props) {
+export function LivestockFlow({ store, session, route, onNavigate, onExit, onOpenProfile, onOpenFarms }: Props) {
   const [query, setQuery] = useState('');
   const [speciesFilter, setSpeciesFilter] = useState<SpeciesFilter>('all');
   const [sexFilter, setSexFilter] = useState<SexFilter>('all');
@@ -197,7 +199,7 @@ export function LivestockFlow({ store, session, route, onNavigate, onExit, onOpe
         onSaved={(item, mode) => onNavigate(mode === 'create'
           ? { type: 'livestock', screen: 'saved', livestockId: item.id }
           : { type: 'livestock', screen: 'detail', livestockId: item.id })}
-        onOpenProfile={onOpenProfile}
+        onOpenFarms={onOpenFarms}
       />
     );
   }
@@ -211,7 +213,7 @@ export function LivestockFlow({ store, session, route, onNavigate, onExit, onOpe
       <View style={styles.centerScreen}>
         <View style={styles.savedIcon}><Icon name="check" size={34} color={colors.white} /></View>
         <Text accessibilityRole="header" style={styles.savedTitle}>Ternak berhasil disimpan</Text>
-        <Text style={styles.savedBody}>Data tersimpan di peternakan Anda.</Text>
+        <Text style={styles.savedBody}>Data tersimpan pada peternakan yang dipilih.</Text>
         <View style={styles.savedActions}>
           <Button label="Lihat detail ternak" role="farmer" onPress={() => onNavigate({ type: 'livestock', screen: 'detail', livestockId: route.livestockId })} />
           <Button label="Kembali ke daftar" role="farmer" variant="secondary" onPress={() => onNavigate({ type: 'livestock', screen: 'list' })} />
@@ -262,6 +264,8 @@ export function LivestockFlow({ store, session, route, onNavigate, onExit, onOpe
               <View style={styles.infoCard}>
                 <Text style={styles.sectionTitle}>Informasi ternak</Text>
                 <DetailLine label="ID ternak" value={detail.displayCode} />
+                <DetailLine label="Peternakan" value={detail.farmName} />
+                <DetailLine label="Alamat kunjungan" value={detail.farmVisitAddress || 'Belum tersedia'} />
                 <DetailLine label="Jenis ternak" value={speciesLabels[detail.species]} />
                 <DetailLine label="Ras" value={detail.breed} />
                 <DetailLine label="Jenis kelamin" value={sexLabels[detail.sex]} />
@@ -290,6 +294,8 @@ export function LivestockFlow({ store, session, route, onNavigate, onExit, onOpe
             <Icon name="plus" size={22} color={colors.white} />
           </Pressable>
         </View>
+
+        <Button label="Kelola Peternakan" role="farmer" variant="secondary" onPress={onOpenFarms} />
 
         <View style={styles.searchRow}>
           <View style={styles.searchField}>
@@ -368,18 +374,21 @@ export function LivestockFlow({ store, session, route, onNavigate, onExit, onOpe
   );
 }
 
-function LivestockEditor({ store, session, route, onBackToList, onBackToDetail, onSaved, onOpenProfile }: {
+function LivestockEditor({ store, session, route, onBackToList, onBackToDetail, onSaved, onOpenFarms }: {
   store: LocalStore;
   session: SessionSnapshot;
   route: Extract<LivestockRoute, { screen: 'form' }>;
   onBackToList: () => void;
   onBackToDetail: (livestockId: string) => void;
   onSaved: (item: LivestockSnapshot, mode: 'create' | 'edit') => void;
-  onOpenProfile: () => void;
+  onOpenFarms: () => void;
 }) {
   const [values, setValues] = useState<FormValues>(emptyForm);
   const [initialValues, setInitialValues] = useState<FormValues | null>(null);
   const [speciesOptions, setSpeciesOptions] = useState<LivestockSpecies[]>([]);
+  const [farms, setFarms] = useState<FarmSnapshot[]>([]);
+  const [selectedFarmId, setSelectedFarmId] = useState<string | null>(null);
+  const [initialFarmId, setInitialFarmId] = useState<string | null>(null);
   const [existingItem, setExistingItem] = useState<LivestockSnapshot | null>(null);
   const [photoAction, setPhotoAction] = useState<SelectedAsset | null | undefined>(undefined);
   const [loading, setLoading] = useState(true);
@@ -391,12 +400,14 @@ function LivestockEditor({ store, session, route, onBackToList, onBackToDetail, 
   useEffect(() => {
     let active = true;
     Promise.all([
-      store.profiles.load(session.userId, 'farmer'),
+      store.farms.list(session.userId),
       route.mode === 'edit' ? store.livestock.get(session.userId, route.livestockId) : Promise.resolve(null),
-    ]).then(([profile, item]) => {
+    ]).then(([ownedFarms, item]) => {
       if (!active) return;
-      const supported = profile.farmer?.species ?? [];
-      if (!supported.length) throw new Error('Lengkapi jenis ternak pada profil peternakan sebelum menambahkan ternak.');
+      const farmId = item?.farmId ?? null;
+      const selectedFarm = farmId ? ownedFarms.find((farm) => farm.id === farmId) : null;
+      if (item && !selectedFarm) throw new Error('Peternakan ternak tidak lagi tersedia pada akun ini.');
+      const supported = selectedFarm?.species ?? [];
       const nextValues: FormValues = item ? {
         displayCode: item.displayCode,
         name: item.name,
@@ -405,7 +416,10 @@ function LivestockEditor({ store, session, route, onBackToList, onBackToDetail, 
         sex: item.sex,
         estimatedAgeMonths: String(item.estimatedAgeMonths),
         weightKg: String(item.weightKg),
-      } : { ...emptyForm, species: supported[0] };
+      } : { ...emptyForm };
+      setFarms(ownedFarms);
+      setSelectedFarmId(farmId);
+      setInitialFarmId(farmId);
       setSpeciesOptions([...supported]);
       setExistingItem(item);
       setValues(nextValues);
@@ -419,7 +433,7 @@ function LivestockEditor({ store, session, route, onBackToList, onBackToDetail, 
     return () => { active = false; };
   }, [route, session.userId, store]);
 
-  const dirty = Boolean(initialValues && JSON.stringify(values) !== JSON.stringify(initialValues)) || photoAction !== undefined;
+  const dirty = Boolean(initialValues && JSON.stringify(values) !== JSON.stringify(initialValues)) || photoAction !== undefined || selectedFarmId !== initialFarmId;
   const returnFromForm = useCallback(() => {
     setLeaveDialog(false);
     if (route.returnTo === 'detail' && route.mode === 'edit') onBackToDetail(route.livestockId);
@@ -448,6 +462,13 @@ function LivestockEditor({ store, session, route, onBackToList, onBackToDetail, 
     setValues((current) => ({ ...current, [key]: value }));
   };
 
+  const chooseFarm = (farm: FarmSnapshot) => {
+    setSelectedFarmId(farm.id);
+    setSpeciesOptions([...farm.species]);
+    setValues((current) => ({ ...current, species: farm.species.includes(current.species as LivestockSpecies) ? current.species : farm.species[0] ?? '' }));
+    setError('');
+  };
+
   const pickPhoto = async () => {
     setBusy(true);
     setError('');
@@ -465,7 +486,7 @@ function LivestockEditor({ store, session, route, onBackToList, onBackToDetail, 
   };
 
   const save = async () => {
-    if (busy || loading || !values.species) return;
+    if (busy || loading || !values.species || !selectedFarmId) return;
     setBusy(true);
     setError('');
     try {
@@ -480,7 +501,7 @@ function LivestockEditor({ store, session, route, onBackToList, onBackToDetail, 
       };
       const photo = photoAction ? { type: 'new' as const, asset: photoAction } : undefined;
       const item = route.mode === 'create'
-        ? await store.livestock.create(session.userId, input, photo)
+        ? await store.livestock.create(session.userId, selectedFarmId, input, photo)
         : await store.livestock.update(session.userId, route.livestockId, input, photoAction === undefined ? undefined : photoAction === null ? null : photo);
       onSaved(item, route.mode);
     } catch (cause: unknown) {
@@ -493,6 +514,7 @@ function LivestockEditor({ store, session, route, onBackToList, onBackToDetail, 
   const selectedPhotoUri = photoAction === null ? null : photoAction?.uri ?? existingItem?.photo?.localUri ?? null;
   const selectedPhotoLabel = photoAction?.filename ?? existingItem?.photo?.filename ?? '';
   const hasSpeciesOptions = speciesOptions.length > 0;
+  const selectedFarm = farms.find((farm) => farm.id === selectedFarmId) ?? null;
 
   return (
     <View style={styles.screen}>
@@ -503,12 +525,21 @@ function LivestockEditor({ store, session, route, onBackToList, onBackToDetail, 
           {!loading && error && !hasSpeciesOptions ? (
             <View style={styles.errorBlock}>
               <InlineFeedback message={error} tone="error" />
-              <Button label="Lengkapi profil peternakan" role="farmer" variant="secondary" onPress={onOpenProfile} />
+              <Button label="Kelola Peternakan" role="farmer" variant="secondary" onPress={onOpenFarms} />
+            </View>
+          ) : null}
+          {!loading && route.mode === 'create' ? (
+            <View style={styles.farmChoiceSection}>
+              <Text style={styles.fieldLabel}>Peternakan tujuan *</Text>
+              <Text style={styles.helperText}>Pilih peternakan yang akan memiliki ternak baru ini.</Text>
+              {farms.length ? farms.map((farm) => <ChoiceChip key={farm.id} label={`${farm.name} · ${farm.location}`} selected={selectedFarmId === farm.id} onPress={() => chooseFarm(farm)} />) : (
+                <EmptyState title="Peternakan belum tersedia" description="Tambahkan peternakan dan alamat kunjungan terlebih dahulu." role="farmer" actionLabel="Kelola Peternakan" onAction={onOpenFarms} />
+              )}
             </View>
           ) : null}
           {!loading && hasSpeciesOptions ? (
             <>
-              <Text style={styles.formIntro}>Isi data ternak. ID harus unik di peternakan Anda.</Text>
+              <Text style={styles.formIntro}>{route.mode === 'create' ? `Isi data untuk ${selectedFarm?.name ?? 'peternakan terpilih'}. ID unik pada peternakan ini.` : `Peternakan: ${selectedFarm?.name ?? '—'}. ID unik pada peternakan ini.`}</Text>
               {error ? <InlineFeedback message={error} tone="error" /> : null}
               <TextField label="ID ternak" value={values.displayCode} onChangeText={(value) => updateValue('displayCode', value)} placeholder="Contoh: SAPI-01" autoCapitalize="characters" maxLength={24} returnKeyType="next" />
               <TextField label="Nama ternak" value={values.name} onChangeText={(value) => updateValue('name', value)} placeholder="Masukkan nama ternak" maxLength={100} returnKeyType="next" />
@@ -534,7 +565,7 @@ function LivestockEditor({ store, session, route, onBackToList, onBackToDetail, 
                 {selectedPhotoLabel ? <Text numberOfLines={2} style={styles.photoFilename}>{selectedPhotoLabel}</Text> : null}
               </View>
               <View style={styles.formActions}>
-                <Button label={route.mode === 'create' ? 'Simpan Ternak' : 'Simpan Perubahan'} role="farmer" onPress={() => void save()} loading={busy} disabled={!values.species || !hasSpeciesOptions} />
+                <Button label={route.mode === 'create' ? 'Simpan Ternak' : 'Simpan Perubahan'} role="farmer" onPress={() => void save()} loading={busy} disabled={!values.species || !hasSpeciesOptions || !selectedFarmId} />
                 <Button label="Batal" role="farmer" variant="secondary" onPress={requestLeave} disabled={busy} />
               </View>
             </>
@@ -563,13 +594,13 @@ function AnimalRow({ animal, imageFailed, onImageError, onPress }: {
   onPress: () => void;
 }) {
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${animal.name}, ${speciesLabels[animal.species]}, ID ${animal.displayCode}`} onPress={onPress} style={({ pressed }) => [styles.animalCard, pressed && styles.pressed]}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${animal.name}, ${speciesLabels[animal.species]}, ${animal.farmName}, ID ${animal.displayCode}`} onPress={onPress} style={({ pressed }) => [styles.animalCard, pressed && styles.pressed]}>
       <View style={styles.animalImageFrame}>
         {animal.photo?.localUri && !imageFailed ? <Image accessibilityLabel={`Foto ${animal.name}`} source={{ uri: animal.photo.localUri }} onError={onImageError} style={styles.animalImage} /> : <Icon name="paw-print" size={26} color={colors.brown} />}
       </View>
       <View style={styles.animalCopy}>
         <Text numberOfLines={1} style={styles.animalName}>{animal.name}</Text>
-        <Text numberOfLines={1} style={styles.animalMeta}>{speciesLabels[animal.species]} · {animal.breed}</Text>
+        <Text numberOfLines={1} style={styles.animalMeta}>{animal.farmName} · {speciesLabels[animal.species]} · {animal.breed}</Text>
         <Text numberOfLines={1} style={styles.animalCode}>{animal.displayCode}</Text>
       </View>
       <View style={styles.animalAside}>
@@ -749,6 +780,8 @@ const styles = StyleSheet.create({
   detailLabel: { flex: 1, color: colors.muted, fontFamily: fonts.regular, fontSize: typeScale.body },
   detailValue: { flex: 1, color: colors.dark, fontFamily: fonts.medium, fontSize: typeScale.body, textAlign: 'right' },
   formIntro: { color: colors.muted, fontFamily: fonts.regular, fontSize: typeScale.body, lineHeight: 21 },
+  farmChoiceSection: { gap: spacing[2] },
+  helperText: { color: colors.muted, fontFamily: fonts.regular, fontSize: typeScale.small, lineHeight: 18 },
   warningText: { color: colors.orange, fontFamily: fonts.medium, fontSize: typeScale.small, lineHeight: 18 },
   choiceGroup: { gap: spacing[2] },
   fieldLabel: { color: colors.dark, fontFamily: fonts.medium, fontSize: typeScale.label, lineHeight: 19 },

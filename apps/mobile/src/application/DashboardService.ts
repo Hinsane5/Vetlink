@@ -5,6 +5,7 @@ import type { DomainEntity } from '../domain/entities';
 import { DomainError } from '../domain/errors';
 import { calculateWalletBalances, type LedgerMovement } from '../domain/ledger';
 import { isVerificationStatus } from '../domain/profiles';
+import { hasConsultationFarmContext } from './livestockAccess';
 import type { IdFactory } from './ports/AuthRepository';
 import type { DomainRepository } from './ports/DomainRepository';
 import type { ProfileService } from './ProfileService';
@@ -200,7 +201,7 @@ export class DashboardService {
       const relatedAnimals = await this.repository.listRelated('consultation', record.id, 'animal');
       const animal = relatedAnimals.find((item) => item.kind === 'livestock' && item.id === animalId);
       if (animalId && !animal) continue;
-      if (role === 'farmer' && animal && animal.ownerId !== userId) continue;
+      if (animal && !(await hasConsultationFarmContext(this.repository, record, animal, farmerId))) continue;
 
       const otherPartyId = role === 'farmer' ? vetId : farmerId;
       const otherPartyRelationship = role === 'farmer' ? 'veterinarian' : 'farmer';

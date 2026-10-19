@@ -84,6 +84,193 @@ const migrations: readonly Migration[] = [
         WHERE kind = 'user' AND json_type(payload_json, '$.email') = 'text';
     `,
   },
+  {
+    version: 3,
+    sql: `
+      UPDATE entities AS profile
+      SET payload_json = json_set(profile.payload_json, '$.farmId', (
+        SELECT relation.target_id
+        FROM entity_relations relation
+        JOIN entities farm ON farm.id = relation.target_id AND farm.kind = 'farm'
+        WHERE relation.source_id = profile.id AND relation.relationship = 'farm'
+          AND farm.owner_id = profile.owner_id
+        ORDER BY relation.id LIMIT 1
+      ))
+      WHERE profile.kind = 'farmerProfile'
+        AND (json_type(profile.payload_json, '$.farmId') IS NULL OR json_type(profile.payload_json, '$.farmId') = 'null')
+        AND EXISTS (
+          SELECT 1 FROM entity_relations relation
+          JOIN entities farm ON farm.id = relation.target_id AND farm.kind = 'farm'
+          WHERE relation.source_id = profile.id AND relation.relationship = 'farm'
+            AND farm.owner_id = profile.owner_id
+        );
+
+      INSERT INTO entity_relations (source_id, relationship, target_id)
+      SELECT farm.id, 'owner', farm.owner_id
+      FROM entities farm
+      JOIN entities owner ON owner.id = farm.owner_id AND owner.kind = 'user'
+      WHERE farm.kind = 'farm'
+        AND NOT EXISTS (
+          SELECT 1 FROM entity_relations relation
+          WHERE relation.source_id = farm.id AND relation.relationship = 'owner'
+            AND relation.target_id = farm.owner_id
+        );
+
+      UPDATE entities AS farm
+      SET payload_json = json_set(farm.payload_json, '$.visitAddressId', (
+        SELECT relation.target_id
+        FROM entity_relations relation
+        JOIN entities profile ON profile.id = relation.source_id AND profile.kind = 'farmerProfile'
+        WHERE relation.relationship = 'address' AND profile.owner_id = farm.owner_id
+          AND json_extract(profile.payload_json, '$.farmId') = farm.id
+        ORDER BY relation.id LIMIT 1
+      ))
+      WHERE farm.kind = 'farm'
+        AND (json_type(farm.payload_json, '$.visitAddressId') IS NULL OR json_type(farm.payload_json, '$.visitAddressId') = 'null')
+        AND EXISTS (
+          SELECT 1 FROM entity_relations relation
+          JOIN entities profile ON profile.id = relation.source_id AND profile.kind = 'farmerProfile'
+          JOIN entities address ON address.id = relation.target_id AND address.kind = 'address'
+          WHERE relation.relationship = 'address' AND profile.owner_id = farm.owner_id
+            AND json_extract(profile.payload_json, '$.farmId') = farm.id
+            AND address.owner_id = farm.owner_id
+        );
+
+      INSERT INTO entity_relations (source_id, relationship, target_id)
+      SELECT farm.id, 'visitAddress', json_extract(farm.payload_json, '$.visitAddressId')
+      FROM entities farm
+      JOIN entities address ON address.id = json_extract(farm.payload_json, '$.visitAddressId')
+        AND address.kind = 'address' AND address.owner_id = farm.owner_id
+      WHERE farm.kind = 'farm' AND json_type(farm.payload_json, '$.visitAddressId') = 'text'
+        AND NOT EXISTS (
+          SELECT 1 FROM entity_relations relation
+          WHERE relation.source_id = farm.id AND relation.relationship = 'visitAddress'
+            AND relation.target_id = json_extract(farm.payload_json, '$.visitAddressId')
+        );
+
+      UPDATE entities AS address
+      SET context_id = (
+        SELECT farm.id FROM entities farm
+        JOIN entity_relations relation ON relation.source_id = farm.id
+          AND relation.relationship = 'visitAddress' AND relation.target_id = address.id
+        WHERE farm.kind = 'farm' AND farm.owner_id = address.owner_id
+        ORDER BY relation.id LIMIT 1
+      )
+      WHERE address.kind = 'address'
+        AND EXISTS (
+          SELECT 1 FROM entities farm
+          JOIN entity_relations relation ON relation.source_id = farm.id
+            AND relation.relationship = 'visitAddress' AND relation.target_id = address.id
+          WHERE farm.kind = 'farm' AND farm.owner_id = address.owner_id
+        );
+
+      UPDATE entities AS animal
+      SET payload_json = json_set(animal.payload_json, '$.farmId', COALESCE(
+        (SELECT relation.target_id FROM entity_relations relation
+         JOIN entities farm ON farm.id = relation.target_id AND farm.kind = 'farm' AND farm.owner_id = animal.owner_id
+         WHERE relation.source_id = animal.id AND relation.relationship = 'farm'
+         ORDER BY relation.id LIMIT 1),
+        (SELECT COALESCE(json_extract(profile.payload_json, '$.farmId'), profileFarm.target_id)
+         FROM entities profile
+         LEFT JOIN entity_relations profileFarm ON profileFarm.source_id = profile.id AND profileFarm.relationship = 'farm'
+         JOIN entities farm ON farm.id = COALESCE(json_extract(profile.payload_json, '$.farmId'), profileFarm.target_id)
+           AND farm.kind = 'farm' AND farm.owner_id = animal.owner_id
+         WHERE profile.kind = 'farmerProfile' AND profile.owner_id = animal.owner_id
+         ORDER BY profile.created_at, profile.id LIMIT 1)
+      ))
+      WHERE animal.kind = 'livestock'
+        AND (json_type(animal.payload_json, '$.farmId') IS NULL OR json_type(animal.payload_json, '$.farmId') = 'null')
+        AND COALESCE(
+          (SELECT relation.target_id FROM entity_relations relation
+           JOIN entities farm ON farm.id = relation.target_id AND farm.kind = 'farm' AND farm.owner_id = animal.owner_id
+           WHERE relation.source_id = animal.id AND relation.relationship = 'farm'
+           ORDER BY relation.id LIMIT 1),
+          (SELECT COALESCE(json_extract(profile.payload_json, '$.farmId'), profileFarm.target_id)
+           FROM entities profile
+           LEFT JOIN entity_relations profileFarm ON profileFarm.source_id = profile.id AND profileFarm.relationship = 'farm'
+           JOIN entities farm ON farm.id = COALESCE(json_extract(profile.payload_json, '$.farmId'), profileFarm.target_id)
+             AND farm.kind = 'farm' AND farm.owner_id = animal.owner_id
+           WHERE profile.kind = 'farmerProfile' AND profile.owner_id = animal.owner_id
+           ORDER BY profile.created_at, profile.id LIMIT 1)
+        ) IS NOT NULL;
+
+      INSERT INTO entity_relations (source_id, relationship, target_id)
+      SELECT animal.id, 'farm', json_extract(animal.payload_json, '$.farmId')
+      FROM entities animal
+      JOIN entities farm ON farm.id = json_extract(animal.payload_json, '$.farmId')
+        AND farm.kind = 'farm' AND farm.owner_id = animal.owner_id
+      WHERE animal.kind = 'livestock'
+        AND json_type(animal.payload_json, '$.farmId') = 'text'
+        AND NOT EXISTS (
+          SELECT 1 FROM entity_relations relation
+          WHERE relation.source_id = animal.id AND relation.relationship = 'farm'
+            AND relation.target_id = json_extract(animal.payload_json, '$.farmId')
+        );
+
+      UPDATE entities AS animal
+      SET context_id = json_extract(animal.payload_json, '$.farmId')
+      WHERE animal.kind = 'livestock'
+        AND EXISTS (
+          SELECT 1 FROM entities farm
+          WHERE farm.id = json_extract(animal.payload_json, '$.farmId')
+            AND farm.kind = 'farm' AND farm.owner_id = animal.owner_id
+        );
+
+      UPDATE entities AS consultation
+      SET payload_json = json_set(consultation.payload_json, '$.farmId', (
+        SELECT json_extract(animal.payload_json, '$.farmId')
+        FROM entity_relations relation
+        JOIN entities animal ON animal.id = relation.target_id AND animal.kind = 'livestock'
+        WHERE relation.source_id = consultation.id AND relation.relationship = 'animal'
+        ORDER BY relation.id LIMIT 1
+      ))
+      WHERE consultation.kind = 'consultation'
+        AND (json_type(consultation.payload_json, '$.farmId') IS NULL OR json_type(consultation.payload_json, '$.farmId') = 'null')
+        AND EXISTS (
+          SELECT 1 FROM entity_relations relation
+          JOIN entities animal ON animal.id = relation.target_id AND animal.kind = 'livestock'
+          WHERE relation.source_id = consultation.id AND relation.relationship = 'animal'
+        );
+
+      UPDATE entities AS consultation
+      SET context_id = json_extract(consultation.payload_json, '$.farmId')
+      WHERE consultation.kind = 'consultation'
+        AND EXISTS (
+          SELECT 1 FROM entities farm
+          WHERE farm.id = json_extract(consultation.payload_json, '$.farmId')
+            AND farm.kind = 'farm' AND farm.owner_id = consultation.owner_id
+        );
+
+      INSERT INTO entity_relations (source_id, relationship, target_id)
+      SELECT consultation.id, 'farm', json_extract(consultation.payload_json, '$.farmId')
+      FROM entities consultation
+      JOIN entities farm ON farm.id = json_extract(consultation.payload_json, '$.farmId')
+        AND farm.kind = 'farm' AND farm.owner_id = consultation.owner_id
+      WHERE consultation.kind = 'consultation'
+        AND json_type(consultation.payload_json, '$.farmId') = 'text'
+        AND NOT EXISTS (
+          SELECT 1 FROM entity_relations relation
+          WHERE relation.source_id = consultation.id AND relation.relationship = 'farm'
+            AND relation.target_id = json_extract(consultation.payload_json, '$.farmId')
+        );
+
+      UPDATE entities AS draft
+      SET payload_json = json_set(draft.payload_json, '$.input.farmId', (
+        SELECT json_extract(animal.payload_json, '$.farmId')
+        FROM entities animal
+        WHERE animal.kind = 'livestock'
+          AND animal.id = json_extract(draft.payload_json, '$.input.animalId')
+        LIMIT 1
+      ))
+      WHERE draft.kind = 'bookingDraft'
+        AND (json_type(draft.payload_json, '$.input.farmId') IS NULL OR json_type(draft.payload_json, '$.input.farmId') = 'null')
+        AND EXISTS (
+          SELECT 1 FROM entities animal
+          WHERE animal.kind = 'livestock'
+            AND animal.id = json_extract(draft.payload_json, '$.input.animalId')
+        );
+    `,
+  },
 ];
 
 export async function migrateDatabase(database: SQLiteDatabase): Promise<number> {

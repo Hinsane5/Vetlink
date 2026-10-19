@@ -8,6 +8,7 @@ import { SqliteProfileRepository } from './SqliteProfileRepository';
 import { ProfileService } from '../../../application/ProfileService';
 import { DashboardService } from '../../../application/DashboardService';
 import { LivestockService } from '../../../application/LivestockService';
+import { FarmService } from '../../../application/FarmService';
 import { HealthRecordService } from '../../../application/HealthRecordService';
 import { PatientService } from '../../../application/PatientService';
 import { FrontendPreviewService } from '../../../application/FrontendPreviewService';
@@ -38,6 +39,7 @@ export interface LocalStore {
   profiles: ProfileService;
   dashboard: DashboardService;
   livestock: LivestockService;
+  farms: FarmService;
   healthRecords: HealthRecordService;
   patients: PatientService;
   preview: FrontendPreviewService;
@@ -94,6 +96,7 @@ async function createLocalStore(): Promise<LocalStore> {
     new ExpoIdFactory(),
   );
   const dashboard = new DashboardService(repositories, profiles, new ExpoIdFactory());
+  const farms = new FarmService(repositories, profileRepository, new ExpoIdFactory());
   const livestock = new LivestockService(repositories, profileRepository, attachmentMedia, new ExpoIdFactory());
   const healthRecords = new HealthRecordService(repositories, livestock, profiles, events);
   const patients = new PatientService(repositories, profiles, healthRecords);
@@ -126,5 +129,5 @@ async function createLocalStore(): Promise<LocalStore> {
     );
   }
 
-  return { database, repositories, events, auth, profiles, dashboard, livestock, healthRecords, patients, preview, vetDirectory, catalog, commerce, payments, booking, consultations, clinicalNotes, recommendations, chat, availability, careCoordination, authStore, schemaVersion, fixtureSeedVersion, seedResult };
+  return { database, repositories, events, auth, profiles, dashboard, farms, livestock, healthRecords, patients, preview, vetDirectory, catalog, commerce, payments, booking, consultations, clinicalNotes, recommendations, chat, availability, careCoordination, authStore, schemaVersion, fixtureSeedVersion, seedResult };
 }

@@ -64,8 +64,8 @@ export class ProfileService {
       postalCode: values.postalCode,
     };
     const address = current.address
-      ? revised(current.address, addressPayload, timestamp)
-      : createEntity('address', addressId, userId, addressPayload, timestamp, current.profile.id);
+      ? { ...revised(current.address, addressPayload, timestamp), contextId: farmId }
+      : createEntity('address', addressId, userId, addressPayload, timestamp, farmId);
 
     const creates: ProfileCreate[] = [...attachments.creates];
     const updates: ProfileUpdate[] = [

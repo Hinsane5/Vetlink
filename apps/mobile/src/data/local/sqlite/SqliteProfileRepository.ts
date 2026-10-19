@@ -27,11 +27,22 @@ export class SqliteProfileRepository implements ProfileRepository {
     const farmId = typeof profile.payload.farmId === 'string'
       ? profile.payload.farmId
       : profileRelations.find((relation) => relation.relationship === 'farm')?.targetId;
-    const addressId = profileRelations.find((relation) => relation.relationship === 'address')?.targetId;
     const farm = farmId ? await this.findEntity('farm', farmId) : null;
     const farmRelations = farm ? await this.relationsFrom(farm.id) : [];
-    const resolvedAddressId = addressId ?? (typeof farm?.payload.visitAddressId === 'string' ? farm.payload.visitAddressId : null);
+    if (farm && (farm.kind !== 'farm' || farm.ownerId !== userId || !farmRelations.some((relation) => relation.relationship === 'owner' && relation.targetId === userId))) {
+      throw new DomainError('FORBIDDEN', 'Peternakan aktif bukan milik akun ini atau relasinya tidak valid.');
+    }
+    const addressId = profileRelations.find((relation) => relation.relationship === 'address')?.targetId;
+    const resolvedAddressId = (typeof farm?.payload.visitAddressId === 'string' ? farm.payload.visitAddressId : null)
+      ?? farmRelations.find((relation) => relation.relationship === 'visitAddress')?.targetId
+      ?? addressId;
     const address = resolvedAddressId ? await this.findEntity('address', resolvedAddressId) : null;
+    if (farm && resolvedAddressId && !farmRelations.some((relation) => relation.relationship === 'visitAddress' && relation.targetId === resolvedAddressId)) {
+      throw new DomainError('FORBIDDEN', 'Alamat aktif tidak terhubung dengan peternakan ini.');
+    }
+    if (address && (address.ownerId !== userId || (farm && address.contextId !== farm.id))) {
+      throw new DomainError('FORBIDDEN', 'Alamat aktif tidak sesuai dengan peternakan milik akun ini.');
+    }
     const submissions = role === 'vet' ? await this.related(profile.id, 'verificationSubmission') : [];
     const attachments = await this.listByOwner('attachment', userId);
     const drafts = await this.listByOwner('profileDraft', userId);

@@ -51,7 +51,11 @@ export function BookingFlow({ store, userId, vetId, onBack, onComplete }: Props)
       setLoading(true); setError('');
       store.booking.open(userId, vetId).then((next) => {
         if (!active) return;
-        setContext(next); setInput(next.draft.input); setReview(null); setScheduleRevision((value) => value + 1);
+        const selectedAnimal = next.animals.find((animal) => animal.id === next.draft.input.animalId);
+        const recoveredInput = selectedAnimal
+          ? { ...next.draft.input, farmId: selectedAnimal.farmId, visitAddress: next.draft.input.service === 'visit' ? selectedAnimal.farmVisitAddress : next.draft.input.visitAddress }
+          : next.draft.input;
+        setContext(next); setInput(recoveredInput); setReview(null); setScheduleRevision((value) => value + 1);
         setNotice(next.draft.version > 1 ? 'Draft tersimpan dimuat kembali.' : '');
       }).catch((cause: unknown) => { if (active) setError(message(cause)); }).finally(() => { if (active) setLoading(false); });
     }, 0);
@@ -130,7 +134,7 @@ export function BookingFlow({ store, userId, vetId, onBack, onComplete }: Props)
           </> : review ? <>
             <View style={styles.card}>
               <Text style={styles.heading}>Detail konsultasi</Text>
-              <Text style={styles.body}>{serviceName(review.input.service)} · {review.animalName}</Text>
+              <Text style={styles.body}>{serviceName(review.input.service)} · {review.animalName} · {review.farmName}</Text>
               <Text style={styles.body}>{date(review.input.startsAt, review.timezone)} · {time(review.input.startsAt, review.timezone)}–{time(review.input.endsAt, review.timezone)}</Text>
               <Text style={styles.muted}>{review.timezone}</Text>
               {review.input.service === 'visit' ? <><Text style={styles.label}>Alamat kunjungan</Text><Text style={styles.body}>{review.input.visitAddress}</Text></> : null}
@@ -144,9 +148,9 @@ export function BookingFlow({ store, userId, vetId, onBack, onComplete }: Props)
           </> : <>
             {!ready ? <InlineFeedback tone="error" message={!context.vet.verified ? 'Dokter belum terverifikasi. Pilih dokter lain untuk membuat booking.' : !context.vet.accepting ? 'Dokter belum menerima permintaan baru.' : 'Belum ada ternak Anda yang sesuai dengan jenis ternak yang dilayani dokter ini.'} /> : null}
             <View style={styles.card}>
-              <Text style={styles.heading}>Layanan</Text><View style={styles.choices}>{context.vet.services.map((value) => <Choice key={value} label={serviceName(value)} selected={input.service === value} disabled={busy} onPress={() => { change({ service: value, startsAt: '', endsAt: '', selectedDay: '' }); setDay(''); }} />)}</View>
+              <Text style={styles.heading}>Layanan</Text><View style={styles.choices}>{context.vet.services.map((value) => <Choice key={value} label={serviceName(value)} selected={input.service === value} disabled={busy} onPress={() => { const animal = context.animals.find((item) => item.id === input.animalId); change({ service: value, startsAt: '', endsAt: '', selectedDay: '', visitAddress: value === 'visit' ? animal?.farmVisitAddress ?? '' : '' }); setDay(''); }} />)}</View>
               <Text style={styles.label}>Ternak yang diperiksa *</Text>
-              {context.animals.length ? <View style={styles.choices}>{context.animals.map((animal) => <Choice key={animal.id} label={`${animal.name} · ${animal.displayCode}`} selected={input.animalId === animal.id} disabled={busy} onPress={() => change({ animalId: animal.id })} />)}</View> : <EmptyState title="Ternak belum tersedia" description="Tambahkan ternak yang sesuai melalui menu Ternak, atau pilih dokter lain." role="farmer" />}
+              {context.animals.length ? <View style={styles.choices}>{context.animals.map((animal) => <Choice key={animal.id} label={`${animal.name} · ${animal.displayCode} · ${animal.farmName}`} selected={input.animalId === animal.id} disabled={busy} onPress={() => change({ animalId: animal.id, farmId: animal.farmId, visitAddress: input.service === 'visit' ? animal.farmVisitAddress : input.visitAddress })} />)}</View> : <EmptyState title="Ternak belum tersedia" description="Tambahkan ternak yang sesuai melalui menu Ternak, atau pilih dokter lain." role="farmer" />}
             </View>
             <View style={styles.card}>
               <Text style={styles.heading}>Tanggal dan waktu *</Text><Text style={styles.muted}>7 hari ke depan · {schedule?.timezone || 'Waktu dokter'}</Text>
@@ -157,7 +161,7 @@ export function BookingFlow({ store, userId, vetId, onBack, onComplete }: Props)
               <Button role="farmer" label="Muat ulang jadwal" variant="secondary" disabled={busy || scheduleLoading} onPress={() => setScheduleRevision((value) => value + 1)} />
               {input.startsAt && schedule && !schedule.slots.some((slot) => slot.startsAt === input.startsAt && slot.endsAt === input.endsAt) && !scheduleLoading ? <InlineFeedback tone="error" message="Jadwal dalam draft sudah tidak tersedia. Pilih waktu baru." /> : null}
             </View>
-            {input.service === 'visit' ? <View style={styles.card}><Text style={styles.heading}>Alamat kunjungan *</Text><Text style={styles.muted}>Wilayah dokter: {context.vet.visitRegions.join(', ') || 'Hubungi dokter untuk cakupan wilayah'}. Cantumkan alamat lengkap dan petunjuk kandang.</Text><TextInput accessibilityLabel="Alamat kunjungan" value={input.visitAddress} onChangeText={(visitAddress) => change({ visitAddress })} editable={!busy} multiline maxLength={1000} placeholder="Jalan, nomor, desa, kota, dan petunjuk lokasi" placeholderTextColor={colors.muted} style={[styles.input, styles.multiline]} /></View> : null}
+            {input.service === 'visit' ? <View style={styles.card}><Text style={styles.heading}>Alamat kunjungan</Text><Text style={styles.muted}>Alamat berasal dari peternakan ternak terpilih agar kunjungan memakai lokasi yang tepat.</Text>{context.animals.find((animal) => animal.id === input.animalId) ? <><Text style={styles.label}>{context.animals.find((animal) => animal.id === input.animalId)?.farmName}</Text><Text style={styles.body}>{input.visitAddress || 'Alamat belum tersedia. Perbarui alamat pada detail peternakan.'}</Text></> : <Text style={styles.body}>Pilih ternak untuk melihat alamat peternakannya.</Text>}</View> : null}
             <View style={styles.card}><Text style={styles.heading}>Keluhan ternak *</Text><TextInput accessibilityLabel="Keluhan ternak" value={input.complaint} onChangeText={(complaint) => change({ complaint })} editable={!busy} multiline maxLength={2000} placeholder="Jelaskan kondisi dan sejak kapan keluhan muncul" placeholderTextColor={colors.muted} style={[styles.input, styles.multiline]} /><Text style={styles.muted}>{input.complaint.length} / 2.000 karakter · minimal 5 karakter</Text></View>
             <View style={styles.card}><Text style={styles.heading}>Foto atau video</Text><Text style={styles.muted}>Opsional. Pilih berkas yang membantu dokter memahami kondisi ternak.</Text>
               {attachments.map((attachment) => <View key={attachment.id} style={styles.attachment}>

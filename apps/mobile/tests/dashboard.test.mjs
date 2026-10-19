@@ -90,12 +90,19 @@ test('turning off availability changes only the availability record and leaves a
 
 test('vet context opens the assigned consultation ID and rejects another veterinarian access', async () => {
   const consultationRecord = consultation('consultation-assigned', 'farmer-1', 'vet-1', 'cow-1', 'requested', '2026-10-06T02:00:00.000Z');
-  const animal = entity('cow-1', 'livestock', 'farmer-1', { name: 'Mawar' });
+  const animal = { ...entity('cow-1', 'livestock', 'farmer-1', { name: 'Mawar', farmId: 'farm-1' }), contextId: 'farm-1' };
   const farmer = entity('farmer-1', 'user', null, { name: 'Peternak Satu' });
+  const farm = entity('farm-1', 'farm', 'farmer-1', { name: 'Kandang Satu' });
+  consultationRecord.payload.farmId = farm.id;
+  consultationRecord.contextId = farm.id;
   const repository = new MemoryDomainRepository({ consultation: consultationRecord, relations: [
     { sourceId: consultationRecord.id, relationship: 'veterinarian', targetId: 'vet-1', target: entity('vet-1', 'user', null, { name: 'drh. Satu' }) },
     { sourceId: consultationRecord.id, relationship: 'animal', targetId: animal.id, target: animal },
     { sourceId: consultationRecord.id, relationship: 'farmer', targetId: farmer.id, target: farmer },
+    { sourceId: consultationRecord.id, relationship: 'farm', targetId: farm.id, target: farm },
+    { sourceId: animal.id, relationship: 'farmer', targetId: farmer.id, target: farmer },
+    { sourceId: animal.id, relationship: 'farm', targetId: farm.id, target: farm },
+    { sourceId: farm.id, relationship: 'owner', targetId: farmer.id, target: farmer },
   ] });
   const service = new DashboardService(repository, profileService('verified'), { create: () => 'id' });
 
@@ -150,7 +157,7 @@ class MemoryDomainRepository {
   async findById(kind, id) {
     if (kind === 'consultation' && this.consultation?.id === id) return this.consultation;
     if (kind === 'availability' && this.availability?.id === id) return this.availability;
-    return null;
+    return this.relations.find((item) => item.targetId === id && item.target?.kind === kind)?.target ?? null;
   }
 
   async listByOwner(kind, ownerId) {

@@ -101,6 +101,7 @@ Selisih implementasi awal yang perlu ditinjau pada pemeriksaan Figma berikutnya:
 | Orders F-17 | Success `12:2910`, Orders `12:2925`, Done `12:2963`, Detail `12:2997`, Tracking `12:3032` | `/farmer/orders`, `/farmer/orders/:id`, `/farmer/orders/:id/tracking` | OrderRow, Timeline | order, payment, shipment |
 | Ulasan F-19 | Review `12:2425`, Success `12:2446` | `/farmer/consultations/:id/review` | RatingInput, TextArea | stars, text, eligible/submitting |
 | Profil F-02 | Profile `12:3066`, Edit `12:3103` | `/farmer/profile`, `/farmer/profile/edit` | ProfileForm, AddressList | identity, farm, species, photo, address |
+| Multi-Farm FE-26 | Tidak ada frame pengelolaan Farm khusus pada inventory/cache lokal; konteks ternak `12:1889`, `12:1980`, `12:2032`, dan booking `12:2280` menjadi layar terkait | `/farmer/farms`, `/farmer/farms/:farmId`, `/farmer/farms/new`, `/farmer/farms/:farmId/edit` | FarmList, FarmDetail, FarmForm, FarmPicker | owner-scoped farms, active farm, visit address |
 | Pengaturan F-20 | Settings `12:3130`, Help `12:3162`, Logout `12:3184` | `/farmer/settings`, `/farmer/help` | SettingsRow, Dialog | prefs, session, help |
 | Inbox F-20 | Belum ada frame inbox Peternak khusus yang teridentifikasi; gunakan pola Dokter notifications `46:33` | `/farmer/notifications` | NotificationList | recipient scoped events/read |
 
@@ -356,3 +357,11 @@ Visual QA layar Cart/Checkout di Android 390 × 844, ukuran kecil, font besar, k
 ## Implementasi FE-20: Pesanan dan pengiriman
 
 Inventory referensi lokal memetakan Orders `12:2925`, Orders Done `12:2963`, Order Detail `12:2997`, dan Tracking `12:3032` (390 × 844). Screenshot layar tersebut tidak ada pada cache lokal; tidak ada panggilan Figma MCP sesuai instruksi task. UI memakai tokens FE-01, tab aktif/selesai, snapshot order, dan timeline vertikal. Status pengiriman hanya baca dari adapter lokal dan kegagalan tetap menjadi event kendala; tidak ada aksi UI untuk mengubah status order atau shipment. QA Android dan pixel-match ditunda.
+
+## Implementasi FE-26: banyak Peternakan
+
+Inventory dan cache screenshot lokal tidak menyediakan frame khusus untuk daftar/detail/form Farm. Node nyata yang sudah dipetakan untuk alur terkait ialah daftar ternak `12:1889`, tambah ternak `12:1980`, detail `12:2032`, dan Booking `12:2280`. Screenshot lokal [farmer-booking.png](reference/figma/screenshots/farmer-booking.png) ditinjau: prototype menempatkan pilihan layanan, jadwal, pemilih ternak, keluhan, lampiran, biaya, dan tombol lanjut. Figma MCP tidak dipanggil sesuai batas task.
+
+`FarmFlow` menambahkan list/detail/create/edit/select mandiri di Beranda Peternak. `LivestockFlow` memakai picker Farm eksplisit saat create dan menampilkan nama Farm pada list/detail tanpa membatasi daftar ke pilihan aktif. Booking menunjukkan Farm dari animal dan mengisi alamat kunjungan dari alamat Farm tersebut. Perbedaan ini mengikuti DEC-27 dan aturan owner/context; tidak mempertahankan picker alamat bebas untuk kunjungan.
+
+Farm management dirancang dengan tokens/Inter/Lucide dan komponen input/dialog yang sudah ada sesuai DEC-24 karena frame khusus tidak tersedia dalam cache lokal. Tidak ada screenshot prototype yang dipakai sebagai UI. Perbandingan desain terkini, layar Android 390 × 844, ukuran kecil/font besar, taps, keyboard, Back, dan scroll **Belum diuji** karena sesi tidak memiliki Android SDK atau `adb`; FE-26 tetap menunggu gate QA native.

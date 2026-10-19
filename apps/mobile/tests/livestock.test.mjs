@@ -41,7 +41,7 @@ test('search and species/sex filters combine and return stable name order', () =
   assert.deepEqual(selectLivestock(items, { query: 'bud-0' }).map((item) => item.id), ['animal-1', 'animal-2', 'animal-3']);
 });
 
-test('farmer list and ID detail stay scoped to the active owner and farm', async () => {
+test('farmer list includes owned farms and ID detail stays scoped to the owner', async () => {
   const setup = makeService();
   const visible = await setup.service.list('farmer-1');
   assert.deepEqual(visible.map((item) => item.id), ['animal-1']);
@@ -55,7 +55,7 @@ test('farmer list and ID detail stay scoped to the active owner and farm', async
 test('create persists a unique farm ID, data, and locally stored photo in one commit', async () => {
   const setup = makeService();
   const photo = { type: 'new', asset: { uri: 'picker://new-photo', filename: 'melati.jpg', mimeType: 'image/jpeg', byteSize: 234, kind: 'image' } };
-  const created = await setup.service.create('farmer-1', input, photo);
+  const created = await setup.service.create('farmer-1', 'farm-1', input, photo);
 
   assert.equal(created.id, 'generated-1');
   assert.equal(created.displayCode, 'BUD-02');
@@ -70,7 +70,7 @@ test('create persists a unique farm ID, data, and locally stored photo in one co
   assert.ok(changes.creates.find((item) => item.entity.kind === 'livestock').relations.some((link) => link.relationship === 'farm' && link.targetId === 'farm-1'));
   assert.ok(changes.creates.find((item) => item.entity.kind === 'livestock').relations.some((link) => link.relationship === 'photo' && link.targetId === attachment.id));
   await assert.rejects(
-    setup.service.create('farmer-1', { ...input, displayCode: 'BUD-01' }),
+    setup.service.create('farmer-1', 'farm-1', { ...input, displayCode: 'BUD-01' }),
     (error) => error instanceof DomainError && error.code === 'VALIDATION_FAILED',
   );
 });
@@ -91,11 +91,11 @@ test('edit updates the same animal version, preserves ownership links, and can c
 test('profile species constrain creation and photo selection cannot attach a document', async () => {
   const setup = makeService();
   await assert.rejects(
-    setup.service.create('farmer-1', { ...input, species: 'goat' }),
+    setup.service.create('farmer-1', 'farm-1', { ...input, species: 'goat' }),
     (error) => error instanceof DomainError && error.code === 'VALIDATION_FAILED',
   );
   await assert.rejects(
-    setup.service.create('farmer-1', input, { type: 'new', asset: { uri: 'picker://file', filename: 'doc.pdf', mimeType: 'application/pdf', byteSize: 12, kind: 'document' } }),
+    setup.service.create('farmer-1', 'farm-1', input, { type: 'new', asset: { uri: 'picker://file', filename: 'doc.pdf', mimeType: 'application/pdf', byteSize: 12, kind: 'document' } }),
     (error) => error instanceof DomainError && error.code === 'VALIDATION_FAILED',
   );
 });
@@ -106,11 +106,12 @@ function makeService({ withPhoto = false } = {}) {
   const profile = entity('profile-1', 'farmerProfile', farmer.id, { farmId: farm.id });
   const otherFarmer = entity('farmer-2', 'user', null, { name: 'Peternak Dua' });
   const otherFarm = entity('farm-2', 'farm', otherFarmer.id, { species: ['goat'] });
-  const cow = entity('animal-1', 'livestock', farmer.id, { ...input, displayCode: 'BUD-01', name: 'Mawar', species: 'cattle', breed: 'Sapi lokal', photoAttachmentIds: withPhoto ? ['photo-1'] : [] }, farm.id);
-  const foreignCow = entity('animal-foreign', 'livestock', otherFarmer.id, { ...input, displayCode: 'SAR-01', species: 'goat', name: 'Luna' }, otherFarm.id);
+  const cow = entity('animal-1', 'livestock', farmer.id, { ...input, farmId: farm.id, displayCode: 'BUD-01', name: 'Mawar', species: 'cattle', breed: 'Sapi lokal', photoAttachmentIds: withPhoto ? ['photo-1'] : [] }, farm.id);
+  const foreignCow = entity('animal-foreign', 'livestock', otherFarmer.id, { ...input, farmId: otherFarm.id, displayCode: 'SAR-01', species: 'goat', name: 'Luna' }, otherFarm.id);
   const photo = entity('photo-1', 'attachment', farmer.id, { kind: 'image', accessContext: 'livestock', localUri: 'private://photo-1', filename: 'mawar.jpg', mimeType: 'image/jpeg', byteSize: 100 }, cow.id);
   const records = [farmer, farm, profile, otherFarmer, otherFarm, cow, foreignCow, ...(withPhoto ? [photo] : [])];
   const relations = [
+    link(farm.id, 'owner', farmer.id), link(otherFarm.id, 'owner', otherFarmer.id),
     link(cow.id, 'farmer', farmer.id), link(cow.id, 'farm', farm.id),
     link(foreignCow.id, 'farmer', otherFarmer.id), link(foreignCow.id, 'farm', otherFarm.id),
     ...(withPhoto ? [link(cow.id, 'photo', photo.id)] : []),
@@ -144,6 +145,7 @@ class MemoryDomainRepository {
     this.relations = structuredClone(relations);
   }
   async findById(kind, id) { const item = this.entities.get(id); return item?.kind === kind ? structuredClone(item) : null; }
+  async listByOwner(kind, ownerId) { return [...this.entities.values()].filter((item) => item.kind === kind && item.ownerId === ownerId).map((item) => structuredClone(item)); }
   async listByRelated(kind, relatedId, relationship) {
     return this.relations.filter((item) => item.relationship === relationship && item.targetId === relatedId)
       .map((item) => this.entities.get(item.sourceId)).filter((item) => item?.kind === kind).map((item) => structuredClone(item));
@@ -179,7 +181,7 @@ class MemoryProfileRepository {
 }
 
 function snapshot(id, name, displayCode, sex, breed) {
-  return { id, farmId: 'farm-1', name, displayCode, species: 'cattle', breed, sex, estimatedAgeMonths: 12, weightKg: 100, photo: null, createdAt: '', updatedAt: '' };
+  return { id, farmId: 'farm-1', farmName: 'Kandang Satu', farmVisitAddress: 'Jalan Fiktif, Bogor', name, displayCode, species: 'cattle', breed, sex, estimatedAgeMonths: 12, weightKg: 100, photo: null, createdAt: '', updatedAt: '' };
 }
 
 function entity(id, kind, ownerId, payload, contextId = null) {

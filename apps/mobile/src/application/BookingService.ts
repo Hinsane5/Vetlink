@@ -16,13 +16,12 @@ export class BookingService {
   }
 
   async open(userId: string, vetId: string) {
-    const { livestock, profiles, directory } = this.services(this.storage.read);
-    const [vet, animals, profile] = await Promise.all([directory.get(vetId), livestock.list(userId), profiles.load(userId, 'farmer')]);
+    const { livestock, directory } = this.services(this.storage.read);
+    const [vet, animals] = await Promise.all([directory.get(vetId), livestock.list(userId)]);
     const draft = await this.storage.transaction(async (unit) => {
       const existing = (await unit.repository.listByOwner('bookingDraft', userId)).find((item) => item.payload.vetId === vetId && item.payload.status === 'draft');
       if (existing) return toDraft(existing);
-      const address = profile.farmer;
-      const record = this.entity('bookingDraft', this.ids.create(), userId, { vetId, status: 'draft', input: { ...emptyBookingInput, service: vet.services[0] ?? 'chat', visitAddress: address?.address ? [address.address, address.city, address.province, address.postalCode].filter(Boolean).join(', ') : '' } }, vetId);
+      const record = this.entity('bookingDraft', this.ids.create(), userId, { vetId, status: 'draft', input: { ...emptyBookingInput, service: vet.services[0] ?? 'chat' } }, vetId);
       await unit.repository.create(record, [{ sourceId: record.id, targetId: vetId, relationship: 'veterinarian' }]);
       return toDraft(record);
     });
@@ -125,17 +124,18 @@ export class BookingService {
       const quoteId = this.ids.create();
       const consultation = this.entity('consultation', id, userId, {
         operationKey: `booking:${record.id}`, displayCode: `VL-${current.input.service === 'visit' ? 'V' : 'C'}-${id.toUpperCase()}`,
-        farmerId: userId, vetId: record.payload.vetId, animalId: current.input.animalId, type: current.input.service,
+        farmerId: userId, vetId: record.payload.vetId, animalId: current.input.animalId, farmId: current.input.farmId, type: current.input.service,
         status: 'awaiting_payment', complaint: current.input.complaint, attachmentIds: current.input.attachmentIds,
         startsAt: current.input.startsAt, endsAt: current.input.endsAt, feeSnapshot: current.total,
         // Local fixture policy only; production commission has not been chosen.
         commissionSnapshot: Math.floor(current.total / 10), quoteId, paymentId: null,
         ...(current.input.service === 'visit' ? { visitAddressSnapshot: current.input.visitAddress } : {}),
-      });
+      }, current.input.farmId);
       await unit.repository.create(consultation, [
         { sourceId: id, targetId: userId, relationship: 'farmer' },
         { sourceId: id, targetId: String(record.payload.vetId), relationship: 'veterinarian' },
         { sourceId: id, targetId: current.input.animalId, relationship: 'animal' },
+        { sourceId: id, targetId: current.input.farmId, relationship: 'farm' },
         ...current.input.attachmentIds.map((targetId) => ({ sourceId: id, targetId, relationship: 'attachment' })),
       ]);
       await unit.repository.create(this.entity('quote', quoteId, userId, { context: 'consultation', consultationId: id, lines: [{ label: current.input.service === 'chat' ? 'Konsultasi chat' : 'Kunjungan dokter', amount: current.total }], shippingAmount: 0, totalAmount: current.total }, id), [{ sourceId: quoteId, targetId: id, relationship: 'consultation' }]);
@@ -152,12 +152,16 @@ export class BookingService {
     if (!vet.accepting || !vet.services.includes(input.service)) throw new DomainError('INVALID_STATE', 'Dokter belum tersedia untuk layanan ini.');
     const animal = await livestock.get(record.ownerId!, input.animalId);
     if (!vet.species.includes(animal.species)) throw new DomainError('VALIDATION_FAILED', 'Jenis ternak belum dilayani dokter ini.');
+    if (input.farmId !== animal.farmId) throw new DomainError('FORBIDDEN', 'Peternakan pada booking tidak cocok dengan ternak yang dipilih.');
+    if (input.service === 'visit' && (!animal.farmVisitAddress || input.visitAddress.trim() !== animal.farmVisitAddress)) {
+      throw new DomainError('VALIDATION_FAILED', 'Alamat kunjungan harus berasal dari peternakan ternak yang dipilih.');
+    }
     const schedule = await directory.slots(vet.id, input.service);
     if (!schedule.slots.some((slot) => slot.startsAt === input.startsAt && slot.endsAt === input.endsAt)) throw new DomainError('INVALID_STATE', 'Waktu sudah tidak tersedia. Pilih jadwal lain.');
     await this.validateAttachments(unit, record, input.attachmentIds);
     const rate = vet.rates.find((item) => item.service === input.service);
     if (!rate) throw new DomainError('INVALID_STATE', 'Tarif layanan belum tersedia.');
-    return { draftId: record.id, version: record.version, total: rate.amount, vetName: vet.name, animalName: animal.name, timezone: schedule.timezone, input };
+    return { draftId: record.id, version: record.version, total: rate.amount, vetName: vet.name, animalName: animal.name, farmName: animal.farmName, timezone: schedule.timezone, input };
   }
 
   private async validateAttachments(unit: BookingUnit, draft: DomainEntity, ids: string[]) {

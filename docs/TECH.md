@@ -55,12 +55,12 @@ Lucide dimuat sebelum shell dirender bersama Inter agar glyph ikon tersedia saat
 | Kebutuhan | Implementasi aktual |
 | --- | --- |
 | Database | `expo-sqlite ~57.0.3`; file `vetlink.db`, WAL, foreign key, exclusive transaction |
-| Migrasi dan seed | Schema saat ini `user_version=2`, audit `schema_migrations`, fixture seed `fe02-v1` satu kali saat tabel entitas kosong; v2 menambah indeks email unik tanpa kolom database khusus baru |
+| Migrasi dan seed | Schema saat ini `user_version=3`, audit `schema_migrations`, fixture seed `fe02-v1` satu kali saat tabel entitas kosong; v2 menambah indeks email unik dan v3 mengaitkan Farm/ternak/consultation legacy tanpa menghapus record |
 | Repository | Envelope entity dan relasi ber-FK; lookup by ID/owner/relationship; update optimistic version; final clinical note immutable |
 | Domain | Guard verified/assignment, akses peserta layanan, urutan Visit, kelengkapan/finalitas note, dan kalkulasi saldo integer rupiah |
 | Event | `domain_events` + `event_effects`; notification unik per penerima/event dan health event unik per source key; proyeksi satu transaksi |
 | Tes | `npm run test:domain` menjalankan Node `node:test` tanpa framework tambahan; 40 tes total sampai FE-08, termasuk transaksi ekstensi fixture pada SQLite in-memory melalui `node:sqlite` |
-| Perangkat | Xiaomi `2311DRK48G`; schema 2, seed `fe02-v1`, 61 entitas/79 relasi dipertahankan oleh migrasi; foreign-key/integrity check lulus; cold restart dan retry event SQLite lulus |
+| Perangkat | Bukti historis Xiaomi `2311DRK48G`; schema 2, seed `fe02-v1`, 61 entitas/79 relasi dipertahankan oleh migrasi; foreign-key/integrity check lulus; cold restart dan retry event SQLite lulus. Schema 3 FE-26 diperiksa melalui tes repository/migrasi lokal; QA Android masih tertunda |
 
 ## Tahap frontend aktif
 

@@ -1,6 +1,7 @@
 import type { AccountRole } from '../domain/auth';
 import type { DomainEntity, EntityKind, EntityRelation } from '../domain/entities';
 import { DomainError } from '../domain/errors';
+import { hasConsultationFarmContext } from './livestockAccess';
 import { localDisplay, overlaps, timezoneValid } from '../domain/availability';
 import {
   validateFollowUpInput,
@@ -311,7 +312,8 @@ export class CareCoordinationService {
       unit.repository.findById('livestock', animalId),
     ]);
     if (!farmers.some((item) => item.id === farmerId) || !vets.some((item) => item.id === vetId)
-      || !animals.some((item) => item.id === animalId) || animal?.ownerId !== farmerId) {
+      || !animals.some((item) => item.id === animalId) || !animal
+      || !(await hasConsultationFarmContext(unit.repository, consultation, animal, farmerId))) {
       throw new DomainError('FORBIDDEN', 'Relasi ternak dan layanan tidak valid.');
     }
     return { consultation, farmerId, vetId, animalId };
