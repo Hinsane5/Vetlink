@@ -209,6 +209,7 @@ try {
     });
     const actors = [];
     let consultationId;
+    let unpaidConsultationId;
     let failedStorageServer;
     try {
       const farmer = await registerSmokeUser(healthy.baseUrl, 'farmer', 'Peternak Fiktif BE-07');
@@ -249,6 +250,13 @@ try {
       assert.equal(createdAnimalResponse.status, 201);
       const createdAnimal = await createdAnimalResponse.json();
       assert.equal(createdAnimal.display_code, 'NEW-001');
+      unpaidConsultationId = randomUUID();
+      await database.query(`INSERT INTO consultations
+        (id, display_code, farmer_id, vet_id, animal_id, service_type, complaint, status,
+         starts_at, ends_at, fee_snapshot_idr, commission_snapshot_idr)
+        VALUES ($1, $2, $3, $4, $5, 'chat', 'Booking fiktif belum dibayar', 'awaiting_payment',
+                now() + interval '3 hours', now() + interval '4 hours', 1000, 0)`,
+        [unpaidConsultationId, `BE03-${unpaidConsultationId}`, farmer.user.id, vet.user.id, createdAnimal.id]);
       const farmTakeover = await sendJson(healthy.baseUrl, '/v1/livestock', outsider.accessToken, 'POST', {
         farmId, displayCode: 'TAKE-001', name: 'Tidak boleh', species: 'sapi', sex: 'female',
       });
@@ -428,6 +436,7 @@ try {
         await database.query('DELETE FROM payments WHERE payable_type = \'consultation\' AND payable_id = $1', [consultationId]);
         await database.query('DELETE FROM consultations WHERE id = $1', [consultationId]);
       }
+      if (unpaidConsultationId) await database.query('DELETE FROM consultations WHERE id = $1', [unpaidConsultationId]);
       if (actors.length > 0) {
         await database.query('DELETE FROM livestock WHERE farmer_id = ANY($1::uuid[])', [actors]);
         await database.query('DELETE FROM farms WHERE owner_id = ANY($1::uuid[])', [actors]);

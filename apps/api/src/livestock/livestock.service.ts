@@ -9,18 +9,18 @@ export class LivestockService {
 
   async list(p: AuthenticatedPrincipal) {
     if (p.activeRole === 'farmer') return (await this.db.query('SELECT l.* FROM livestock l WHERE l.farmer_id=$1 ORDER BY l.created_at DESC,l.id',[p.userId])).rows;
-    return (await this.db.query(`SELECT DISTINCT l.* FROM livestock l JOIN consultations c ON c.animal_id=l.id AND c.vet_id=$1 ORDER BY l.created_at DESC,l.id`,[p.userId])).rows;
+    return (await this.db.query(`SELECT DISTINCT l.* FROM livestock l JOIN consultations c ON c.animal_id=l.id AND c.farmer_id=l.farmer_id AND c.vet_id=$1 AND c.status NOT IN ('draft','awaiting_payment') ORDER BY l.created_at DESC,l.id`,[p.userId])).rows;
   }
 
   async patients(p: AuthenticatedPrincipal) {
     this.requireVet(p);
     return (await this.db.query(`SELECT DISTINCT l.id,l.display_code AS "displayCode",l.name,l.species,l.breed,l.sex,l.birth_date AS "birthDate",l.estimated_age_months AS "estimatedAgeMonths",l.weight_kg AS "weightKg",l.farm_id AS "farmId",l.farmer_id AS "farmerId"
       FROM livestock l JOIN consultations c ON c.animal_id=l.id AND c.farmer_id=l.farmer_id
-      WHERE c.vet_id=$1 ORDER BY l.name,l.id`,[p.userId])).rows;
+      WHERE c.vet_id=$1 AND c.status NOT IN ('draft','awaiting_payment') ORDER BY l.name,l.id`,[p.userId])).rows;
   }
 
   async get(p: AuthenticatedPrincipal,id: string) {
-    const r=await this.db.query(`SELECT l.* FROM livestock l WHERE l.id=$1 AND (${p.activeRole==='farmer'?'l.farmer_id=$2':'EXISTS (SELECT 1 FROM consultations c WHERE c.animal_id=l.id AND c.farmer_id=l.farmer_id AND c.vet_id=$2)'})`,[id,p.userId]);
+    const r=await this.db.query(`SELECT l.* FROM livestock l WHERE l.id=$1 AND (${p.activeRole==='farmer'?'l.farmer_id=$2':"EXISTS (SELECT 1 FROM consultations c WHERE c.animal_id=l.id AND c.farmer_id=l.farmer_id AND c.vet_id=$2 AND c.status NOT IN ('draft','awaiting_payment'))"})`,[id,p.userId]);
     if(!r.rows[0]) throw new NotFoundException({code:'RESOURCE_NOT_FOUND',message:'Ternak/pasien tidak ditemukan.'}); return r.rows[0];
   }
 

@@ -23,6 +23,7 @@ Pemeriksaan dari `apps/api` menggunakan Node `24.10.0` / npm `11.6.0`; `.nvmrc` 
 - `npm run db:migrate` — **Lulus**; migrasi `20261019_000006_health_events.sql` diterapkan.
 - `npm run db:seed` — **Lulus**; fixture lokal non-destruktif tersedia.
 - `npm run api:smoke` — **Lulus**: create/patch ternak dan stale version, farm owner denial, arbitrary ID 404, daftar pasien dokter hanya pasien konsultasi terkait, farmer tidak dapat membaca daftar dokter, care-event retry mengembalikan event yang sama, draft clinical note tidak muncul, final note muncul sekali, dan timeline tidak menyertakan media privat. Smoke BE-07 tetap memeriksa chat/media scope, retry, byte MIME/size, private download serta pagination.
+- Review koordinator mengecualikan konsultasi `draft`/`awaiting_payment` dari akses pasien Dokter dan menambah fixture konsultasi belum dibayar pada smoke. `npm run check` serta `api:smoke` dijalankan ulang dan lulus pada PostgreSQL lokal; container dihentikan setelah pemeriksaan.
 - Tidak ada `npm test` pada manifest. Uji Android/mobile API integration belum dijalankan; mobile belum menggunakan backend.
 - Percobaan smoke awal menguji final-note immutability lalu teardown terhalang trigger immutable. Teardown smoke diperbaiki agar hanya fixture cleanup menggunakan `session_replication_role=replica`; trigger production tidak berubah. Smoke penuh sesudah perbaikan lulus.
 

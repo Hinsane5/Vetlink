@@ -54,14 +54,14 @@ Semua route memakai bearer dan active role membership. Ternak Peternak dibatasi 
 
 | Method / path | Request → response | Otorisasi / aturan |
 | --- | --- | --- |
-| `GET /v1/livestock` | Array ternak | Peternak milik sendiri; Dokter pasien terkait saja |
+| `GET /v1/livestock` | Array ternak | Peternak milik sendiri; Dokter pasien dari layanan terkait yang sudah terkirim saja (`draft`/`awaiting_payment` dikecualikan) |
 | `POST /v1/livestock` | `{farmId,displayCode,name,species,breed?,sex,birthDate?,estimatedAgeMonths?,weightKg?}` → 201 | Peternak; farm harus milik actor dan spesies konsisten; displayCode unik per farm |
-| `GET /v1/livestock/{id}` | Detail ternak | Owner Peternak atau Dokter terkait |
+| `GET /v1/livestock/{id}` | Detail ternak | Owner Peternak atau Dokter dari layanan terkait yang sudah terkirim |
 | `PATCH /v1/livestock/{id}` | Field ternak + `expectedVersion` → detail versi baru | Peternak owner; stale version/ID tidak mengubah record |
 | `DELETE /v1/livestock/{id}` | `{deleted:true}` | Peternak owner; hanya bila tidak ada riwayat yang mereferensikannya |
 | `GET /v1/livestock/{id}/health-events` | Timeline terurut terbaru | Owner Peternak atau Dokter terkait; final note muncul satu kali, draft tidak ditampilkan |
 | `POST /v1/livestock/{id}/care-events` | `{kind,occurredAt,description,sourceKey}` → event | Peternak owner; `sourceKey` + payload sama retry mengembalikan event sama, payload berbeda 409; bukan catatan klinis Dokter |
-| `GET /v1/patients` | Data ringkas pasien | Dokter; distinct pasien dari konsultasi terkait saja |
+| `GET /v1/patients` | Data ringkas pasien | Dokter; distinct pasien dari layanan terkait yang sudah terkirim |
 
 Data timeline BE-03 memakai `health_events` dengan provenance dan unique key. `clinical_note_id` unik memastikan proyeksi note tidak tertaut ganda; query timeline menampilkan sumber clinical note langsung dari record final dan mengabaikan baris proyeksi clinical_note agar tidak menduplikasi tampilan. Endpoint note/finalisasi tetap cakupan BE-08.
 
