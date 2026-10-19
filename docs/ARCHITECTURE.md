@@ -1,6 +1,6 @@
 # Arsitektur VetLink
 
-Status: mobile tetap memakai alur Android lokal tanpa autentikasi dan tanpa koneksi backend. `FrontendFlow` memilih persona fixture lokal; FE-05–14 membaca SQLite lewat service/repository. BE-00–08 menyediakan modular monolith NestJS + PostgreSQL dengan Health, Auth, Profile, Livestock, Vet, Payment, Consultation, Clinical, Communication, dan Media modules. Mobile belum diarahkan ke API; domain follow-up, commerce, earning/withdrawal, notification dan integrasi provider produksi tetap menunggu tiket.
+Status per 20 Oktober 2026: mobile tetap memakai alur Android lokal tanpa autentikasi dan tanpa koneksi backend. `FrontendFlow` memilih persona fixture lokal; FE-05–14 membaca SQLite lewat service/repository. BE-00–08 dan BE-10 menyediakan modular monolith NestJS + PostgreSQL dengan Health, Auth, Profile, Livestock, Vet, Payment, Consultation, Clinical, Communication, Media, dan Catalog modules. BE-09, mobile API integration, cart/checkout/order, earning/withdrawal, notification dan provider produksi tetap menunggu tiket.
 
 ## Boundary aplikasi
 
@@ -34,6 +34,7 @@ UI tidak mengetahui tabel SQL, transport HTTP, komisi hardcoded atau fixture out
 | Discovery & availability | Dokter, tarif, jadwal kerja, slot/blok | VetRepository, AvailabilityRepository |
 | Consultations | Request, usulan jadwal, appointment, kunjungan, completion | ConsultationRepository, BookingPolicy |
 | Clinical | Draft/final note, rekomendasi, hasil | ClinicalRepository |
+| Catalog | Pencarian/detail produk aktif dan lookup tautan rekomendasi | CatalogService |
 | Follow-up | Pemeriksaan ulang, reminder, laporan | FollowUpRepository, ReminderDeliveryService |
 | Messaging & media | Message, attachment, viewer | MessageRepository, ChatDeliveryService, MediaService |
 | Commerce | Produk, cart, quote, order, shipment | CatalogRepository, CartRepository, OrderRepository, ShippingService |
@@ -45,6 +46,10 @@ UI tidak mengetahui tabel SQL, transport HTTP, komisi hardcoded atau fixture out
 `ConsultationController` hanya memetakan route/DTO; aturan booking dan transisi berada di `ConsultationService`. `ConsultationModule` memberi PaymentModule port `ConsultationPaymentSucceededPort`; PaymentModule tidak mengimpor controller konsultasi dan memanggil port di transaksi sukses payment yang sama. Action/outbox disimpan oleh `PostgresConsultationActionAdapter` sebagai append-only record di transaksi, dengan hasil `AdapterResult` yang gagal mengembalikan 503 dan rollback.
 
 Quote tidak menahan slot. Submit booking, acceptance, proposal dan persetujuan proposal memakai advisory transaction lock yang sama dengan BE-04 per dokter, lalu memeriksa ulang availability, blocked time, appointment dan pending proposal. Mutasi memiliki optimistic version dan idempotency key. Scope owner/assignment tetap berasal dari session user ID; role membership tanpa relasi konsultasi tidak memberi akses data.
+
+## Backend BE-10
+
+CatalogModule melayani read-only search/detail untuk active catalog dan mengelola penyisipan fixture melalui seed internal. ClinicalModule menggunakan CatalogService untuk memastikan tautan RecommendationItem merujuk produk aktif dalam transaksi edit yang sama; row lock melindungi pemeriksaan dari deaktivasi bersamaan. Catalog tidak memberi Dokter cart/checkout atau konsep stok.
 
 Visit dan Consultation berubah bersama; final note menyimpan satu HealthEvent di timeline dan tidak menyelesaikan layanan. Completion memerlukan note final, payment succeeded, verifikasi dokter, status `in_progress`, konfirmasi eksplisit dan Visit `examining` bila layanan kunjungan. Komisi lokal disnapshot Rp0 sampai kebijakan komersial dipilih; refund `refund_needed` bukan refund aktual. Cancel, notification delivery dan earning/ledger berada di luar BE-05.
 

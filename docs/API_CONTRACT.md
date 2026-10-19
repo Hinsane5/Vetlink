@@ -1,6 +1,6 @@
 # Kontrak integrasi backend v1
 
-Status: OpenAPI executable memuat route BE-00–08: health/auth, profil/verifikasi, ternak/pasien/riwayat, vet discovery/availability, booking/request/proposal/visit/completion, payment quote/create, chat/media, dan note/recommendation. Domain setelah BE-08 tetap kontrak target tiket berikutnya. Aplikasi mobile belum memakai backend jaringan.
+Status per 20 Oktober 2026: OpenAPI executable memuat route BE-00–08 dan BE-10: health/auth, profil/verifikasi, ternak/pasien/riwayat, vet discovery/availability, booking/request/proposal/visit/completion, payment quote/create, chat/media, note/recommendation, dan pencarian/detail katalog aktif. BE-09 dan domain setelah BE-10 tetap kontrak target tiket berikutnya. Aplikasi mobile belum memakai backend jaringan.
 
 ## Konvensi
 
@@ -10,7 +10,7 @@ Mutasi concurrency-sensitive menerima `expectedVersion`. Mutasi pembayaran, orde
 
 Gunakan action endpoint untuk transisi yang membutuhkan syarat; jangan menyediakan PATCH umum yang membolehkan client mengatur `verified`, `completed`, `paid`, `balance`, atau `finalizedAt`.
 
-## OpenAPI executable BE-00–08
+## OpenAPI executable BE-00–08 dan BE-10
 
 NestJS melayani Swagger UI di `/docs` dan JSON di `/openapi.json`. Endpoint runtime yang tersedia:
 
@@ -25,6 +25,8 @@ NestJS melayani Swagger UI di `/docs` dan JSON di `/openapi.json`. Endpoint runt
 | `POST /v1/auth/password-reset` | Email | 202 generik | 400/429; tidak membocorkan keberadaan akun |
 | `POST /v1/auth/password-reset/confirm` | Reset token, password baru | 204 | 400/429 |
 | `GET /v1/me` | Bearer access token | Akun aktif dan memberships | 401/403 |
+| `GET /v1/products` | Filter opsional `name`, `category`, `species`, `minPrice`, `maxPrice`, `cursor`, `limit` | 200 `ProductPageResponseDto` berisi `items: ProductResponseDto[]`, `nextCursor`, `hasMore` | 400/401/403/503 `ApiErrorResponseDto` |
+| `GET /v1/products/{id}` | ID produk UUID | 200 `ProductResponseDto` dan `unitPriceIdr` authoritative | 401/403/404/503 `ApiErrorResponseDto` |
 | `POST /v1/attachments/uploads` | Multipart `consultationId`, `file`; `Idempotency-Key` | 201 `Attachment` status `uploaded` | 400/401/403/404/409/413/422/503 |
 | `POST /v1/attachments/{id}/commit` | ID lampiran yang diunggah actor | 200 `Attachment` status `committed` | 401/403/404/409/422/503 |
 | `GET /v1/attachments/{id}` | ID lampiran | 200 metadata dan URL content privat | 401/403/404 |
@@ -140,7 +142,7 @@ BE-07 memakai adapter filesystem privat lokal di luar static web root dan adapte
 | Follow-up | GET/POST `/consultations/{id}/follow-ups`; PATCH `/follow-ups/{id}` | Dokter related schedules; konflik slot divalidasi |
 | Laporan | GET/POST `/follow-ups/{id}/progress-reports` | Peternak related submit, dokter related read |
 | Reminder | GET/POST `/reminders`; PATCH `/reminders/{id}`; POST `.../complete` | Owner atau dokter terkait create; care done berbeda delivery sent |
-| Katalog | GET `/products`, `/products/{id}` | Peternak beli; dokter hanya browse untuk rekomendasi |
+| Katalog | GET `/products`, `/products/{id}` | Peternak melihat produk untuk pembelian; Dokter hanya browse untuk rekomendasi; produk nonaktif tersembunyi |
 | Cart/checkout | GET `/me/cart`; PUT/DELETE `/me/cart/items/{productId}`; POST `/checkout-quotes`, `/orders` | Peternak saja; quantities, address, quote checked |
 | Bayar | POST `/payments`; GET `/payments`, `/payments/{id}` | Owner payable; result provider atau adapter, bukan client claimed paid |
 | Orders | GET `/orders`, `/orders/{id}`, `/orders/{id}/shipment` | Owner Peternak |
@@ -149,7 +151,7 @@ BE-07 memakai adapter filesystem privat lokal di luar static web root dan adapte
 | Pencairan | GET/POST `/me/vet/withdrawals`; GET `.../{id}` | Positive ≤ available; reservation transaction |
 | Notifikasi | GET `/me/notifications`; POST `.../{id}/read`; GET/PATCH `/me/preferences` | Recipient/owner |
 
-Tooling admin review, catalog management dan provider callbacks adalah internal backend/operasional berikutnya, bukan fitur mobile dokter atau toko dokter. Integrasi callbacks nyata diblokir sampai provider/security contract tersedia.
+Tooling admin review, pengelolaan katalog, dan provider callbacks tetap merupakan operasi internal, bukan fitur mobile dokter atau toko dokter. Seed katalog hanya menambahkan fixture tanpa menimpa record. Integrasi callbacks nyata diblokir sampai provider/security contract tersedia.
 
 ### BE-05 executable contract
 
@@ -174,6 +176,14 @@ Semua mutasi BE-05 menggunakan `expectedVersion` dan idempotency key; replay pay
 BE-08 mengaktifkan route note dan recommendation di atas. PUT note menerima `expectedVersion` dan field clinical parsial; versi awal adalah `1`, lalu setiap simpan berikutnya menaikkan versi. Penulisan dan finalisasi hanya tersedia saat Consultation `in_progress`. Finalisasi mensyaratkan complaint, findings, assessment, actions, dan careInstructions non-whitespace, serta expectedVersion yang sedang ditinjau. Konfirmasi stale mengembalikan 409; trigger PostgreSQL membuat snapshot final tidak dapat diubah/dihapus. Finalisasi hanya mengubah note dan tidak menyelesaikan Consultation.
 
 Recommendation PUT mengganti item sesuai payload (termasuk daftar kosong untuk draft), memakai `expectedVersion`, dan menyimpan snapshot judul/instruksi/catatan serta productId opsional. Penulisan dan send hanya saat Consultation `in_progress`. Farmer hanya dapat membaca recommendation berstatus sent; Dokter harus menjadi vet konsultasi dan tidak memperoleh aksi cart/checkout. Send menolak daftar kosong; adapter delivery lokal mengembalikan outcome succeeded/failed, dan status sent hanya disimpan setelah succeeded. Adapter bukan provider notifikasi produksi.
+
+### BE-10 executable contract
+
+`GET /products` dan `GET /products/{id}` memerlukan bearer dan active role `farmer` atau `vet`; membership dijaga guard session. Filter `name` (substring tanpa membedakan kapital), `category` (pencocokan kategori tanpa membedakan kapital), `species`, `minPrice`, dan `maxPrice` dapat digabungkan. Hasil daftar hanya memuat produk `active=true`, diurutkan stabil menurut `lower(name), id`, dan memakai cursor opaque serta `limit` 1–100 (default 20). Detail produk nonaktif dan ID yang tidak dikenal sama-sama menghasilkan 404.
+
+`unitPriceIdr` dibaca dari `products.unit_price_idr` sebagai rupiah integer yang aman direpresentasikan pada JSON; client tidak memasok atau menetapkan harga. Produk memiliki active/inactive, kategori, spesies, deskripsi, dan referensi gambar opsional yang saat ini null. Tidak ada route katalog tulis/admin publik, stok, atau toko Dokter. Penambahan katalog saat ini melalui seed idempotent dan tooling internal; seed menggunakan `ON CONFLICT DO NOTHING` serta menggagalkan transaksi bila ID fixture sudah berisi nilai berbeda.
+
+Saat Dokter menulis Recommendation, productId opsional harus menunjuk produk aktif. Produk dibaca dengan row lock `FOR SHARE` dalam transaksi penyimpanan yang sama; jika produk hilang/nonaktif, seluruh edit ditolak. Untuk item tertaut, `titleSnapshot` diturunkan dari nama katalog server, bukan teks judul client. Rekomendasi terkirim tetap immutable dan dapat dibaca melalui snapshot meski produk kemudian nonaktif atau harganya berubah. Harga produk tidak disnapshot sebagai otoritas pembayaran; pembelian/checkout adalah BE-11 milik Peternak.
 
 ### BE-04 executable contract
 
@@ -209,4 +219,4 @@ Payload event minimal: eventId, aggregateId, actorId, occurredAt, version. Efek 
 
 Jalankan suite yang sama terhadap repository lokal dan API: scope ownership, verified guard, slot conflicts, final-note immutability, complete guard, sequence visit, computed totals, earning once, withdrawal reservation/retry, notification recipient. Perbedaan teknis error harus dinormalisasi ke domain error yang sama.
 
-OpenAPI executable BE-00–08 memuat healthcheck, auth, profil/verifikasi, livestock/patient, vet discovery/availability/slots/blocked-times/schedule, booking/request/proposal/visit/completion, payment quote/create, chat/media, serta note/recommendation. Domain endpoint yang tersisa pada tabel masih usulan. Request/response serta validation constraints untuk tiap domain tetap harus diturunkan dari Data model dan direview bersama mobile sebelum implementasi.
+OpenAPI executable BE-00–08 dan BE-10 memuat healthcheck, auth, profil/verifikasi, livestock/patient, vet discovery/availability/slots/blocked-times/schedule, booking/request/proposal/visit/completion, payment quote/create, chat/media, note/recommendation, dan katalog produk aktif. Follow-up BE-09, cart/checkout, order, ledger, payout, dan domain lain pada tabel tetap menunggu tiket backend berikutnya. Perubahan kontrak BE-10 telah dikoordinasikan lewat Orca sebelum implementasi.

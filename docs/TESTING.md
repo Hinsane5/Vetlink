@@ -1,6 +1,6 @@
 # Strategi pengujian VetLink
 
-Status QA per 19 Oktober 2026: tahap aktif memakai frontend lokal tanpa autentikasi/backend jaringan; Pilih Peran membuka persona fiktif. UI FE-06–18 tersedia dan pemeriksaan FE-18 `npm run check` lulus typecheck, lint, serta 103 tes domain/repository. `npm run android` FE-18 berhenti sebelum build karena Android SDK/ADB tidak tersedia. Backend BE-00–08 memiliki route executable; mobile belum terhubung ke API. Pemeriksaan Android terdahulu bukan bukti integrasi backend. Interaksi fitur pada perangkat, viewport kecil/font besar, dan pembandingan visual 390 × 844 tetap tertunda; tidak ada pemanggilan Figma MCP baru.
+Status QA per 20 Oktober 2026: tahap aktif memakai frontend lokal tanpa autentikasi/backend jaringan; Pilih Peran membuka persona fiktif. UI FE-06–18 tersedia dan pemeriksaan FE-18 `npm run check` lulus typecheck, lint, serta 103 tes domain/repository. `npm run android` FE-18 berhenti sebelum build karena Android SDK/ADB tidak tersedia. Backend BE-00–08 dan BE-10 memiliki route executable; BE-09 belum mulai dan mobile belum terhubung ke API. Pemeriksaan Android terdahulu bukan bukti integrasi backend. Interaksi fitur pada perangkat, viewport kecil/font besar, dan pembandingan visual 390 × 844 tetap tertunda; tidak ada pemanggilan Figma MCP baru.
 
 ## Level pengujian
 
@@ -33,6 +33,17 @@ Pemeriksaan dijalankan dari `apps/api` pada Node `24.10.0` / npm `11.6.0`; `.nvm
 Di `apps/api`, `npm ci` lulus dengan peringatan engine karena runtime tersedia Node `24.10.0` sedangkan `.nvmrc` meminta `24.15.0`. `npm run check` lulus (TypeScript typecheck dan Nest build). Database PostgreSQL lokal 17.4 di Compose memakai port 55432 karena port 5432 sudah terpakai; `npm run db:migrate` menerapkan seluruh sembilan migrasi termasuk `20261019_000009_clinical_recommendations.sql`.
 
 `npm run api:smoke` lulus dengan variabel database lokal eksplisit: tambahan BE-08 memeriksa penolakan edit sebelum `in_progress`, required fields, draft parsial, stale review conflict, final note immutable, pembacaan final oleh Peternak, final tidak mengubah status konsultasi, recommendation edit replacement, empty send denied, send/read scoped, dan dokter tidak memiliki route orders/checkout. Smoke suite juga mengulang pemeriksaan yang sudah ada untuk BE-03/04/06/07. Pemanggilan smoke tanpa variabel database lokal gagal karena password koneksi tidak disetel; setelah variabel dev lokal diberikan smoke lulus. Tidak ada provider produksi, credential nyata, atau transaksi finansial. Pemeriksaan visual/mobile tidak berlaku untuk API slice.
+
+## Bukti BE-10 (20 Oktober 2026)
+
+Pemeriksaan dijalankan dari `apps/api` dengan Node `24.10.0` / npm `11.6.0`; `.nvmrc` meminta Node `24.15.0`, sehingga `npm ci --no-audit --no-fund` memberi peringatan engine. PostgreSQL `17.4-alpine` lokal sementara memakai port `55444` dan `tmpfs`; tidak ada volume/data produksi.
+
+- `npm run check` — **Lulus**; `tsc --noEmit` dan Nest build. Run pertama sebelum dependensi tersedia berhenti dengan `tsc: command not found`; setelah `npm ci`, pemeriksaan lengkap lulus.
+- `npm run db:migrate` — **Lulus**; seluruh 11 migrasi diterapkan, termasuk `20261020_000011_catalog.sql`.
+- `npm run db:seed` — **Lulus tiga kali** pada database yang sama. Produk fiktif aktif/nonaktif ditambahkan lewat `ON CONFLICT DO NOTHING`; pengulangan mempertahankan data dan seed memeriksa konflik nilai fixture.
+- `npm run api:smoke` — **Lulus**. OpenAPI memuat route, filter `maxPrice`, serta schema response katalog; smoke menguji filter gabungan nama/kategori/spesies/harga, cursor halaman stabil, harga rupiah integer dari DB, visibilitas aktif/nonaktif, akses browse Dokter, penolakan link recommendation ke produk nonaktif, judul snapshot berasal dari Product, harga detail terbaru, dan snapshot rekomendasi terkirim setelah produk dinonaktifkan. Pemeriksaan existing BE-03/04/05/06/07/08 dalam script yang sama juga lulus.
+- Percobaan smoke pertama menemukan nama fixture uji bertabrakan dengan katalog seed; fixture smoke diganti menjadi nama unik dan run akhir lulus. Script melakukan teardown fixture uji; kontainer PostgreSQL sementara dihentikan setelah pemeriksaan.
+- Tidak ada `npm test`/lint script terpisah pada manifest. Tidak ada Figma/UI/API mobile test untuk slice ini; aplikasi mobile masih memakai adapter lokal. Tidak ada provider produksi, secret, stok/toko Dokter, checkout, transaksi finansial, atau deployment.
 
 ## Bukti BE-03 (19 Oktober 2026)
 

@@ -12,7 +12,7 @@ export class ClinicalNoteInputDto {
 
 export class RecommendationItemDto {
   @IsOptional() @IsUUID() productId?: string;
-  @IsString() @MinLength(1) @MaxLength(160) title!: string;
+  @IsOptional() @IsString() @MinLength(1) @MaxLength(160) title?: string;
   @IsOptional() @IsString() @MaxLength(2000) instructions?: string;
   @IsOptional() @IsString() @MaxLength(2000) note?: string;
 }

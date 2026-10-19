@@ -1,6 +1,6 @@
-# VetLink API (BE-00–08)
+# VetLink API (BE-00–08 dan BE-10)
 
-Backend ini adalah modular monolith NestJS + PostgreSQL. BE-00 menyediakan healthcheck, migrasi awal, seed fiktif non-destruktif, dan kontrak OpenAPI. BE-01 menambahkan register/login/logout/refresh/reset, sesi bearer dan role guard. BE-02 menambahkan profil, Farm/Address, dokumen profesi privat dan review tepercaya. BE-03 menyediakan CRUD ternak, timeline kesehatan dan daftar pasien dokter dengan scope owner/assignment. BE-04 menyediakan discovery dokter, availability, tarif efektif-dated, blocked intervals, kalender dan slot timezone. BE-05 menambahkan quote/booking, request/accept/reject, proposal jadwal, progres kunjungan, completion dan history dengan version/idempotency guard. BE-06 menyediakan Payment dan PaymentAttempt dengan adapter lokal pending; pembayaran order menunggu model BE-11. BE-07 menyediakan storage media privat lokal, upload/commit/download terotorisasi, persistensi pesan dan transport polling. BE-08 menyediakan catatan klinis dan rekomendasi. Domain lain dan provider produksi belum tersedia. Mobile belum terhubung ke API.
+Backend ini adalah modular monolith NestJS + PostgreSQL. BE-00 menyediakan healthcheck, migrasi awal, seed fiktif non-destruktif, dan kontrak OpenAPI. BE-01 menambahkan register/login/logout/refresh/reset, sesi bearer dan role guard. BE-02 menambahkan profil, Farm/Address, dokumen profesi privat dan review tepercaya. BE-03 menyediakan CRUD ternak, timeline kesehatan dan daftar pasien dokter dengan scope owner/assignment. BE-04 menyediakan discovery dokter, availability, tarif efektif-dated, blocked intervals, kalender dan slot timezone. BE-05 menambahkan quote/booking, request/accept/reject, proposal jadwal, progres kunjungan, completion dan history dengan version/idempotency guard. BE-06 menyediakan Payment dan PaymentAttempt dengan adapter lokal pending; pembayaran order menunggu model BE-11. BE-07 menyediakan storage media privat lokal, upload/commit/download terotorisasi, persistensi pesan dan transport polling. BE-08 menyediakan catatan klinis dan rekomendasi. BE-10 menyediakan pencarian/detail katalog aktif dan validasi produk tertaut pada rekomendasi. Domain lain dan provider produksi belum tersedia. Mobile belum terhubung ke API.
 
 BE-08 menyediakan draft dan finalisasi catatan klinis dengan version guard, final snapshot immutable, rekomendasi CRUD/send dan adapter delivery lokal yang dapat gagal. Finalisasi catatan tidak menyelesaikan konsultasi; Dokter tidak mendapat hak checkout.
 
@@ -42,7 +42,7 @@ Container Compose mengikat port hanya pada `127.0.0.1` dan menyimpan data pada v
 
 Jika port host `5432` sudah dipakai, ubah `DATABASE_PORT` di `.env` ke port bebas sebelum `docker compose up`; Compose mengikat port itu ke 5432 pada container dan aplikasi membaca nilai host yang sama.
 
-Seed hanya menambahkan identitas fixture Budi/Yuda, farm, dan ternak fiktif dengan `INSERT ... ON CONFLICT DO NOTHING`. Fixture tidak berisi credential dan tidak dapat dipakai untuk masuk. Seed tidak menghapus atau menimpa record yang sudah ada; konflik ID fixture dengan data berbeda membuat transaksi seed dibatalkan.
+Seed hanya menambahkan identitas fixture Budi/Yuda, farm, ternak, serta produk katalog fiktif dengan `INSERT ... ON CONFLICT DO NOTHING`. Fixture tidak berisi credential dan tidak dapat dipakai untuk masuk. Seed tidak menghapus atau menimpa record yang sudah ada; konflik ID fixture dengan data berbeda membuat transaksi seed dibatalkan.
 
 ## Media dan chat BE-07
 
@@ -62,9 +62,9 @@ Rate limit berjalan di process memory; detail batas ada di [kontrak API](../../d
 
 Reset mengembalikan status/message generik tanpa membocorkan apakah email terdaftar. Adapter `UnconfiguredPasswordResetDeliveryAdapter` mengembalikan hasil `failed`, tidak mengirim email/SMS dan tidak mengembalikan token. Konfirmasi reset hanya menerima token yang adapter-nya berhasil dan tersimpan sebagai `succeeded`; provider pengiriman belum dipilih. Karena itu endpoint reset aman terhadap enumeration, tetapi pengiriman reset yang dapat digunakan menunggu pilihan provider.
 
-## Batas OpenAPI BE-00–08
+## Batas OpenAPI BE-00–08 dan BE-10
 
-Route aktif mencakup health, Auth BE-01/`GET /v1/me`, profil/verifikasi BE-02, ternak/pasien BE-03, vet discovery/availability/slot BE-04, booking/request/proposal/visit/completion BE-05, quote/create payment BE-06, chat/media BE-07, serta catatan/rekomendasi BE-08. Callback pembayaran lokal hanya metode service internal, tanpa route publik. Response, status HTTP, error envelope, pagination, enum status, dan adapter `pending/succeeded/failed` tercantum di OpenAPI untuk route aktif. Route domain lain yang ada di [kontrak integrasi](../../docs/API_CONTRACT.md) menunggu tiket backend masing-masing.
+Route aktif mencakup health, Auth BE-01/`GET /v1/me`, profil/verifikasi BE-02, ternak/pasien BE-03, vet discovery/availability/slot BE-04, booking/request/proposal/visit/completion BE-05, quote/create payment BE-06, chat/media BE-07, catatan/rekomendasi BE-08, serta `GET /v1/products` dan `GET /v1/products/{id}` BE-10. Callback pembayaran lokal hanya metode service internal, tanpa route publik. Response, status HTTP, error envelope, pagination, enum status, dan adapter `pending/succeeded/failed` tercantum di OpenAPI untuk route aktif. Route domain lain yang ada di [kontrak integrasi](../../docs/API_CONTRACT.md) menunggu tiket backend masing-masing.
 
 ## Script yang tersedia
 
@@ -73,7 +73,7 @@ Route aktif mencakup health, Auth BE-01/`GET /v1/me`, profil/verifikasi BE-02, t
 | `npm run check` | Typecheck dan build NestJS |
 | `npm run db:migrate` | Menerapkan migrasi yang belum ada |
 | `npm run db:seed` | Menambahkan fixture yang belum tersedia |
-| `npm run api:smoke` | Smoke live/ready, OpenAPI/auth, rate-limit/no-password-log, reset enumeration-safe dan 503. Saat PostgreSQL ready, script juga memeriksa owner/related scope, vet verification guard, booking/slot race, proposals, visit/completion, dedupe/retry, MIME/size, private download, dan cursor pagination; fixture sementara dibersihkan |
+| `npm run api:smoke` | Smoke live/ready, OpenAPI/auth, rate-limit/no-password-log, reset enumeration-safe dan 503. Saat PostgreSQL ready, script juga memeriksa katalog aktif, filter/cursor/harga, tautan rekomendasi, owner/related scope, vet verification guard, booking/slot race, proposals, visit/completion, dedupe/retry, MIME/size, dan private download; fixture sementara dibersihkan |
 
 CI menjalankan script tersebut dengan PostgreSQL sementara. Tidak ada script reset/drop database.
 
@@ -90,3 +90,7 @@ Route BE-05 aktif menerima quote booking (`POST /v1/consultation-quotes`), membu
 Semua mutasi memakai `expectedVersion` dan `Idempotency-Key`; slot di-serialize dengan advisory transaction lock dokter yang sama dengan BE-04. Submit, accept, dan proposal consent memvalidasi ulang availability dan konflik. Visit wajib maju berurutan; final note tidak menyelesaikan Consultation. Completion meminta konfirmasi, note final, payment succeeded, Dokter verified dan status yang sesuai, serta Visit `examining` jika jenis layanan `visit`. Action/outbox lokal memiliki hasil adapter `succeeded/pending/failed`; pending/gagal menggagalkan transaksi dan tidak menghasilkan respons sukses.
 
 Quote menyimpan fee integer IDR dan snapshot komisi saat ini Rp0 karena kebijakan komersial belum dipilih. Quote belum mereservasi slot; booking `awaiting_payment` menahan jadwal sampai status berubah dan expiry policy tetap terbuka. Pembatalan/refund aktual, attachment booking, earning/ledger dan provider produksi tidak termasuk BE-05.
+
+## Katalog BE-10
+
+`GET /v1/products` mendukung gabungan filter nama, kategori, spesies, rentang harga integer IDR dan cursor stabil; respons hanya memuat produk aktif. `GET /v1/products/{id}` menyembunyikan produk nonaktif atau tidak dikenal dengan 404. Kedua route hanya baca dan tersedia bagi Peternak serta Dokter; katalog ditambah lewat seed/tooling internal tanpa route admin publik. Harga `unitPriceIdr` selalu berasal dari PostgreSQL. Tautan produk pada rekomendasi harus menunjuk produk aktif; judul snapshot berasal dari katalog, dan rekomendasi terkirim tetap dapat dibaca sesudah produk berubah status atau harga. Tidak ada stok/toko Dokter atau checkout Dokter.

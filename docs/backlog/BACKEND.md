@@ -1,6 +1,6 @@
 # Backlog backend
 
-Status keseluruhan saat ini: BE-00–08 **Selesai**; BE-09–17 **Belum mulai**. Stack backend dipilih melalui DEC-10; hosting/provider produksi dan integrasi mobile tetap belum dipilih.
+Status per 20 Oktober 2026: BE-00–08 dan BE-10 **Selesai**; BE-09 dan BE-11–17 **Belum mulai**. Stack backend dipilih melalui DEC-10; hosting/provider produksi dan integrasi mobile tetap belum dipilih.
 
 Status setiap tiket: **Selesai** berarti seluruh acceptance criteria terpenuhi dan buktinya dicatat; **Sedang dikerjakan** berarti ada progres tetapi acceptance belum lengkap; **Belum mulai** berarti implementasi belum dimulai.
 
@@ -27,7 +27,7 @@ BE-05/06/08 diimplementasikan sebagai slice kontrak bertahap: schema consultatio
 
 | ID | Status | P | Keluaran | Dependensi | Acceptance criteria |
 | --- | --- | --- | --- | --- | --- |
-| BE-10 | Belum mulai | P1 | Catalog search/filter/detail, link recommendations | BE-00/01 | Produk active/inactive, harga authoritative; catalog seed/internal admin; tidak menambah stok/toko ke role dokter |
+| BE-10 | Selesai | P1 | Catalog search/filter/detail, link recommendations | BE-00/01 | GET `/products` menggabungkan filter dan cursor stabil, detail hanya produk aktif, harga integer IDR berasal dari server; seed internal fiktif non-destruktif; RecommendationItem baru wajib tertaut ke produk aktif bila productId diberikan; Dokter hanya browse/recommend, tanpa stok/toko/checkout. [Bukti BE-10](../TESTING.md#bukti-be-10-20-oktober-2026). |
 | BE-11 | Belum mulai | P1 | Cart, checkout quote, order and snapshots | BE-02/06/10 | Farmer only; qty positive; stale price/address recalculated; total/unit snapshots; idempotent create; cart/order atomic |
 | BE-12 | Belum mulai | P1 | Shipment adapter dan order timelines | BE-11 | Transisi status dari hasil adapter; duplicate events ignored; read owner only; pending/failed bukan delivered |
 | BE-13 | Belum mulai | P1 | Review eligibility/uniqueness, profile aggregation | BE-05 | Completed own consultation only, 1–5, one per consultation; aggregate matches records |
