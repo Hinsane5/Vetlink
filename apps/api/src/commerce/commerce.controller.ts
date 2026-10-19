@@ -24,6 +24,7 @@ import {
   DeleteCartItemQueryDto,
   OrderListResponseDto,
   OrderListQueryDto,
+  OrderShipmentResponseDto,
   OrderResponseDto,
   SetCartItemDto,
 } from './commerce.dto.js';
@@ -111,5 +112,14 @@ export class CommerceController {
   @ApiNotFoundResponse({ type: ApiErrorResponseDto })
   getOrder(@AuthenticatedUser() principal: AuthenticatedPrincipal, @Param('id', ParseUUIDPipe) id: string) {
     return this.commerce.getOrder(principal, id);
+  }
+
+  @Get('orders/:id/shipment')
+  @ApiOkResponse({ type: OrderShipmentResponseDto, description: 'Status pengiriman dan timeline event adapter untuk pemilik order.' })
+  @ApiUnauthorizedResponse({ type: ApiErrorResponseDto })
+  @ApiForbiddenResponse({ type: ApiErrorResponseDto, description: 'Hanya Peternak.' })
+  @ApiNotFoundResponse({ type: ApiErrorResponseDto, description: 'Order yang bukan milik actor disembunyikan.' })
+  getOrderShipment(@AuthenticatedUser() principal: AuthenticatedPrincipal, @Param('id', ParseUUIDPipe) id: string) {
+    return this.commerce.getShipment(principal, id);
   }
 }

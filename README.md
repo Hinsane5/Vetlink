@@ -2,7 +2,7 @@
 
 Aplikasi mobile berbahasa Indonesia untuk pengelolaan kesehatan ternak, konsultasi dokter hewan, kunjungan, dan pembelian produk kesehatan hewan.
 
-**Fokus mobile tetap flow frontend Android lokal.** Aplikasi membuka “Pilih Peran” dan memakai data fiktif persisten. FE-06–22 mencakup ternak, pasien, direktori dokter, booking, respons layanan, jadwal, chat, kunjungan, catatan klinis, rekomendasi, tindak lanjut, laporan perkembangan, Marketplace, checkout, pembayaran lokal, pesanan, rating/ulasan, kotak masuk dua peran, preferensi notifikasi, bantuan, dan pengaturan akun. FE-26 menambahkan pengelolaan banyak Farm, pemilihan Farm saat membuat ternak, serta booking yang mengikuti Farm dan alamat ternak. FE-00/02 selesai; FE-01/04–22/26 masih memerlukan penerimaan visual/interaksi Android dan FE-03 autentikasi tetap ditunda sesuai DEC-23. `npm run check` FE-22 lulus dengan 119 tes. Build dan QA Android/visual tetap menjadi gate. Backend NestJS/PostgreSQL mencakup BE-00–08 dan BE-10/11: fondasi, autentikasi, profil/Farm/Address, ternak/pasien, discovery/jadwal, booking/kunjungan/completion, pembayaran lokal, chat/media privat, catatan/rekomendasi, katalog aktif, cart Peternak, checkout quote, dan order snapshots. BE-09 masih menunggu; mobile belum terhubung ke API. [Catatan Testing](docs/TESTING.md) memisahkan bukti pemeriksaan lokal dari QA Android yang tertunda.
+**Fokus mobile tetap flow frontend Android lokal.** Aplikasi membuka “Pilih Peran” dan memakai data fiktif persisten. FE-06–22 mencakup ternak, pasien, direktori dokter, booking, respons layanan, jadwal, chat, kunjungan, catatan klinis, rekomendasi, tindak lanjut, laporan perkembangan, Marketplace, checkout, pembayaran lokal, pesanan, rating/ulasan, kotak masuk dua peran, preferensi notifikasi, bantuan, dan pengaturan akun. FE-26 menambahkan pengelolaan banyak Farm, pemilihan Farm saat membuat ternak, serta booking yang mengikuti Farm dan alamat ternak. FE-00/02 selesai; FE-01/04–22/26 masih memerlukan penerimaan visual/interaksi Android dan FE-03 autentikasi tetap ditunda sesuai DEC-23. `npm run check` FE-22 lulus dengan 119 tes. Build dan QA Android/visual tetap menjadi gate. Backend NestJS/PostgreSQL mencakup BE-00–08 dan BE-10–12 (BE-09 belum mulai): fondasi, autentikasi, profil/Farm/Address, ternak/pasien, discovery/jadwal, booking/kunjungan/completion, pembayaran lokal, chat/media privat, catatan/rekomendasi, katalog aktif, cart Peternak, checkout quote, order snapshots, dan shipment timeline owner-only dengan adapter lokal fiktif. Mobile belum terhubung ke API. [Catatan Testing](docs/TESTING.md) memisahkan bukti pemeriksaan lokal dari QA Android yang tertunda.
 
 ## Arah yang telah dipilih
 
@@ -32,7 +32,7 @@ Aplikasi mobile berbahasa Indonesia untuk pengelolaan kesehatan ternak, konsulta
 | Font/icon FE-01 | `expo-font ~57.0.4`, Inter lokal (OFL), `@react-native-vector-icons/lucide ^13.1.4` |
 | Android application ID | `com.vetlink.mobile` (sementara untuk build lokal; belum ID rilis) |
 
-## Versi backend BE-00–08 dan BE-10/11
+## Versi backend BE-00–08 dan BE-10–12 (BE-09 belum mulai)
 
 | Bagian | Versi / konfigurasi |
 | --- | --- |
@@ -40,7 +40,7 @@ Aplikasi mobile berbahasa Indonesia untuk pengelolaan kesehatan ternak, konsulta
 | NestJS / Nest CLI | `12.1.3` / `12.0.8` |
 | TypeScript / PostgreSQL driver | `6.0.3` / `pg 8.23.1` |
 | PostgreSQL lokal / CI | `17.4` (`postgres:17.4-alpine`) |
-| API | REST `/v1`, OpenAPI 3.0; health/auth/profile-verification/livestock/patients/vet discovery & availability/booking/visit/completion/payment/chat/media/clinical aktif, route domain lain menunggu tiket |
+| API | REST `/v1`, OpenAPI 3.0; `GET /v1/orders/{id}/shipment` owner-only; shipment lokal dimulai setelah payment succeeded tersimpan |
 | ORM | Tidak dipilih; akses SQL lewat `pg`, migrasi SQL eksplisit |
 
 Expo SDK 57 mensyaratkan Node.js 22.13 atau lebih baru. Periksa [panduan Expo](https://docs.expo.dev/versions/latest/) dan gunakan versi Node LTS yang didukung. Native project Android dihasilkan Expo saat prebuild dan diabaikan Git; tidak ada kode Kotlin aplikasi buatan tangan. Komponen memakai satu keluarga ikon Lucide; glyph Figma akan dipetakan bertahap saat screen dibangun.
@@ -70,9 +70,9 @@ Pada smoke test FE-00/14, mount SDK `/Volumes/HowSSD/AndroidStudio/SDK/sdk` ters
 
 Saat aplikasi terbuka, pilih Peternak atau Dokter Hewan lalu tekan “Lanjut”. Peternak memakai profil fiktif Budi dan Dokter memakai profil fiktif Yuda; keduanya membaca penyimpanan lokal yang sama. Tidak diperlukan credential atau layanan backend. Data yang diubah lewat form tersimpan pada SQLite perangkat. Implementasi FE-03 lama masih berada di source untuk riwayat pekerjaan, tetapi tidak digunakan oleh alur aplikasi aktif. Perintah reset database belum disediakan.
 
-## Menjalankan backend BE-00–08 dan BE-10/11
+## Menjalankan backend BE-00–08 dan BE-10–12 (BE-09 belum mulai)
 
-Backend dijalankan terpisah dan belum digunakan oleh aplikasi mobile. Jalankan perintah di [panduan backend](apps/api/README.md); urutannya memakai Node `.nvmrc`, `.env.example`, PostgreSQL Compose, migrasi eksplisit, seed fiktif, lalu NestJS. Route aktif mencakup health/auth, booking/visit/completion, payment, chat/media, catatan klinis, dan katalog baca aktif. Fixture seed tidak memiliki credential login; seed katalog non-destruktif. Reset response enumeration-safe, tetapi adapter pengiriman reset lokal gagal tertutup tanpa provider yang dipilih. Tidak ada payment/provider nyata atau deployment.
+Backend dijalankan terpisah dan belum digunakan oleh aplikasi mobile. Jalankan perintah di [panduan backend](apps/api/README.md); urutannya memakai Node `.nvmrc`, `.env.example`, PostgreSQL Compose, migrasi eksplisit, seed fiktif, lalu NestJS. Route aktif mencakup health/auth, booking/visit/completion, payment, chat/media, catatan klinis, katalog, cart/checkout/order, dan shipment timeline owner-only. Fixture seed tidak memiliki credential login; seed katalog non-destruktif. Reset response enumeration-safe dan pengiriman shipment memakai adapter lokal fiktif. Tidak ada payment/provider nyata atau deployment.
 
 Untuk melihat FE-07: sebagai Peternak buka **Ternak → detail ternak → Riwayat Kesehatan**; sebagai Dokter buka tab **Pasien → detail pasien**. Menu pada beranda kedua peran menyediakan **Ganti Peran**.
 
@@ -113,10 +113,10 @@ Data fiktif FE-08 disimpan pada SQLite yang sama. Instalasi dengan seed `fe02-v1
 | [PRD](docs/PRD.md) | Sasaran, scope, perjalanan pengguna, aturan produk |
 | [Features](docs/FEATURES.md) | Seluruh 20 fitur Peternak dan 18 fitur Dokter |
 | [Architecture](docs/ARCHITECTURE.md) | Lapisan mobile dan modular monolith backend |
-| [Tech](docs/TECH.md) | Stack mobile dan realisasi backend BE-00–08/10 |
+| [Tech](docs/TECH.md) | Stack mobile dan realisasi backend BE-00–08/10–12 |
 | [Figma mapping](docs/FIGMA_MAPPING.md) | Fitur → node → route → komponen → state; selisih referensi |
 | [Data model](docs/DATA_MODEL.md) | Entitas, relasi, status, invariant, fixture |
-| [API contract](docs/API_CONTRACT.md) | Kontrak domain dan OpenAPI executable BE-00–08/10 |
+| [API contract](docs/API_CONTRACT.md) | Kontrak domain dan OpenAPI executable BE-00–08/10–12 |
 | [Frontend backlog](docs/backlog/FRONTEND.md) | Pekerjaan mobile dan acceptance criteria |
 | [Backend backlog](docs/backlog/BACKEND.md) | Pekerjaan backend, dependensi, acceptance criteria |
 | [Testing](docs/TESTING.md) | Skenario penerimaan dan hasil pemeriksaan aktual |
@@ -134,7 +134,7 @@ Urutan baca: PRD → Features → Figma mapping → Data model → Architecture 
 2. FE-02 selesai: domain, ports, SQLite/repository/event, seed dan cold-restart check lulus. Penerimaan autentikasi FE-03 ditunda sesuai DEC-23; FE-04/05 sedang dikerjakan untuk profil/media dan dashboard. FE-04 APK sudah terpasang namun QA interaksi menunggu layar HP dibuka.
 3. FE-06–19, FE-23: ternak, booking, flow Dokter A–D, catatan, tindak lanjut, Marketplace, checkout, pembayaran dan ledger lokal.
 4. FE-20/21/22 dan FE-24: fitur lokal tersisa, acceptance Android dan visual.
-5. BE-00–08 dan BE-10/11 menyediakan fondasi, auth, profil/verifikasi, ternak/pasien, discovery dokter/availability/slot, booking/request/visit/completion, payment, chat/media polling, clinical notes/recommendation, katalog aktif, cart, checkout dan order snapshots; BE-09 serta integrasi mobile menyusul sesuai [backlog backend](docs/backlog/BACKEND.md).
+5. BE-00–08 dan BE-10–12 menyediakan fondasi, auth, profil/verifikasi, ternak/pasien, discovery dokter/availability/slot, booking/request/visit/completion, payment, chat/media polling, clinical notes/recommendation, katalog aktif, cart, checkout/order snapshots, dan shipment timeline dengan adapter lokal; BE-09 serta integrasi mobile menyusul sesuai [backlog backend](docs/backlog/BACKEND.md).
 
 Semua fitur Peternak dan Dokter tetap termasuk baseline. Urutan milestone bukan penghapusan scope.
 

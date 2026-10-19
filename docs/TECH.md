@@ -1,6 +1,6 @@
 # Teknologi dan bahan diskusi
 
-Status per 20 Oktober 2026: FE-00/02 selesai; penerimaan FE-01/04–19 masih berjalan dan FE-03 ditunda sesuai DEC-23; BE-00–08, BE-10, dan BE-11 selesai setelah pemeriksaan lokal BE-11; BE-09 belum mulai. Mobile tetap memakai persona lokal tanpa autentikasi/backend jaringan. Backend NestJS + PostgreSQL memiliki route health/auth/profile-verification/livestock/patients/vet discovery & availability/booking/visit/completion/payment/chat/media/clinical/catalog/cart/checkout/order dengan migrasi dan smoke lokal. Bukti backend ada di [Testing](TESTING.md). QA visual/interaksi Android FE-14 sebelumnya belum terverifikasi karena MIUI menolak tap ADB (`INJECT_EVENTS`).
+Status per 20 Oktober 2026: FE-00/02 selesai; penerimaan FE-01/04–19 masih berjalan dan FE-03 ditunda sesuai DEC-23; BE-00–08 dan BE-10–12 selesai setelah pemeriksaan lokal BE-12; BE-09 belum mulai. Mobile tetap memakai persona lokal tanpa autentikasi/backend jaringan. Backend NestJS + PostgreSQL memiliki route health/auth/profile-verification/livestock/patients/vet discovery & availability/booking/visit/completion/payment/chat/media/clinical/catalog/cart/checkout/order/shipment timeline dengan migrasi dan smoke lokal. Bukti backend ada di [Testing](TESTING.md). QA visual/interaksi Android FE-14 sebelumnya belum terverifikasi karena MIUI menolak tap ADB (`INJECT_EVENTS`).
 
 ## Keputusan mobile
 
@@ -126,7 +126,7 @@ Harness diagnostik FE-02 hanya tampil saat development dengan `EXPO_PUBLIC_FE02_
 
 Paket Expo yang benar-benar terpasang dan keterkaitannya dengan FE-01–04 dicatat di README. Form/test framework dan seluruh kandidat lain tetap usulan; tidak ada kewajiban menginstall semua kandidat state/form/test sekaligus.
 
-## Pilihan backend dan realisasi BE-00–08/10/11
+## Pilihan backend dan realisasi BE-00–08/10–12
 
 | Kandidat | Kesesuaian untuk VetLink | Tradeoff yang perlu dibahas |
 | --- | --- | --- |
@@ -162,7 +162,13 @@ Module Commerce menambah cart Peternak dengan version guard, harga produk aktif 
 
 Pembuatan order mengunci idempotency operation, quote, cart, produk dan alamat, lalu menulis order/item, mengonsumsi quote, mengosongkan cart dan menandai operation selesai dalam satu transaction PostgreSQL. Trigger mencegah perubahan snapshot order/item. Adapter ongkir lokal hanya mendukung Bogor/Depok Rp9.000 dan Sleman/Yogyakarta Rp12.000 sesuai fixture FE-18; wilayah lain gagal tertutup. Tidak ada provider kurir/keuangan nyata. BE-06 mengambil amount dari order total snapshot dan mengubah order menjadi `paid` hanya setelah hasil adapter sukses tersimpan.
 
-Route, payload, status quote/order, dan batas adapter ada di [kontrak API](API_CONTRACT.md). Pemeriksaan `npm run check`, migrasi, seed, dan smoke fixture yang benar-benar dijalankan tercatat di [bukti BE-11](TESTING.md#bukti-be-11-20-oktober-2026). Backend belum tersambung ke mobile; shipment timeline menunggu BE-12.
+Route, payload, status quote/order, dan batas adapter ada di [kontrak API](API_CONTRACT.md). Pemeriksaan `npm run check`, migrasi, seed, dan smoke fixture yang benar-benar dijalankan tercatat di [bukti BE-11](TESTING.md#bukti-be-11-20-oktober-2026). Backend belum tersambung ke mobile.
+
+## Realisasi backend BE-12: shipment dan timeline order
+
+Commerce mengelola Shipment/ShipmentEvent melalui adapter lokal fiktif yang dijalankan hanya setelah Payment succeeded tersimpan. Hasil adapter `pending`/`failed` dicatat tanpa memajukan status order; hasil `succeeded` divalidasi berurutan dan harus tersimpan sebagai event sebelum update `processing`, `shipped`, atau `delivered`. Event bersifat append-only dan deduplikasi memakai event ID serta fingerprint payload. Trigger database juga menolak perubahan status tanpa event/payment yang cocok.
+
+`GET /v1/orders/{id}/shipment` hanya mengembalikan order milik Peternak, status Shipment dan timeline kronologis dari pembuatan order, payment sukses, serta hasil adapter. Event shipment tetap internal; tidak ada callback publik, provider produksi, atau klaim pengiriman kurir nyata. Batas implementasi dan bukti pemeriksaan ada di [kontrak API](API_CONTRACT.md), [model data](DATA_MODEL.md), dan [Testing](TESTING.md#bukti-be-12-20-oktober-2026).
 
 ## Hal yang masih terbuka untuk backend
 
