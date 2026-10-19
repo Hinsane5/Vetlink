@@ -238,6 +238,8 @@ try {
       assert.deepEqual((await filteredDirectory.json()).map(x=>x.id),[vet.user.id]);
       const selectedServiceRate=await sendJson(healthy.baseUrl,'/v1/vets?service=visit&minFee=100000&maxFee=130000',farmer.accessToken,'GET');
       assert.deepEqual(await selectedServiceRate.json(),[]);
+      const rateGap=await sendJson(healthy.baseUrl,'/v1/vets?minFee=200000&maxFee=300000',farmer.accessToken,'GET');
+      assert.deepEqual(await rateGap.json(),[]);
       const pendingDirectory=await sendJson(healthy.baseUrl,'/v1/vets?name=Belum%20Terverifikasi',outsider.accessToken,'GET');
       assert.equal(pendingDirectory.status,200);
       assert.deepEqual(await pendingDirectory.json(),[]);
@@ -310,6 +312,11 @@ try {
         VALUES ($1, $2, $3, $4, $5, 'chat', 'Booking fiktif belum dibayar', 'awaiting_payment',
                 now() + interval '3 hours', now() + interval '4 hours', 1000, 0)`,
         [unpaidConsultationId, `BE03-${unpaidConsultationId}`, farmer.user.id, vet.user.id, createdAnimal.id]);
+      const scheduleFrom=new Date().toISOString();
+      const scheduleTo=new Date(Date.now()+5*60*60*1000).toISOString();
+      const vetSchedule=await sendJson(healthy.baseUrl,`/v1/me/vet/schedule?from=${encodeURIComponent(scheduleFrom)}&to=${encodeURIComponent(scheduleTo)}`,vet.accessToken,'GET');
+      assert.equal(vetSchedule.status,200);
+      assert.deepEqual((await vetSchedule.json()).appointments.map(item=>item.id),[consultationId]);
       const farmTakeover = await sendJson(healthy.baseUrl, '/v1/livestock', outsider.accessToken, 'POST', {
         farmId, displayCode: 'TAKE-001', name: 'Tidak boleh', species: 'sapi', sex: 'female',
       });

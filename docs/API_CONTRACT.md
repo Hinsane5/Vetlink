@@ -147,7 +147,7 @@ Tooling admin review, catalog management dan provider callbacks adalah internal 
 
 ### BE-04 executable contract
 
-Semua route BE-04 memerlukan bearer dan active role membership. Discovery/slot dapat dibaca Peternak maupun Dokter; konfigurasi, block dan kalender hanya Dokter pemilik. Vet discovery hanya mengembalikan profil `verified` dengan profil direktori, availability dan tarif yang telah dikonfigurasi. Query `name`, `species`, `service`, `location`, `available`, `minFee`, `maxFee` dapat digabungkan; biaya adalah integer rupiah dan batas tarif menerima rentang yang beririsan dengan tarif layanan aktif.
+Semua route BE-04 memerlukan bearer dan active role membership. Discovery/slot dapat dibaca Peternak maupun Dokter; konfigurasi, block dan kalender hanya Dokter pemilik. Vet discovery hanya mengembalikan profil `verified` dengan profil direktori, availability dan tarif yang telah dikonfigurasi. Query `name`, `species`, `service`, `location`, `available`, `minFee`, `maxFee` dapat digabungkan; biaya adalah integer rupiah dan sedikitnya satu tarif layanan aktif harus berada dalam seluruh batas tarif yang diminta.
 
 `PUT /me/vet/availability` menerima `expectedVersion`, accepting flag, layanan, IANA timezone, aturan weekday lokal (Minggu=0), durasi, metadata direktori serta tarif integer rupiah per layanan. Server mengunci konfigurasi dokter, menolak versi basi/jam invalid/aturan weekday ganda, menyimpan konfigurasi dan rate efektif-dated; tarif pada consultation lama tetap snapshot. Mengubah availability tidak menghapus atau mengubah consultation yang sudah ada. Hasil mutasi berisi operationId/status/occurredAt dan nilai tersimpan.
 
