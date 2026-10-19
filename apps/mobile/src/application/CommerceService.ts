@@ -2,6 +2,7 @@ import type { IdFactory } from './ports/AuthRepository';
 import type { CommerceRepository } from './ports/CommerceRepository';
 import type { ProfileRepository } from './ports/ProfileRepository';
 import type { ShippingQuoteProvider } from './ports/ShippingQuoteProvider';
+import type { ShipmentStatusProvider } from './ports/ShipmentStatusProvider';
 import { toCatalogProduct } from '../domain/catalog';
 import {
   addressSnapshotFromEntity,
@@ -34,7 +35,22 @@ export class CommerceService {
     private readonly shipping: ShippingQuoteProvider,
     private readonly ids: IdFactory,
     private readonly now: () => Date = () => new Date(),
+    private readonly shipmentStatus?: ShipmentStatusProvider,
   ) {}
+
+  async listOrders(userId: string, role: AccountRole): Promise<OrderSnapshot[]> {
+    await this.assertFarmer(userId, role);
+    const orders = await this.storage.read.listByOwner('order', userId);
+    const snapshots = await Promise.all(orders.map((order) => this.orderSnapshot(this.storage.read, userId, order)));
+    return snapshots.sort((left, right) => right.id.localeCompare(left.id));
+  }
+
+  async getOrder(userId: string, role: AccountRole, orderId: string): Promise<OrderSnapshot> {
+    await this.assertFarmer(userId, role);
+    const order = await this.storage.read.findById('order', orderId);
+    if (!order || order.ownerId !== userId || order.payload.farmerId !== userId) throw new DomainError('NOT_FOUND', 'Pesanan tidak ditemukan.');
+    return this.orderSnapshot(this.storage.read, userId, order);
+  }
 
   async getCart(userId: string, role: AccountRole): Promise<CartSnapshot> {
     await this.assertFarmer(userId, role);
@@ -401,18 +417,38 @@ export class CommerceService {
         lineTotal: numberValue(item.payload.lineTotal),
       };
     });
-    const status = order.payload.status;
-    if (status !== 'awaiting_payment') throw new DomainError('INVALID_STATE', 'Pesanan tidak lagi menunggu pembayaran.');
+    const storedStatus = order.payload.status;
+    if (!['awaiting_payment', 'paid', 'processing', 'shipped', 'delivered'].includes(String(storedStatus))) {
+      throw new DomainError('INVALID_STATE', 'Status pesanan tidak valid.');
+    }
+    const paymentId = typeof order.payload.paymentId === 'string' ? order.payload.paymentId : null;
+    const payment = paymentId ? await repository.findById('payment', paymentId) : null;
+    const paymentStatus = payment && payment.ownerId === userId && payment.payload.payableType === 'order'
+      && payment.payload.payableId === order.id && payment.payload.amount === order.payload.totalSnapshot
+      ? payment.payload.status : null;
+    if (storedStatus !== 'awaiting_payment' && paymentStatus !== 'succeeded') {
+      throw new DomainError('INVALID_STATE', 'Status berbayar memerlukan pembayaran sukses yang tertaut.');
+    }
+    if (storedStatus === 'awaiting_payment' && paymentStatus === 'succeeded') {
+      throw new DomainError('INVALID_STATE', 'Pembayaran sukses belum tercermin pada status pesanan.');
+    }
+    const shipment = this.shipmentStatus ? await this.shipmentStatus.getForOrder(userId, order.id) : null;
+    const status = storedStatus === 'awaiting_payment' ? 'awaiting_payment'
+      : shipment && shipment.status !== 'failed' ? shipment.status
+        : storedStatus as OrderSnapshot['status'];
     return {
       id: order.id,
       displayCode: stringValue(order.payload.displayCode),
       status,
-      paymentId: null,
+      paymentId,
       address,
       items,
       subtotal: numberValue(order.payload.subtotalSnapshot),
       shippingAmount: numberValue(order.payload.shippingSnapshot),
       totalAmount: numberValue(order.payload.totalSnapshot),
+      paymentStatus: paymentStatus as OrderSnapshot['paymentStatus'],
+      trackingCode: shipment?.trackingCode ?? null,
+      shipmentEvents: shipment?.events ?? [],
     };
   }
 

@@ -44,6 +44,8 @@
     "src/data/local/sqlite/SqliteEventStore.ts",
     "src/data/local/sqlite/SqliteBookingRepository.ts",
     "src/data/local/sqlite/SqliteCommerceRepository.ts",
-    "src/data/local/commerce/LocalShippingQuoteAdapter.ts"
+    "src/data/local/commerce/LocalShippingQuoteAdapter.ts",
+    "src/data/local/commerce/LocalShipmentStatusAdapter.ts",
+    "src/application/ports/ShipmentStatusProvider.ts"
   ]
 }

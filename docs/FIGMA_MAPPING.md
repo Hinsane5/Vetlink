@@ -352,3 +352,7 @@ Node lokal yang dipetakan: Payment Consult `12:2325` dan Payment Order `12:2889`
 Figma MCP tidak dipanggil sesuai instruksi tiket dan cache lokal hanya menyediakan inventory/prototype link, bukan screenshot khusus layar pembayaran. QA pixel-match/viewport Android, keyboard, back, scrolling dan interaksi metode **tertunda**; jangan anggap prototype sebagai bukti tampilan aplikasi.
 
 Visual QA layar Cart/Checkout di Android 390 × 844, ukuran kecil, font besar, keyboard, back dan scroll **tertunda** karena SDK/ADB tidak tersedia. Implementasi belum dibandingkan dengan screenshot frame Figma terbaru dan bukan klaim pixel-match.
+
+## Implementasi FE-20: Pesanan dan pengiriman
+
+Inventory referensi lokal memetakan Orders `12:2925`, Orders Done `12:2963`, Order Detail `12:2997`, dan Tracking `12:3032` (390 × 844). Screenshot layar tersebut tidak ada pada cache lokal; tidak ada panggilan Figma MCP sesuai instruksi task. UI memakai tokens FE-01, tab aktif/selesai, snapshot order, dan timeline vertikal. Status pengiriman hanya baca dari adapter lokal dan kegagalan tetap menjadi event kendala; tidak ada aksi UI untuk mengubah status order atau shipment. QA Android dan pixel-match ditunda.

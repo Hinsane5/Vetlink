@@ -95,6 +95,8 @@ Untuk melihat FE-17: Dokter Yuda buka layanan yang berlangsung, finalisasi catat
 
 Untuk melihat FE-18: dari rekomendasi terkirim Peternak, buka **Lihat Produk** atau **Buka Marketplace**, pilih produk, lalu **Tambah ke Keranjang**. Keranjang Peternak mengubah jumlah dengan kontrol tambah/kurang, menghapus item, dan menampilkan subtotal terkini. Checkout mewajibkan alamat lengkap; estimasi ongkir lokal tersedia untuk Bogor/Depok (Jawa Barat) dan Sleman/Yogyakarta (DI Yogyakarta), lalu quote menampilkan subtotal, ongkir dan total. **Buat Pesanan Menunggu Pembayaran** menyimpan snapshot barang, harga, alamat dan ongkir; pembayaran belum dilakukan sampai FE-19. Dokter ditolak oleh layanan keranjang/checkout. QA interaksi dan visual Android masih tertunda.
 
+Untuk melihat FE-20: pilih Peternak lalu buka tab **Pesanan**. **Aktif** dan **Selesai** membaca order pemilik dari SQLite; pilih pesanan untuk melihat jumlah/harga/alamat snapshot, pembayaran, nomor pelacakan, dan timeline shipment. Order hanya tampil dibayar bila payment terkait sukses; timeline hanya membaca shipment adapter lokal. Adapter pembayaran lokal saat ini memberi hasil `pending`, sehingga order checkout baru menunggu konfirmasi dan tidak otomatis masuk status dibayar. QA layar Android/visual belum selesai.
+
 Data fiktif FE-08 disimpan pada SQLite yang sama. Instalasi dengan seed `fe02-v1` mendapat ekstensi `fe08-v1` satu kali: hanya field profil/jadwal yang belum ada ditambahkan, disertai satu ulasan fiktif atas konsultasi selesai. Nilai yang sudah disimpan, termasuk availability off, daftar kosong yang sengaja disimpan, dan lokasi hasil edit, dipertahankan. Tidak ada akun atau layanan jaringan baru.
 
 ## Panduan dokumen
