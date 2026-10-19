@@ -36,10 +36,13 @@ import { MarketplaceFlow, type MarketplaceRoute } from '../marketplace/Marketpla
 import { OrdersFlow } from '../marketplace/OrdersFlow';
 import { PaymentPanel } from '../payment/PaymentPanel';
 import type { OrderSnapshot } from '../../domain/commerce';
+import type { NotificationSnapshot } from '../../application/NotificationService';
 import { colors, fonts, layout, radii, roleTokens, spacing, typeScale } from '../theme/tokens';
+import { NotificationsFlow } from '../notifications/NotificationsFlow';
 
 type DashboardRoute =
   | { type: 'home' }
+  | { type: 'notifications' }
   | { type: 'farms' }
   | { type: 'list'; kind: 'consultations' | 'appointments' }
   | { type: 'detail'; kind: 'consultation' | 'reminder'; id: string }
@@ -52,7 +55,7 @@ type DashboardRoute =
   | { type: 'doctors'; vetId?: string }
   | { type: 'booking'; vetId: string }
   | { type: 'schedule' }
-  | { type: 'orders' }
+  | { type: 'orders'; orderId?: string }
   | { type: 'payment'; orderId: string; amount: number }
   | MarketplaceRoute
   | LivestockRoute;
@@ -61,11 +64,12 @@ type Props = {
   store: LocalStore;
   session: SessionSnapshot;
   onOpenProfile: () => void;
+  onOpenAccountSettings?: () => void;
   onSwitchRole: () => void;
   onLogout?: () => void;
 };
 
-export function DashboardFlow({ store, session, onOpenProfile, onSwitchRole, onLogout }: Props) {
+export function DashboardFlow({ store, session, onOpenProfile, onOpenAccountSettings, onSwitchRole, onLogout }: Props) {
   const role = session.activeRole;
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
   const [route, setRoute] = useState<DashboardRoute>({ type: 'home' });
@@ -167,7 +171,18 @@ export function DashboardFlow({ store, session, onOpenProfile, onSwitchRole, onL
   return (
     <View style={styles.fullScreen}>
       {route.type === 'orders' ? (
-        <OrdersFlow key={route.type} store={store} session={session} onBack={() => setRoute({ type: 'home' })} onPay={(order: OrderSnapshot) => setRoute({ type: 'payment', orderId: order.id, amount: order.totalAmount })} />
+        <OrdersFlow key={route.type} store={store} session={session} initialOrderId={route.orderId} onBack={() => setRoute({ type: 'home' })} onPay={(order: OrderSnapshot) => setRoute({ type: 'payment', orderId: order.id, amount: order.totalAmount })} />
+      ) : route.type === 'notifications' ? (
+        <NotificationsFlow
+          store={store}
+          session={session}
+          onBack={() => setRoute({ type: 'home' })}
+          onOpenSettings={onOpenAccountSettings}
+          onOpenContext={(notification) => {
+            const target = routeForNotification(notification);
+            if (target) setRoute(target);
+          }}
+        />
       ) : route.type === 'payment' ? (
         <PaymentPanel key={route.orderId} store={store} session={session} payableType="order" payableId={route.orderId} amount={route.amount} onBack={() => setRoute({ type: 'orders' })} />
       ) : route.type === 'clinicalNote' ? (
@@ -211,8 +226,8 @@ export function DashboardFlow({ store, session, onOpenProfile, onSwitchRole, onL
       >
         {route.type === 'home' ? (
           snapshot.role === 'farmer'
-            ? <FarmerDashboard snapshot={snapshot} error={error} onOpenMenu={() => setMenuVisible(true)} onOpenFarms={() => setRoute({ type: 'farms' })} onOpenList={(kind) => setRoute({ type: 'list', kind })} onAddLivestock={() => setRoute({ type: 'livestock', screen: 'form', mode: 'create', returnTo: 'list' })} onOpenContext={openContext} />
-            : <VetDashboard snapshot={snapshot} error={error} availabilityBusy={availabilityBusy} onAvailability={(value) => void changeAvailability(value)} onOpenList={(kind) => setRoute({ type: 'list', kind })} onOpenContext={openContext} onOpenMenu={() => setMenuVisible(true)} />
+            ? <FarmerDashboard snapshot={snapshot} error={error} onOpenMenu={() => setMenuVisible(true)} onOpenNotifications={() => setRoute({ type: 'notifications' })} onOpenFarms={() => setRoute({ type: 'farms' })} onOpenList={(kind) => setRoute({ type: 'list', kind })} onAddLivestock={() => setRoute({ type: 'livestock', screen: 'form', mode: 'create', returnTo: 'list' })} onOpenContext={openContext} />
+            : <VetDashboard snapshot={snapshot} error={error} availabilityBusy={availabilityBusy} onAvailability={(value) => void changeAvailability(value)} onOpenList={(kind) => setRoute({ type: 'list', kind })} onOpenContext={openContext} onOpenMenu={() => setMenuVisible(true)} onOpenNotifications={() => setRoute({ type: 'notifications' })} />
         ) : null}
         {route.type === 'detail' ? (
           <DashboardDetail
@@ -244,7 +259,7 @@ export function DashboardFlow({ store, session, onOpenProfile, onSwitchRole, onL
         ) : null}
       </ScrollView>
       )}
-      {route.type !== 'booking' && route.type !== 'schedule' && route.type !== 'farms' && route.type !== 'list' && route.type !== 'chat' && route.type !== 'clinicalNote' && route.type !== 'recommendation' && route.type !== 'marketplace' && route.type !== 'care' && route.type !== 'review' && route.type !== 'orders' && route.type !== 'payment' && !(route.type === 'detail' && route.kind === 'consultation') && !(route.type === 'patients' && route.patientId) && !(route.type === 'livestock' && route.screen !== 'list') && !(route.type === 'doctors' && route.vetId) ? (
+      {route.type !== 'booking' && route.type !== 'schedule' && route.type !== 'farms' && route.type !== 'list' && route.type !== 'notifications' && route.type !== 'chat' && route.type !== 'clinicalNote' && route.type !== 'recommendation' && route.type !== 'marketplace' && route.type !== 'care' && route.type !== 'review' && route.type !== 'orders' && route.type !== 'payment' && !(route.type === 'detail' && route.kind === 'consultation') && !(route.type === 'patients' && route.patientId) && !(route.type === 'livestock' && route.screen !== 'list') && !(route.type === 'doctors' && route.vetId) ? (
         <BottomNavigation role={role} route={route} onSelect={(next) => setRoute(next)} onOpenProfile={onOpenProfile} />
       ) : null}
       <AccountMenu
@@ -252,6 +267,7 @@ export function DashboardFlow({ store, session, onOpenProfile, onSwitchRole, onL
         role={role}
         onClose={() => setMenuVisible(false)}
         onProfile={() => { setMenuVisible(false); onOpenProfile(); }}
+        onSettings={onOpenAccountSettings ? () => { setMenuVisible(false); onOpenAccountSettings(); } : undefined}
         onSwitchRole={() => { setMenuVisible(false); onSwitchRole(); }}
         onLogout={onLogout ? () => { setMenuVisible(false); onLogout(); } : undefined}
       />
@@ -259,10 +275,11 @@ export function DashboardFlow({ store, session, onOpenProfile, onSwitchRole, onL
   );
 }
 
-function FarmerDashboard({ snapshot, error, onOpenMenu, onOpenFarms, onOpenList, onAddLivestock, onOpenContext }: {
+function FarmerDashboard({ snapshot, error, onOpenMenu, onOpenNotifications, onOpenFarms, onOpenList, onAddLivestock, onOpenContext }: {
   snapshot: FarmerDashboardSnapshot;
   error: string;
   onOpenMenu: () => void;
+  onOpenNotifications: () => void;
   onOpenFarms: () => void;
   onOpenList: (kind: 'consultations') => void;
   onAddLivestock: () => void;
@@ -279,7 +296,10 @@ function FarmerDashboard({ snapshot, error, onOpenMenu, onOpenFarms, onOpenList,
             {snapshot.farmLocation ? ` · ${snapshot.farmLocation}` : ''}
           </Text>
         </View>
-        <RoundAction label="Buka menu akun" icon="user-round" onPress={onOpenMenu} />
+        <View style={styles.headerActions}>
+          <RoundAction label="Buka kotak masuk" icon="bell" onPress={onOpenNotifications} />
+          <RoundAction label="Buka menu akun" icon="user-round" onPress={onOpenMenu} />
+        </View>
       </View>
 
       {error ? <InlineFeedback message={error} tone="error" /> : null}
@@ -336,7 +356,7 @@ function FarmerDashboard({ snapshot, error, onOpenMenu, onOpenFarms, onOpenList,
   );
 }
 
-function VetDashboard({ snapshot, error, availabilityBusy, onAvailability, onOpenList, onOpenContext, onOpenMenu }: {
+function VetDashboard({ snapshot, error, availabilityBusy, onAvailability, onOpenList, onOpenContext, onOpenMenu, onOpenNotifications }: {
   snapshot: VetDashboardSnapshot;
   error: string;
   availabilityBusy: boolean;
@@ -344,6 +364,7 @@ function VetDashboard({ snapshot, error, availabilityBusy, onAvailability, onOpe
   onOpenList: (kind: 'consultations' | 'appointments') => void;
   onOpenContext: (kind: 'consultation', id: string) => void;
   onOpenMenu: () => void;
+  onOpenNotifications: () => void;
 }) {
   const verified = snapshot.verificationStatus === 'verified';
   const priority = snapshot.newRequests[0];
@@ -355,7 +376,10 @@ function VetDashboard({ snapshot, error, availabilityBusy, onAvailability, onOpe
           <Text style={styles.vetGreeting}>Selamat {greeting().toLowerCase()},</Text>
           <Text style={styles.vetName}>{snapshot.displayName}</Text>
         </View>
-        <RoundAction label="Menu akun" icon="ellipsis" onPress={onOpenMenu} />
+        <View style={styles.headerActions}>
+          <RoundAction label="Buka kotak masuk" icon="bell" onPress={onOpenNotifications} />
+          <RoundAction label="Menu akun" icon="ellipsis" onPress={onOpenMenu} />
+        </View>
       </View>
 
       <Text style={styles.dateHeading}>{formatLongDate(new Date())}</Text>
@@ -612,11 +636,12 @@ function BottomNavigation({ role, route, onSelect, onOpenProfile }: {
   );
 }
 
-function AccountMenu({ visible, role, onClose, onProfile, onSwitchRole, onLogout }: {
+function AccountMenu({ visible, role, onClose, onProfile, onSettings, onSwitchRole, onLogout }: {
   visible: boolean;
   role: AccountRole;
   onClose: () => void;
   onProfile: () => void;
+  onSettings?: () => void;
   onSwitchRole: () => void;
   onLogout?: () => void;
 }) {
@@ -626,6 +651,7 @@ function AccountMenu({ visible, role, onClose, onProfile, onSwitchRole, onLogout
         <View style={styles.menuCard}>
           <Text accessibilityRole="header" style={styles.menuTitle}>Menu VetLink</Text>
           <Button label="Profil" role={role} onPress={onProfile} />
+          {onSettings ? <Button label="Pengaturan akun" role={role} variant="secondary" onPress={onSettings} /> : null}
           <Button label="Ganti Peran" role={role} variant="secondary" onPress={onSwitchRole} />
           {onLogout ? <Button label="Keluar" role={role} variant="secondary" onPress={onLogout} /> : null}
           <Button label="Tutup" role={role} variant="secondary" onPress={onClose} />
@@ -675,6 +701,17 @@ function serviceTypeLabel(type: DashboardConsultationItem['type']): string {
   return type === 'visit' ? 'Kunjungan' : type === 'chat' ? 'Konsultasi chat' : 'Layanan';
 }
 
+function routeForNotification(notification: NotificationSnapshot): DashboardRoute | null {
+  const contextId = notification.contextId;
+  if (!contextId) return null;
+  const type = notification.type.toLowerCase();
+  if (type.includes('message') || type.includes('chat')) return { type: 'chat', consultationId: contextId };
+  if (type.includes('reminder')) return { type: 'detail', kind: 'reminder', id: contextId };
+  if (type.includes('follow')) return { type: 'care', consultationId: contextId };
+  if (type.includes('order') || type.includes('shipment') || type.includes('commerce')) return { type: 'orders', orderId: contextId };
+  return { type: 'detail', kind: 'consultation', id: contextId };
+}
+
 function consultationStatusLabel(status: string): string {
   switch (status) {
     case 'requested': return 'Menunggu dokter';
@@ -722,6 +759,7 @@ const styles = StyleSheet.create({
   farmerHeader: { minHeight: 70, flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
   vetHeader: { minHeight: 104, flexDirection: 'row', alignItems: 'flex-start', gap: spacing[3] },
   headerCopy: { flex: 1, minWidth: 0, gap: spacing[1] },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   farmerGreeting: { color: colors.brown, fontFamily: fonts.bold, fontSize: typeScale.title, lineHeight: 32, flexShrink: 1 },
   farmLocation: { color: colors.muted, fontFamily: fonts.regular, fontSize: typeScale.small, lineHeight: 19, flexShrink: 1 },
   vetPageTitle: { color: colors.brown, fontFamily: fonts.bold, fontSize: typeScale.heading, lineHeight: 28 },

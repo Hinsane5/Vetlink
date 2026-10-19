@@ -100,5 +100,20 @@ export function validateFixtureGraph(
         }
       }
     }
+    if (entity.kind === 'notification') {
+      const recipientId = entity.payload.recipientId;
+      if (typeof recipientId !== 'string' || recipientId !== entity.ownerId || !relations.some((link) => link.sourceId === entity.id && link.relationship === 'recipient' && link.targetId === recipientId)) {
+        throw new DomainError('INVALID_FIXTURE', `Notifikasi ${entity.id} belum memiliki penerima yang cocok dengan pemilik.`);
+      }
+      if (typeof entity.payload.eventId !== 'string' || !entity.payload.eventId) {
+        throw new DomainError('INVALID_FIXTURE', `Notifikasi ${entity.id} belum memiliki event ID.`);
+      }
+    }
+    if (entity.kind === 'preferences') {
+      const userId = entity.payload.userId;
+      if (typeof userId !== 'string' || userId !== entity.ownerId || !relations.some((link) => link.sourceId === entity.id && link.relationship === 'user' && link.targetId === userId)) {
+        throw new DomainError('INVALID_FIXTURE', `Preferensi ${entity.id} belum memiliki relasi akun yang cocok.`);
+      }
+    }
   }
 }

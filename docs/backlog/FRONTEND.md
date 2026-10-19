@@ -1,6 +1,6 @@
 # Backlog frontend / mobile Android
 
-Status keseluruhan saat ini: **FE-00 Selesai, FE-01 Sedang dikerjakan, FE-02 Selesai, FE-03/04/05/06/07/08/09/10/11/12/13/14/15/16/17/18 Sedang dikerjakan**; FE-19/20 **Sedang dikerjakan**; FE-21 **Sedang dikerjakan**; FE-22–FE-25 **Belum mulai**. Tahap aktif mengikuti arahan pengguna: flow frontend tanpa autentikasi dan tanpa backend jaringan. Acceptance autentikasi FE-03 ditunda; implementasi historisnya tidak dipasang pada aplikasi aktif. Data fiktif lokal tetap dipakai agar screen dapat menampilkan perubahan yang konsisten.
+Status keseluruhan saat ini: **FE-00 Selesai, FE-01 Sedang dikerjakan, FE-02 Selesai, FE-03/04/05/06/07/08/09/10/11/12/13/14/15/16/17/18 Sedang dikerjakan**; FE-19/20/21/22 **Sedang dikerjakan**; FE-23/24/25 **Belum mulai**. Tahap aktif mengikuti arahan pengguna: flow frontend tanpa autentikasi dan tanpa backend jaringan. Acceptance autentikasi FE-03 ditunda; implementasi historisnya tidak dipasang pada aplikasi aktif. Data fiktif lokal tetap dipakai agar screen dapat menampilkan perubahan yang konsisten.
 
 Status setiap tiket: **Selesai** berarti seluruh acceptance criteria terpenuhi dan buktinya dicatat; **Sedang dikerjakan** berarti ada progres tetapi acceptance belum lengkap; **Belum mulai** berarti implementasi belum dimulai.
 
@@ -72,13 +72,21 @@ FE-08/09 bergantung availability dari FE-11; kerjakan FE-11 lebih awal dalam sli
 | FE-19 | Sedang dikerjakan | P0 | Payment method, submit, pending/failed/success, history | FE-02; context FE-09 dan FE-18 | Tap method tidak membayar; service result persisten; pending bukan paid; retry/idempotency; consultation/order dipisahkan; riwayat dapat dibuka kembali |
 | FE-20 | Sedang dikerjakan | P1 | Orders active/done/details/shipment timeline | FE-18/19 | Paid hanya dari payment sukses; delivery status dari adapter; jumlah/harga sesuai snapshot; gagal kirim tidak ditampilkan delivered |
 | FE-21 | Sedang dikerjakan | P1 | Rating/review dan agregasi profil dokter | FE-10/14 | Hanya consultation own completed; stars 1–5; satu review per layanan; rating dokter berubah dari review tersimpan |
-| FE-22 | Belum mulai | P1 | Inbox kedua peran, prefs, help, account settings | FE-03/10/12/16/19/20 | Events milik penerima; read state/prefs persisten; link mempertahankan ID; prefs tidak menghapus inbox; help Indonesia; logout confirmation |
+| FE-22 | Sedang dikerjakan | P1 | Inbox kedua peran, prefs, help, account settings | FE-03/10/12/16/19/20 | Events milik penerima; read state/prefs persisten; link mempertahankan ID; prefs tidak menghapus inbox; help Indonesia; logout confirmation |
 | FE-23 | Belum mulai | P0 | Earnings/period/detail, destination, amount/review/confirm/submitted/history | FE-02/14/19 | Gross−commission=net; pending/available berbeda; amount invalid/zero blocked; partial reserve sesuai jumlah; cancel review tanpa debit; retry tidak duplikat; submitted bukan paid |
 | FE-24 | Belum mulai | P0 | QA Android, visual comparison, accessibility, regression A–D dan farmer flow | Semua P0/P1 untuk acceptance lengkap | Bukti build, tests, native interactions dan screenshots; zero blocking errors; semua selisih dicatat; README run steps terbukti; tidak ada kontrol pengujian produk |
 | FE-25 | Belum mulai | P2 | API adapters dan integrasi bertahap | BE-00/16 + persetujuan tahap backend | Contract tests local/API; session/security server; dua perangkat; network/retry; tidak fallback payment gagal ke sukses lokal |
 | FE-26 | Sedang dikerjakan | P1 | Banyak peternakan untuk satu akun Peternak: daftar/tambah/ubah/pilih konteks, ternak dan booking per peternakan | FE-04/06/09 | Farm tersimpan tanpa menimpa farm lain; pemilihan farm eksplisit saat menambah ternak dan booking; detail ternak lama tetap dapat diakses lintas farm milik akun; ID ternak unik per farm; alamat kunjungan sesuai farm; owner lain ditolak; fixture dan data lama tetap terbaca |
 
 FE-19 dibuat dengan consultation payable pada M1; cabang order diselesaikan setelah FE-18 pada M2. FE-24 dapat dijalankan per slice, tetapi acceptance lengkap menunggu seluruh P0/P1. FE-25 tidak menjadi syarat penerimaan lokal.
+
+## Implementasi FE-22: kotak masuk dan pengaturan akun
+
+Inbox Peternak dan Dokter membaca notification yang `ownerId` serta `recipientId`-nya cocok dengan akun aktif. Membuka item menyimpan `readAt` sekali, lalu route memakai `contextId` record yang sama; preferensi per akun tersimpan terpisah dan tidak menghapus atau menyaring inbox. Migrasi SQLite v4 menambahkan batas satu record preferences per akun, sedangkan fixture FE-22 hanya menambahkan event, notifikasi, dan preferensi fiktif tanpa mengganti data tersimpan.
+
+Menu Pengaturan akun menyediakan preferensi kategori, konten bantuan berbahasa Indonesia, profil, Ganti Peran, dan Keluar. Keluar menampilkan konfirmasi lalu kembali ke Pilih Peran dengan data domain tetap tersimpan. Sesuai DEC-23, sesi alur aktif adalah persona lokal sehingga tombol Keluar hanya menutup persona tersebut; FE-03 autentikasi tetap ditunda.
+
+`npm run check` dari `apps/mobile` lulus typecheck, lint, dan 119 tes domain/repository, termasuk lima tes FE-22 untuk scope penerima, konteks ID, read state idempoten, persistensi preferensi, preservasi inbox, dan ekstensi fixture instalasi lama. Interaksi layar serta visual Android masih belum diuji; rinciannya ada di [Testing](../TESTING.md) dan [Figma mapping](../FIGMA_MAPPING.md). Status FE-22 **Sedang dikerjakan** sampai QA tersebut selesai.
 
 ## Definition of Done tiket
 

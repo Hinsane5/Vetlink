@@ -35,9 +35,10 @@ type Props = {
   session: SessionSnapshot;
   onBack: () => void;
   onDisplayNameChange: (name: string) => void;
+  onOpenAccountSettings?: () => void;
 };
 
-export function ProfileFlow({ store, session, onBack, onDisplayNameChange }: Props) {
+export function ProfileFlow({ store, session, onBack, onDisplayNameChange, onOpenAccountSettings }: Props) {
   const role = session.activeRole;
   const [snapshot, setSnapshot] = useState<ProfileSnapshot | null>(null);
   const [farmerForm, setFarmerForm] = useState<FarmerProfileInput>(() => emptyFarmerForm(session.displayName));
@@ -284,7 +285,10 @@ export function ProfileFlow({ store, session, onBack, onDisplayNameChange }: Pro
           <Button label="Batal Mengedit" role={role} variant="secondary" disabled={busy} onPress={requestLeave} />
         </>
       ) : (
-        <Button label="Ubah Profil" role={role} onPress={() => { setNotice(''); setError(''); setEditing(true); }} />
+        <>
+          <Button label="Ubah Profil" role={role} onPress={() => { setNotice(''); setError(''); setEditing(true); }} />
+          {onOpenAccountSettings ? <Button label="Pengaturan akun" role={role} variant="secondary" onPress={onOpenAccountSettings} /> : null}
+        </>
       )}
 
       <LeaveDraftDialog
