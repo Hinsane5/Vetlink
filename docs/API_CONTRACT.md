@@ -151,6 +151,12 @@ BE-07 memakai adapter filesystem privat lokal di luar static web root dan adapte
 
 Tooling admin review, catalog management dan provider callbacks adalah internal backend/operasional berikutnya, bukan fitur mobile dokter atau toko dokter. Integrasi callbacks nyata diblokir sampai provider/security contract tersedia.
 
+### BE-08 executable contract
+
+BE-08 mengaktifkan route note dan recommendation di atas. PUT note menerima `expectedVersion` dan field clinical parsial; versi awal adalah `1`, lalu setiap simpan berikutnya menaikkan versi. Penulisan dan finalisasi hanya tersedia saat Consultation `in_progress`. Finalisasi mensyaratkan complaint, findings, assessment, actions, dan careInstructions non-whitespace, serta expectedVersion yang sedang ditinjau. Konfirmasi stale mengembalikan 409; trigger PostgreSQL membuat snapshot final tidak dapat diubah/dihapus. Finalisasi hanya mengubah note dan tidak menyelesaikan Consultation.
+
+Recommendation PUT mengganti item sesuai payload (termasuk daftar kosong untuk draft), memakai `expectedVersion`, dan menyimpan snapshot judul/instruksi/catatan serta productId opsional. Penulisan dan send hanya saat Consultation `in_progress`. Farmer hanya dapat membaca recommendation berstatus sent; Dokter harus menjadi vet konsultasi dan tidak memperoleh aksi cart/checkout. Send menolak daftar kosong; adapter delivery lokal mengembalikan outcome succeeded/failed, dan status sent hanya disimpan setelah succeeded. Adapter bukan provider notifikasi produksi.
+
 ### BE-04 executable contract
 
 Semua route BE-04 memerlukan bearer dan active role membership. Discovery/slot dapat dibaca Peternak maupun Dokter; konfigurasi, block dan kalender hanya Dokter pemilik. Vet discovery hanya mengembalikan profil `verified` dengan profil direktori, availability dan tarif yang telah dikonfigurasi. Query `name`, `species`, `service`, `location`, `available`, `minFee`, `maxFee` dapat digabungkan; biaya adalah integer rupiah dan sedikitnya satu tarif layanan aktif harus berada dalam seluruh batas tarif yang diminta.
