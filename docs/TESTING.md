@@ -1,6 +1,6 @@
 # Strategi pengujian VetLink
 
-Status QA per 20 Oktober 2026: tahap aktif memakai frontend lokal tanpa autentikasi/backend jaringan; Pilih Peran membuka persona fiktif. UI FE-06–18 tersedia dan pemeriksaan FE-18 `npm run check` lulus typecheck, lint, serta 103 tes domain/repository. `npm run android` FE-18 berhenti sebelum build karena Android SDK/ADB tidak tersedia. Backend BE-00–08 dan BE-10 memiliki route executable; BE-09 belum mulai dan mobile belum terhubung ke API. Pemeriksaan Android terdahulu bukan bukti integrasi backend. Interaksi fitur pada perangkat, viewport kecil/font besar, dan pembandingan visual 390 × 844 tetap tertunda; tidak ada pemanggilan Figma MCP baru.
+Status QA per 20 Oktober 2026: tahap aktif memakai frontend lokal tanpa autentikasi/backend jaringan; Pilih Peran membuka persona fiktif. Implementasi FE-22 tersedia dan `npm run check` lulus typecheck, lint, serta 119 tes domain/repository. Pemeriksaan ini belum mencakup build atau interaksi Android; QA FE-22 tertunda pada perangkat fisik. Backend BE-00–08 dan BE-10 memiliki route executable; BE-09 belum mulai dan mobile belum terhubung ke API. Pemeriksaan Android terdahulu bukan bukti integrasi backend. Interaksi fitur pada perangkat, viewport kecil/font besar, dan pembandingan visual 390 × 844 tetap tertunda; tidak ada pemanggilan Figma MCP baru.
 
 ## Level pengujian
 
@@ -663,3 +663,17 @@ Farm management tetap **Sedang dikerjakan** sampai interaksi/visual Android dapa
 | Referensi desain | Inventory lokal memetakan Review `12:2425` dan Review Success `12:2446`; cache tidak memuat screenshot layar Review. Tidak ada panggilan Figma MCP. |
 
 FE-21 tetap **Sedang dikerjakan** sampai QA Android/interaksi dan visual dapat diterima. Tes yang dijalankan mencakup service/repository SQLite; tes tersebut tidak membuktikan input atau navigasi React Native pada perangkat.
+
+## Hasil pemeriksaan FE-22 — 20 Oktober 2026
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm run check` dari `apps/mobile` | **Lulus**: TypeScript typecheck, Expo lint, kompilasi tes TypeScript, dan 119 tes domain/repository (0 gagal). Dependency sebelumnya dipulihkan dari lockfile dengan `npm ci` karena pemeriksaan awal tidak menemukan `tsc`. |
+| Inbox/read state | **Lulus pada service/repository**: daftar hanya memuat notifikasi dengan owner dan penerima yang cocok; ID konteks tetap sama; tandai baca menyimpan `readAt` dan retry tidak menambah versi atau record. |
+| Preferensi/fixture | **Lulus pada SQLite in-memory**: preferensi per akun bertahan setelah service dimuat ulang; kategori tidak menghapus atau menyaring inbox; seed ekstensi instalasi lama menjaga preferensi/read state dan tidak menggandakan entitas/relasi. Migrasi v4 dan indeks unik preferensi ikut diperiksa oleh suite migrasi. |
+| Bantuan/logout | Bantuan berisi topik berbahasa Indonesia. Implementasi logout menampilkan konfirmasi dan kembali ke Pilih Peran; sesi aktif FE-03 tetap ditunda sesuai DEC-23, jadi aksi menutup persona lokal tanpa menghapus data. **UI belum diuji pada perangkat.** |
+| Build dan interaksi Android | Tidak dijalankan sesuai arahan koordinator untuk tidak memakai emulator/AVD/ADB atau `npm run android`; QA fisik, Back Android, keyboard, tabs, scroll, ukuran 390 × 844, layar kecil dan font besar masih tertunda. |
+| Referensi desain | Inventory lokal memetakan Settings `82:7516`/states `82:7546`, `82:7576`, `82:7614`; Notifications `82:7652` dan states `82:7695`, `82:7738`, `82:7788`, `82:7838`, `82:7888`, `82:7938`; Help `82:7988` dan states `82:8015`, `82:8050`, `82:8085`; Logout `12:3184`. Cache screenshot lokal tidak memiliki layar inbox/settings/help; tidak ada panggilan Figma MCP. Perbandingan visual tetap tertunda. |
+| `git diff --check` | **Lulus** setelah perubahan kode dan dokumentasi FE-22. |
+
+FE-22 tetap **Sedang dikerjakan** sampai interaksi perangkat dan visual diterima. Tes domain/repository tidak membuktikan navigasi, dialog, scroll, atau tampilan React Native di Android.

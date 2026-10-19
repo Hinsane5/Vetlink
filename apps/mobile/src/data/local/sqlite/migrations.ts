@@ -271,6 +271,14 @@ const migrations: readonly Migration[] = [
         );
     `,
   },
+  {
+    version: 4,
+    sql: `
+      CREATE UNIQUE INDEX preferences_user_unique
+        ON entities(owner_id)
+        WHERE kind = 'preferences' AND owner_id IS NOT NULL;
+    `,
+  },
 ];
 
 export async function migrateDatabase(database: SQLiteDatabase): Promise<number> {

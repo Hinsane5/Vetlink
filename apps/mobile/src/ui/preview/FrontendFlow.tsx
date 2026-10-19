@@ -9,11 +9,13 @@ import { InlineFeedback } from '../components/Feedback';
 import { Icon } from '../components/Icon';
 import { DashboardFlow } from '../dashboard/DashboardFlow';
 import { ProfileFlow } from '../profile/ProfileFlow';
+import { AccountSettingsFlow } from '../profile/AccountSettingsFlow';
 import { colors, fonts, layout, radii, spacing, typeScale } from '../theme/tokens';
 
 export function FrontendFlow({ store }: { store: LocalStore }) {
   const [session, setSession] = useState<SessionSnapshot | null>(null);
-  const [screen, setScreen] = useState<'roles' | 'home' | 'profile'>('roles');
+  const [screen, setScreen] = useState<'roles' | 'home' | 'profile' | 'account'>('roles');
+  const [accountReturnTo, setAccountReturnTo] = useState<'home' | 'profile'>('home');
   const [selectedRole, setSelectedRole] = useState<AccountRole>('farmer');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -54,6 +56,7 @@ export function FrontendFlow({ store }: { store: LocalStore }) {
           store={store}
           session={session}
           onOpenProfile={() => setScreen('profile')}
+          onOpenAccountSettings={() => { setAccountReturnTo('home'); setScreen('account'); }}
           onSwitchRole={() => {
             setSelectedRole(session.activeRole);
             setScreen('roles');
@@ -67,8 +70,19 @@ export function FrontendFlow({ store }: { store: LocalStore }) {
             session={session}
             onBack={() => setScreen('home')}
             onDisplayNameChange={(displayName) => setSession((current) => current ? { ...current, displayName } : null)}
+            onOpenAccountSettings={() => { setAccountReturnTo('profile'); setScreen('account'); }}
           />
         </ScrollView>
+      ) : null}
+      {screen === 'account' && session ? (
+        <AccountSettingsFlow
+          store={store}
+          session={session}
+          onBack={() => setScreen(accountReturnTo)}
+          onOpenProfile={() => setScreen('profile')}
+          onSwitchRole={() => { setSelectedRole(session.activeRole); setScreen('roles'); }}
+          onLogout={() => { setSession(null); setSelectedRole('farmer'); setScreen('roles'); }}
+        />
       ) : null}
       {screen === 'roles' ? (
         <ScrollView contentContainerStyle={styles.rolesContent} keyboardShouldPersistTaps="handled">

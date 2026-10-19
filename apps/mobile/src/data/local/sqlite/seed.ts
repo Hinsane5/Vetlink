@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { validateFixtureGraph } from '../../../domain/fixtureValidation';
-import { chatFixtureEntities, chatFixtureRelations, consultationFixtureEntities, consultationFixtureRelations, directoryFixturePatches, fixtureEntities, fixtureIds, fixtureRelations, fixtureSeedVersion } from '../../../testing/fixtures';
+import { accountFixtureEntities, accountFixtureRelations, chatFixtureEntities, chatFixtureRelations, consultationFixtureEntities, consultationFixtureRelations, directoryFixturePatches, fixtureEntities, fixtureIds, fixtureRelations, fixtureSeedVersion } from '../../../testing/fixtures';
 import { insertEntity, insertRelations } from './entitySql';
 
 const seededAt = '2026-10-05T00:00:00.000Z';
@@ -11,7 +11,7 @@ export type SeedResult =
   | { status: 'skipped-nonempty'; entityCount: number; relationCount: number };
 
 export async function seedFixturesIfEmpty(database: SQLiteDatabase): Promise<SeedResult> {
-  validateFixtureGraph([...fixtureEntities, ...consultationFixtureEntities, ...chatFixtureEntities], [...fixtureRelations, ...consultationFixtureRelations, ...chatFixtureRelations]);
+  validateFixtureGraph([...fixtureEntities, ...consultationFixtureEntities, ...chatFixtureEntities, ...accountFixtureEntities], [...fixtureRelations, ...consultationFixtureRelations, ...chatFixtureRelations, ...accountFixtureRelations]);
   let result: SeedResult | undefined;
 
   await database.withExclusiveTransactionAsync(async (transaction) => {
@@ -23,6 +23,7 @@ export async function seedFixturesIfEmpty(database: SQLiteDatabase): Promise<See
         await extendDirectoryFixtures(transaction);
         await extendConsultationFixtures(transaction);
         await extendChatFixtures(transaction);
+        await extendAccountFixtures(transaction);
       }
       const counts = await getCounts(transaction);
       result = {
@@ -59,6 +60,7 @@ export async function seedFixturesIfEmpty(database: SQLiteDatabase): Promise<See
     await transaction.runAsync('INSERT INTO app_metadata (key, value, updated_at) VALUES (?, ?, ?)', 'fixture_directory_version', 'fe08-v1', seededAt);
     await extendConsultationFixtures(transaction);
     await extendChatFixtures(transaction);
+    await extendAccountFixtures(transaction);
     const afterSeed = await getCounts(transaction);
     result = {
       status: 'seeded',
@@ -132,4 +134,41 @@ async function extendChatFixtures(database: SQLiteDatabase): Promise<void> {
   }
   await insertRelations(database, chatFixtureRelations);
   await database.runAsync('INSERT INTO app_metadata (key, value, updated_at) VALUES (?, ?, ?)', 'fixture_chat_version', 'fe12-v1', new Date().toISOString());
+}
+
+async function extendAccountFixtures(database: SQLiteDatabase): Promise<void> {
+  if (await database.getFirstAsync("SELECT value FROM app_metadata WHERE key = 'fixture_account_version'")) return;
+  for (const record of accountFixtureEntities) {
+    const existing = await database.getFirstAsync<{ id: string; kind: string; owner_id: string | null }>(
+      'SELECT id, kind, owner_id FROM entities WHERE id = ?', record.id,
+    );
+    if (existing) {
+      if (existing.kind !== record.kind || existing.owner_id !== record.ownerId) {
+        throw new Error('FE-22 fixture ID collision; existing data preserved.');
+      }
+      continue;
+    }
+    await insertEntity(database, record);
+  }
+  for (const relation of accountFixtureRelations) {
+    const existing = await database.getFirstAsync<{ target_id: string }>(
+      'SELECT target_id FROM entity_relations WHERE source_id = ? AND relationship = ?',
+      relation.sourceId,
+      relation.relationship,
+    );
+    if (existing && existing.target_id !== relation.targetId) {
+      throw new Error('FE-22 fixture relation collision; existing data preserved.');
+    }
+    if (!existing) await insertRelations(database, [relation]);
+  }
+  await database.runAsync(
+    `INSERT OR IGNORE INTO domain_events (id, type, aggregate_id, occurred_at, payload_json)
+     VALUES (?, ?, ?, ?, ?)`,
+    'fixture-vet-visit-scheduled',
+    'visit.scheduled',
+    fixtureIds.visit,
+    '2026-10-03T03:00:00.000Z',
+    JSON.stringify({ fixture: true, recipientId: fixtureIds.vetZero }),
+  );
+  await database.runAsync('INSERT INTO app_metadata (key, value, updated_at) VALUES (?, ?, ?)', 'fixture_account_version', 'fe22-v1', new Date().toISOString());
 }

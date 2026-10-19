@@ -102,8 +102,8 @@ Selisih implementasi awal yang perlu ditinjau pada pemeriksaan Figma berikutnya:
 | Ulasan F-19 | Review `12:2425`, Success `12:2446` | `/farmer/consultations/:id/review` | RatingInput, TextArea | stars, text, eligible/submitting |
 | Profil F-02 | Profile `12:3066`, Edit `12:3103` | `/farmer/profile`, `/farmer/profile/edit` | ProfileForm, AddressList | identity, farm, species, photo, address |
 | Multi-Farm FE-26 | Tidak ada frame pengelolaan Farm khusus pada inventory/cache lokal; konteks ternak `12:1889`, `12:1980`, `12:2032`, dan booking `12:2280` menjadi layar terkait | `/farmer/farms`, `/farmer/farms/:farmId`, `/farmer/farms/new`, `/farmer/farms/:farmId/edit` | FarmList, FarmDetail, FarmForm, FarmPicker | owner-scoped farms, active farm, visit address |
-| Pengaturan F-20 | Settings `12:3130`, Help `12:3162`, Logout `12:3184` | `/farmer/settings`, `/farmer/help` | SettingsRow, Dialog | prefs, session, help |
-| Inbox F-20 | Belum ada frame inbox Peternak khusus yang teridentifikasi; gunakan pola Dokter notifications `46:33` | `/farmer/notifications` | NotificationList | recipient scoped events/read |
+| Pengaturan F-20 | Settings `82:7516`; state off `82:7546`, bahasa `82:7576`, privacy `82:7614`; Help `82:7988`/`82:8015`/`82:8050`/`82:8085`; Logout `12:3184` | `/farmer/settings`, `/farmer/help` | SettingsRow, PreferenceSwitch, HelpAccordion, Dialog | prefs, session, help |
+| Inbox F-20 | Frame bersama Notifications `82:7652`; states read/request/visit/chat/transaction/follow-up `82:7695`/`82:7738`/`82:7788`/`82:7838`/`82:7888`/`82:7938`; belum ada frame inbox Peternak khusus | `/farmer/notifications` | NotificationList | recipient scoped events/read/contextId |
 
 Alamat/farm editor, respons proposal jadwal, riwayat pembayaran, dan form laporan Peternak belum mempunyai dedicated frame Peternak yang teridentifikasi. Gunakan komponen input/list/dialog teramati dan susunan konteks fitur; perbedaan visual harus direview sebelum acceptance.
 
@@ -126,8 +126,8 @@ Alamat/farm editor, respons proposal jadwal, riwayat pembayaran, dan form lapora
 | Pendapatan V-15 | earnings `46:28`, transaction `46:29` | `/vet/earnings`, `/vet/earnings/transactions/:id` | BalanceCard, PeriodSheet | gross/commission/net, pending/available |
 | Pencairan V-16 | withdraw `46:30`, review `46:31`, submitted `46:32` | `/vet/withdrawals/new`, `/vet/withdrawals/review`, `/vet/withdrawals/:id` | AmountForm, Review, ConfirmDialog | amount/destination, reservation, submitted |
 | Profil V-03 | profile `46:34`, editProfile `46:35`, ratings `46:6` | `/vet/profile`, `/vet/profile/edit`, `/vet/ratings` | ProfileForm, ReviewList | professional profile, verification, rating |
-| Notifikasi V-17 | notifications `46:33` | `/vet/notifications` | NotificationRow | events, unread/read, context destination |
-| Pengaturan V-18 | settings `46:36`, help `46:37` | `/vet/settings`, `/vet/help` | SettingsRow, Dialog | preferences, help, logout |
+| Notifikasi V-17 | Frame bersama Notifications `82:7652`; states read/request/visit/chat/transaction/follow-up `82:7695`/`82:7738`/`82:7788`/`82:7838`/`82:7888`/`82:7938` | `/vet/notifications` | NotificationList | recipient scoped events/read/contextId |
+| Pengaturan V-18 | Settings `82:7516`; state off `82:7546`, bahasa `82:7576`, privacy `82:7614`; Help `82:7988`/`82:8015`/`82:8050`/`82:8085`; Logout `12:3184` | `/vet/settings`, `/vet/help` | SettingsRow, PreferenceSwitch, HelpAccordion, Dialog | preferences, help, logout |
 
 ## Implementasi FE-15: rekomendasi
 
@@ -371,3 +371,9 @@ Farm management dirancang dengan tokens/Inter/Lucide dan komponen input/dialog y
 Inventory lokal memetakan Review `12:2425` dan Review Success `12:2446`; route usulan yang sudah dicatat adalah `/farmer/consultations/:id/review`. Inventory lokal menjadi rujukan yang dipakai pada tiket ini. Cache screenshot lokal tidak memiliki layar Review, dan Figma MCP tidak dipanggil sesuai instruksi.
 
 Form dibuka dari detail konsultasi selesai milik Peternak, menggunakan tokens FE-01, Inter, Lucide, bintang dengan target sentuh 48 dp, TextArea, dan status sukses hanya setelah Review tersimpan. Ulasan tersimpan tampil baca-saja. Ini rancangan kode berdasarkan kontrak/domain dan komponen lokal, bukan pixel-match terhadap Figma. Build Android berhenti pada timeout unduhan Gradle; Back, keyboard, scroll, 390 × 844, layar kecil, font besar, tangkapan layar, dan perbandingan visual **Belum diuji**.
+
+## Implementasi FE-22: inbox, preferensi, bantuan, dan akun
+
+Inventory lokal memetakan layar Settings `82:7516` beserta states off/language/privacy `82:7546`, `82:7576`, `82:7614`; Notifications `82:7652` beserta state read/request/visit/chat/transaction/follow-up `82:7695`, `82:7738`, `82:7788`, `82:7838`, `82:7888`, `82:7938`; Help `82:7988`, `82:8015`, `82:8050`, `82:8085`; serta logout Peternak `12:3184`. Ini metadata inventory lokal; Figma MCP tidak dipanggil. Folder screenshot lokal tidak menyediakan tampilan inbox, settings, atau help, sehingga konteks visual yang tersedia terbatas pada node/variant mapping dan tokens FE-01. Logout lokal sebelumnya dipetakan sebagai dialog vertikal; `AccountSettingsFlow` memakai tombol Keluar lalu Batal secara vertikal.
+
+`NotificationsFlow` dipakai kedua role dengan daftar milik penerima, state belum/sudah dibaca, dan navigasi memakai `contextId` tersimpan. `AccountSettingsFlow` menggunakan kategori preferensi persisten, accordion bantuan Indonesia, akses profil/Ganti Peran, dan konfirmasi Keluar. Selisih yang belum dibandingkan: prototype memecah variasi notifikasi menjadi frame terpisah, sedangkan aplikasi menyatukannya sebagai state item inbox; layar pengaturan/help dirakit dari tokens dan komponen lokal. QA Android untuk tap, dialog, Back, scroll, keyboard, 390 × 844, layar kecil, font besar dan pixel-match **tertunda**; tidak ada screenshot seluruh layar yang digunakan sebagai UI aplikasi.

@@ -71,10 +71,11 @@ test('farm migration backfills legacy context without deleting or replacing reco
     await db.runAsync("DELETE FROM entity_relations WHERE relationship IN ('owner', 'visitAddress', 'farm') AND (source_id IN (SELECT id FROM entities WHERE kind IN ('farm', 'livestock', 'consultation')))");
     await db.runAsync("INSERT INTO entities (id, kind, owner_id, context_id, payload_json, created_at, updated_at, version) VALUES (?, 'bookingDraft', ?, ?, ?, ?, ?, 1)",
       'legacy-draft', ids.budi, ids.vetZero, JSON.stringify({ vetId: ids.vetZero, status: 'draft', input: { animalId: ids.cow } }), now().toISOString(), now().toISOString());
-    await db.runAsync('DELETE FROM schema_migrations WHERE version = 3');
+    await db.execAsync('DROP INDEX preferences_user_unique');
+    await db.runAsync('DELETE FROM schema_migrations WHERE version IN (3, 4)');
     await db.execAsync('PRAGMA user_version = 2');
 
-    assert.equal(await migrateDatabase(db), 3);
+    assert.equal(await migrateDatabase(db), 4);
     assert.equal((await db.getFirstAsync('SELECT COUNT(*) AS count FROM entities')).count, entityCount + 1);
     const migratedProfile = JSON.parse((await db.getFirstAsync('SELECT payload_json FROM entities WHERE id = ?', ids.budiProfile)).payload_json);
     const migratedFarm = JSON.parse((await db.getFirstAsync('SELECT payload_json FROM entities WHERE id = ?', ids.budiFarm)).payload_json);

@@ -15,6 +15,8 @@ import { FrontendPreviewService } from '../../../application/FrontendPreviewServ
 import { AvailabilityService } from '../../../application/AvailabilityService';
 import { CareCoordinationService } from '../../../application/CareCoordinationService';
 import { ReviewService } from '../../../application/ReviewService';
+import { NotificationService } from '../../../application/NotificationService';
+import { PreferencesService } from '../../../application/PreferencesService';
 import { ChatService } from '../../../application/ChatService';
 import { ConsultationService } from '../../../application/ConsultationService';
 import { ClinicalNoteService } from '../../../application/ClinicalNoteService';
@@ -56,6 +58,8 @@ export interface LocalStore {
   availability: AvailabilityService;
   careCoordination: CareCoordinationService;
   reviews: ReviewService;
+  notifications: NotificationService;
+  preferences: PreferencesService;
   authStore: ExpoSecureAuthStore;
   schemaVersion: number;
   fixtureSeedVersion: string | null;
@@ -123,6 +127,8 @@ async function createLocalStore(): Promise<LocalStore> {
   const availability = new AvailabilityService(bookingRepository, attachmentMedia, new ExpoIdFactory());
   const careCoordination = new CareCoordinationService(bookingRepository);
   const reviews = new ReviewService(bookingRepository, profiles, new ExpoIdFactory());
+  const notifications = new NotificationService(repositories);
+  const preferences = new PreferencesService(repositories, new ExpoIdFactory());
   const counts = await repositories.countAll();
 
   if (__DEV__) {
@@ -132,5 +138,5 @@ async function createLocalStore(): Promise<LocalStore> {
     );
   }
 
-  return { database, repositories, events, auth, profiles, dashboard, farms, livestock, healthRecords, patients, preview, vetDirectory, catalog, commerce, payments, booking, consultations, clinicalNotes, recommendations, chat, availability, careCoordination, reviews, authStore, schemaVersion, fixtureSeedVersion, seedResult };
+  return { database, repositories, events, auth, profiles, dashboard, farms, livestock, healthRecords, patients, preview, vetDirectory, catalog, commerce, payments, booking, consultations, clinicalNotes, recommendations, chat, availability, careCoordination, reviews, notifications, preferences, authStore, schemaVersion, fixtureSeedVersion, seedResult };
 }

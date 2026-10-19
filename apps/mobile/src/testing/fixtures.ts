@@ -56,6 +56,7 @@ export const fixtureIds = {
   withdrawal: id(49),
   reserveEntry: id(50),
   notification: id(51),
+  vetNotification: id(105),
   message: id(52),
   emptyCartItem: id(53),
   orderItem: id(100),
@@ -66,6 +67,7 @@ export const fixtureIds = {
   vetZero: id(54),
   yudaProfile: id(55),
   preferences: id(57),
+  vetPreferences: id(106),
   completedPending: id(58),
   paymentSucceededPending: id(59),
   finalNotePending: id(60),
@@ -175,7 +177,7 @@ export const fixtureEntities: DomainEntity[] = [
   entity('payoutDestination', id(56), { vetId: ids.vetZero, bankLabel: 'Bank Contoh', accountMasked: '•••• 1234', accountHolder: 'Yuda Pratama' }, ids.vetZero),
   entity('withdrawal', ids.withdrawal, { vetId: ids.vetZero, destinationSnapshot: 'Bank Contoh •••• 1234', amount: 20000, feeSnapshot: 0, netAmount: 20000, status: 'submitted', operationKey: 'fixture-withdrawal-submitted' }, ids.vetZero),
   entity('ledgerEntry', ids.reserveEntry, { vetId: ids.vetZero, withdrawalId: ids.withdrawal, kind: 'reserve_withdrawal', amount: 20000, operationKey: 'fixture-reserve-withdrawal', occurredAt: fixtureUpdate }, ids.vetZero),
-  entity('notification', ids.notification, { recipientId: ids.budi, eventId: 'fixture-consultation-requested', type: 'consultation_requested', contextId: ids.request, title: 'Permintaan konsultasi tersimpan', body: 'Dokter akan meninjau permintaan Anda.', deliveryStatus: 'sent', readAt: null }, ids.budi),
+  entity('notification', ids.notification, { recipientId: ids.budi, eventId: 'fixture-consultation-requested', type: 'consultation_requested', contextId: ids.request, title: 'Permintaan konsultasi tersimpan', body: 'Dokter akan meninjau permintaan Anda.', deliveryStatus: 'sent', readAt: null }, ids.budi, ids.request),
   entity('message', ids.message, { consultationId: ids.chat, senderId: ids.sari, clientMessageId: 'fixture-chat-message-1', text: 'Terima kasih, Dok.', deliveryStatus: 'sent', sentAt: fixtureUpdate }, ids.sari),
   entity('preferences', ids.preferences, { userId: ids.budi, notifications: { consultations: true, reminders: true, commerce: false } }, ids.budi),
   entity('review', ids.yudaReview, { consultationId: ids.completed, farmerId: ids.sari, vetId: ids.vetZero, stars: 5, text: 'Penjelasan pemeriksaan mudah dipahami dan jadwal kunjungan jelas.', submittedAt: '2026-10-02T03:00:00.000Z' }, ids.sari),
@@ -273,6 +275,29 @@ link(ids.preferences, 'user', ids.budi);
 link(ids.yudaReview, 'consultation', ids.completed);
 link(ids.yudaReview, 'veterinarian', ids.vetZero);
 link(ids.yudaReview, 'farmer', ids.sari);
+
+export const accountFixtureEntities: DomainEntity[] = [
+  entity('notification', ids.vetNotification, {
+    recipientId: ids.vetZero,
+    eventId: 'fixture-vet-visit-scheduled',
+    type: 'visit_scheduled',
+    title: 'Kunjungan terjadwal',
+    body: 'Jadwal kunjungan yang terkait dengan layanan Anda telah diperbarui.',
+    deliveryStatus: 'sent',
+    readAt: null,
+  }, ids.vetZero, ids.visit),
+  entity('preferences', ids.vetPreferences, {
+    userId: ids.vetZero,
+    enabled: true,
+    notifications: { consultations: true, reminders: true, commerce: true },
+  }, ids.vetZero),
+];
+
+export const accountFixtureRelations: EntityRelation[] = [
+  { sourceId: ids.vetNotification, targetId: ids.vetZero, relationship: 'recipient' },
+  { sourceId: ids.vetNotification, targetId: ids.visit, relationship: 'context' },
+  { sourceId: ids.vetPreferences, targetId: ids.vetZero, relationship: 'user' },
+];
 
 export const fixtureSeedVersion = 'fe02-v1';
 

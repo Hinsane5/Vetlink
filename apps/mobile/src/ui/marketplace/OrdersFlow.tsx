@@ -9,16 +9,17 @@ import { Icon } from '../components/Icon';
 import { StatusBadge } from '../components/StatusBadge';
 import { colors, fonts, radii, spacing, typeScale } from '../theme/tokens';
 
-type Props = { store: LocalStore; session: SessionSnapshot; onBack: () => void; onPay: (order: OrderSnapshot) => void };
+type Props = { store: LocalStore; session: SessionSnapshot; initialOrderId?: string; onBack: () => void; onPay: (order: OrderSnapshot) => void };
 type Tab = 'active' | 'done';
 
-export function OrdersFlow({ store, session, onBack, onPay }: Props) {
+export function OrdersFlow({ store, session, initialOrderId, onBack, onPay }: Props) {
   const [tab, setTab] = useState<Tab>('active');
   const [orders, setOrders] = useState<OrderSnapshot[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialOrderId ?? null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const selected = orders.find((order) => order.id === selectedId) ?? null;
+  const missingInitialOrder = Boolean(initialOrderId && !loading && !orders.some((order) => order.id === initialOrderId));
   const reload = useCallback(async () => {
     setLoading(true); setError('');
     try { setOrders(await store.commerce.listOrders(session.userId, session.activeRole)); }
@@ -40,7 +41,7 @@ export function OrdersFlow({ store, session, onBack, onPay }: Props) {
       <Pressable accessibilityRole="button" accessibilityLabel="Kembali" onPress={() => selectedId ? setSelectedId(null) : onBack()} style={styles.back}><Icon name="arrow-left" size={22} color={colors.brown} /></Pressable>
       <Text accessibilityRole="header" style={styles.title}>{selected ? 'Detail pesanan' : 'Pesanan saya'}</Text><View style={styles.back} />
     </View>
-    {selected ? <OrderDetail order={selected} onPay={() => onPay(selected)} /> : <>
+    {selected ? <OrderDetail order={selected} onPay={() => onPay(selected)} /> : missingInitialOrder ? <View style={styles.content}><Text style={styles.copy}>Pesanan yang dituju belum dapat dibuka untuk akun ini.</Text><Button label="Kembali ke daftar" role="farmer" variant="secondary" onPress={() => setSelectedId(null)} /></View> : <>
       <View style={styles.tabs}>
         {(['active', 'done'] as const).map((value) => <Pressable key={value} accessibilityRole="tab" accessibilityState={{ selected: tab === value }} onPress={() => setTab(value)} style={[styles.tab, tab === value && styles.tabSelected]}><Text style={[styles.tabText, tab === value && styles.tabTextSelected]}>{value === 'active' ? 'Aktif' : 'Selesai'}</Text></Pressable>)}
       </View>
