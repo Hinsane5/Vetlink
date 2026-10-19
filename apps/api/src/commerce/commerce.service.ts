@@ -16,6 +16,7 @@ import { DatabaseService } from '../database/database.service.js';
 import { CHECKOUT_SHIPPING_ADAPTER, type CheckoutShippingAdapter, type ShippingQuoteValue } from './shipping-quote.adapter.js';
 import type { CreateCheckoutQuoteDto, CreateOrderDto, DeleteCartItemQueryDto, OrderListQueryDto, SetCartItemDto } from './commerce.dto.js';
 import type { OrderPaymentSucceededInput, OrderPaymentSucceededPort } from './order-payment.port.js';
+import { ShipmentService } from './shipment.service.js';
 
 const maxIdr = BigInt(Number.MAX_SAFE_INTEGER);
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -159,6 +160,7 @@ export class CommerceService implements OrderPaymentSucceededPort {
   constructor(
     private readonly db: DatabaseService,
     @Inject(CHECKOUT_SHIPPING_ADAPTER) private readonly shipping: CheckoutShippingAdapter,
+    private readonly shipments: ShipmentService,
   ) {}
 
   async getCart(principal: AuthenticatedPrincipal) {
@@ -362,6 +364,11 @@ export class CommerceService implements OrderPaymentSucceededPort {
   async getOrder(principal: AuthenticatedPrincipal, orderId: string) {
     this.farmer(principal);
     return this.db.transaction((client) => this.orderView(client, principal.userId, orderId));
+  }
+
+  async getShipment(principal: AuthenticatedPrincipal, orderId: string) {
+    this.farmer(principal);
+    return this.shipments.getForOwner(principal.userId, orderId);
   }
 
   async handleOrderPaymentSucceeded(client: PoolClient, payment: OrderPaymentSucceededInput): Promise<void> {

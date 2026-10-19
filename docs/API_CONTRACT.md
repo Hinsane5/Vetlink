@@ -1,6 +1,6 @@
 # Kontrak integrasi backend v1
 
-Status per 20 Oktober 2026: OpenAPI executable memuat route BE-00–08 dan BE-10/11: health/auth, profil/verifikasi, ternak/pasien/riwayat, vet discovery/availability, booking/request/proposal/visit/completion, payment quote/create, chat/media, note/recommendation, katalog aktif, cart, checkout quote, order, dan snapshot. BE-09 dan domain setelah BE-11 tetap kontrak target tiket berikutnya. Aplikasi mobile belum memakai backend jaringan.
+Status per 20 Oktober 2026: OpenAPI executable memuat route BE-00–08 dan BE-10/11/12: health/auth, profil/verifikasi, ternak/pasien/riwayat, vet discovery/availability, booking/request/proposal/visit/completion, payment quote/create, chat/media, note/recommendation, katalog aktif, cart, checkout quote, order, snapshot, serta shipment timeline owner-scoped. BE-09 dan domain setelah BE-12 tetap kontrak target tiket berikutnya. Aplikasi mobile belum memakai backend jaringan.
 
 ## Konvensi
 
@@ -10,7 +10,7 @@ Mutasi concurrency-sensitive menerima `expectedVersion`. Mutasi pembayaran, orde
 
 Gunakan action endpoint untuk transisi yang membutuhkan syarat; jangan menyediakan PATCH umum yang membolehkan client mengatur `verified`, `completed`, `paid`, `balance`, atau `finalizedAt`.
 
-## OpenAPI executable BE-00–08 dan BE-10/11
+## OpenAPI executable BE-00–08 dan BE-10–12 (BE-09 belum mulai)
 
 NestJS melayani Swagger UI di `/docs` dan JSON di `/openapi.json`. Endpoint runtime yang tersedia:
 
@@ -34,6 +34,7 @@ NestJS melayani Swagger UI di `/docs` dan JSON di `/openapi.json`. Endpoint runt
 | `POST /v1/orders` | `{quoteId}`; header `Idempotency-Key` | 201 `{operationId,replayed,order}`; order tersimpan dan cart dikosongkan atomik | 400/401/403/404/409/422/503 `ApiErrorResponseDto` |
 | `GET /v1/orders` | `cursor?`, `limit?` 1–100 (default 20) | 200 `{items,nextCursor,hasMore}` order milik Peternak | 400/401/403/503 `ApiErrorResponseDto` |
 | `GET /v1/orders/{id}` | ID order UUID | 200 `OrderResponseDto` dengan item, alamat, total dan harga snapshot | 401/403/404/503 `ApiErrorResponseDto` |
+| `GET /v1/orders/{id}/shipment` | ID order UUID | 200 `OrderShipmentResponseDto` dengan status order, shipment bila sudah ada, dan timeline event | 401/403/404/503 `ApiErrorResponseDto` |
 | `POST /v1/attachments/uploads` | Multipart `consultationId`, `file`; `Idempotency-Key` | 201 `Attachment` status `uploaded` | 400/401/403/404/409/413/422/503 |
 | `POST /v1/attachments/{id}/commit` | ID lampiran yang diunggah actor | 200 `Attachment` status `committed` | 401/403/404/409/422/503 |
 | `GET /v1/attachments/{id}` | ID lampiran | 200 metadata dan URL content privat | 401/403/404 |
@@ -198,7 +199,13 @@ Semua route cart, checkout dan order hanya menerima active role Peternak. Peruba
 
 `POST /checkout-quotes` menerima `addressId` tersimpan yang dimiliki Peternak dan tertaut ke salah satu Farm miliknya (`farms.visit_address_id`). Server mengunci cart, item aktif, produk dan alamat untuk membuat snapshot nama/kategori/harga satuan/jumlah/alamat serta subtotal/ongkir/total rupiah integer. Harga tidak diterima dari client. Adapter ongkir lokal fiktif mengikuti FE-18: Bogor/Depok (Jawa Barat) Rp9.000 dan Sleman/Yogyakarta (DI Yogyakarta) Rp12.000. Wilayah lain gagal sebagai aturan yang belum tersedia; tidak ada kurir/provider yang dihubungi. Hasil adapter `succeeded` diperlukan; `pending`/kegagalan dependency tidak membuat quote dan mengembalikan 503. Quote berlaku 15 menit.
 
-`POST /orders` menerima `quoteId` dan `Idempotency-Key` 8–128 karakter. Dalam satu transaksi server mengunci operasi, quote, cart, produk dan alamat, lalu mengecek expiry, versi/isi cart, harga/nama/kategori terbaru, alamat Farm dan versi/snapshot alamat, serta ongkir terkini. Jika harga, cart, alamat, atau ongkir berubah, order tidak dibuat dan cart tidak dihapus; respons 409 meminta client membuat quote baru agar total terbaru dapat ditinjau. Key dan payload sama mengembalikan order tersimpan; key sama dengan quote berbeda mendapat 409. Pada sukses, order `awaiting_payment` tanpa Payment dibuat bersama item dan alamat/total snapshots, quote dikonsumsi, cart dikosongkan dan operation disimpan atomik. Order items dan snapshot harga/alamat immutable; GET list/detail hanya mengembalikan data pemilik. Shipment/timeline menunggu BE-12.
+`POST /orders` menerima `quoteId` dan `Idempotency-Key` 8–128 karakter. Dalam satu transaksi server mengunci operasi, quote, cart, produk dan alamat, lalu mengecek expiry, versi/isi cart, harga/nama/kategori terbaru, alamat Farm dan versi/snapshot alamat, serta ongkir terkini. Jika harga, cart, alamat, atau ongkir berubah, order tidak dibuat dan cart tidak dihapus; respons 409 meminta client membuat quote baru agar total terbaru dapat ditinjau. Key dan payload sama mengembalikan order tersimpan; key sama dengan quote berbeda mendapat 409. Pada sukses, order `awaiting_payment` tanpa Payment dibuat bersama item dan alamat/total snapshots, quote dikonsumsi, cart dikosongkan dan operation disimpan atomik. Order items dan snapshot harga/alamat immutable; GET list/detail hanya mengembalikan data pemilik. Status shipment dan timeline tersedia lewat BE-12.
+
+### Shipment dan order timeline BE-12
+
+`GET /v1/orders/{id}/shipment` hanya dapat dibaca Peternak pemilik. Respons memuat status order terkini, shipment (null sebelum hasil pembayaran berhasil memulai pengiriman), dan timeline yang menggabungkan pembuatan order, pembayaran berhasil, serta hasil adapter shipment. Urutan timeline mengikuti waktu pencatatan server agar tetap mencerminkan urutan kausal yang tersimpan; `occurredAt` tetap menunjukkan waktu pada hasil adapter.
+
+Adapter fiktif lokal baru dipanggil setelah hasil pembayaran `succeeded` tersimpan bersama status order `paid`. Hasil adapter `pending` atau `failed` dicatat sebagai event, tetapi tidak mengubah status order menjadi `processing`, `shipped`, atau `delivered`. Hasil `succeeded` harus maju satu tahap: `paid → processing → shipped → delivered`; event yang sama dengan payload sama diabaikan, sedangkan penggunaan ulang event ID dengan payload berbeda ditolak. Trigger PostgreSQL melindungi urutan status dari update langsung tanpa payment succeeded atau event adapter shipment tersimpan. Tidak ada callback HTTP publik atau provider/kurir produksi.
 
 BE-06 kini dapat membuat quote/payment untuk order dari `total_snapshot_idr`; nominal client tidak diterima. Payment adapter aktif tetap lokal `pending`, sehingga order menunggu pembayaran. Status menjadi `paid` hanya bila hasil adapter `succeeded` tersimpan bersama order/payment; tidak ada layanan finansial nyata. Adapter ongkir dan pembayaran produksi belum dipilih.
 
@@ -236,4 +243,4 @@ Payload event minimal: eventId, aggregateId, actorId, occurredAt, version. Efek 
 
 Jalankan suite yang sama terhadap repository lokal dan API: scope ownership, verified guard, slot conflicts, final-note immutability, complete guard, sequence visit, computed totals, earning once, withdrawal reservation/retry, notification recipient. Perbedaan teknis error harus dinormalisasi ke domain error yang sama.
 
-OpenAPI executable BE-00–08 dan BE-10/11 memuat healthcheck, auth, profil/verifikasi, livestock/patient, vet discovery/availability/slots/blocked-times/schedule, booking/request/proposal/visit/completion, payment quote/create, chat/media, note/recommendation, katalog produk aktif, cart, checkout quote, order dan snapshots. Follow-up BE-09, ledger, payout, shipment timeline, dan domain lain pada tabel tetap menunggu tiket backend berikutnya. Routes dan semantik BE-11 dibagikan melalui Orca untuk koordinasi.
+OpenAPI executable BE-00–08 dan BE-10–12 memuat healthcheck, auth, profil/verifikasi, livestock/patient, vet discovery/availability/slots/blocked-times/schedule, booking/request/proposal/visit/completion, payment quote/create, chat/media, note/recommendation, katalog produk aktif, cart, checkout quote, order/snapshots dan shipment timeline owner-scoped. Follow-up BE-09, ledger, payout, dan domain lain pada tabel tetap menunggu tiket backend berikutnya. Routes dan semantik BE-11/12 dibagikan melalui Orca untuk koordinasi.

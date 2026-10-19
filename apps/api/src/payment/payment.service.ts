@@ -6,6 +6,7 @@ import { adapterFailed } from '../communication/adapter-result.js';
 import { DatabaseService } from '../database/database.service.js';
 import { CONSULTATION_PAYMENT_SUCCEEDED, type ConsultationPaymentSucceededPort } from '../consultation/consultation-payment.port.js';
 import { ORDER_PAYMENT_SUCCEEDED, type OrderPaymentSucceededPort } from '../commerce/order-payment.port.js';
+import { ORDER_SHIPMENT_START, type OrderShipmentStartPort } from '../commerce/order-shipment.port.js';
 import { PAYMENT_SERVICE, type PaymentOutcome, type PaymentService } from './payment.adapter.js';
 
 type PayableType = 'consultation' | 'order';
@@ -19,6 +20,7 @@ export class PaymentsService {
     @Inject(PAYMENT_SERVICE) private readonly adapter: PaymentService,
     @Inject(CONSULTATION_PAYMENT_SUCCEEDED) private readonly consultationPayment: ConsultationPaymentSucceededPort,
     @Inject(ORDER_PAYMENT_SUCCEEDED) private readonly orderPayment: OrderPaymentSucceededPort,
+    @Inject(ORDER_SHIPMENT_START) private readonly shipmentStart: OrderShipmentStartPort,
   ) {}
 
   async quote(p: AuthenticatedPrincipal, payableType: PayableType, payableId: string) {
@@ -89,7 +91,12 @@ export class PaymentsService {
       }
       return { row: { ...payment, attempt_id: attempt.id, attempt_status: attempt.status, attempt_reference: null }, shouldStart: true };
     });
-    if (!prepared.shouldStart) return this.paymentView(prepared.row);
+    if (!prepared.shouldStart) {
+      if (prepared.row.payable_type === 'order' && prepared.row.status === 'succeeded') {
+        await this.shipmentStart.ensureStarted(prepared.row.payable_id, prepared.row.owner_id);
+      }
+      return this.paymentView(prepared.row);
+    }
     const row = prepared.row;
     let result;
     try { result = await this.adapter.start(row.id, row.attempt_id, Number(row.amount_idr), row.method); }
@@ -115,6 +122,9 @@ export class PaymentsService {
       });
     } catch { throw new ServiceUnavailableException({ code: 'SERVICE_UNAVAILABLE', message: 'Hasil layanan pembayaran belum tersimpan; periksa status sebelum mencoba lagi.' }); }
     const saved = await this.paymentByAttempt(row.attempt_id);
+    if (saved.payable_type === 'order' && saved.status === 'succeeded') {
+      await this.shipmentStart.ensureStarted(saved.payable_id, saved.owner_id);
+    }
     return this.paymentView(saved);
   }
 
@@ -123,7 +133,7 @@ export class PaymentsService {
     if (!Number.isSafeInteger(amount) || amount <= 0 || !/^\d+$/.test(input.amountIdr) || typeof input.eventId !== 'string' || input.eventId.length < 8 || input.eventId.length > 128 || !['pending', 'succeeded', 'failed'].includes(input.outcome)) {
       throw new UnprocessableEntityException({ code: 'VALIDATION_ERROR', message: 'Event atau nominal callback lokal tidak valid.' });
     }
-    return this.db.transaction(async (c: PoolClient) => {
+    const result = await this.db.transaction(async (c: PoolClient) => {
       const result = await c.query<PaymentRow>(`SELECT p.*,a.id AS attempt_id,a.status AS attempt_status,a.adapter_reference AS attempt_reference
         FROM payments p JOIN payment_attempts a ON a.payment_id=p.id WHERE p.id=$1 AND a.id=$2 FOR UPDATE`, [input.paymentId, input.attemptId]);
       const row = result.rows[0];
@@ -134,7 +144,7 @@ export class PaymentsService {
       const seen = await c.query<PaymentRow>('SELECT payment_id,event_id,outcome FROM payment_callback_events WHERE event_id=$1', [input.eventId]);
       if (seen.rows[0]) {
         if (seen.rows[0].payment_id !== row.id || seen.rows[0].outcome !== input.outcome) throw new ConflictException({ code: 'CALLBACK_CONFLICT', message: 'Event callback telah digunakan untuk hasil lain.' });
-        return this.paymentView(row);
+        return { payment: this.paymentView(row), payableType: row.payable_type, payableId: row.payable_id, ownerId: row.owner_id, status: row.status };
       }
       if (row.status !== 'pending' || row.attempt_status !== 'pending') throw new ConflictException({ code: 'PAYMENT_STATE_CONFLICT', message: 'Attempt tidak lagi menunggu hasil.' });
       await c.query('INSERT INTO payment_callback_events(payment_id,event_id,outcome) VALUES($1,$2,$3)', [row.id, input.eventId, input.outcome]);
@@ -154,8 +164,18 @@ export class PaymentsService {
           else await this.consultationPayment.handlePaymentSucceeded(c, payment);
         }
       }
-      return { ...this.paymentView(row), status: input.outcome, attempt: { ...this.paymentView(row).attempt, status: input.outcome } };
+      return {
+        payment: { ...this.paymentView(row), status: input.outcome, attempt: { ...this.paymentView(row).attempt, status: input.outcome } },
+        payableType: row.payable_type,
+        payableId: row.payable_id,
+        ownerId: row.owner_id,
+        status: input.outcome,
+      };
     });
+    if (result.payableType === 'order' && result.status === 'succeeded') {
+      await this.shipmentStart.ensureStarted(result.payableId, result.ownerId);
+    }
+    return result.payment;
   }
 
   private async paymentByAttempt(attemptId: string) {

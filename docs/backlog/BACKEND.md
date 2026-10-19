@@ -1,6 +1,6 @@
 # Backlog backend
 
-Status per 20 Oktober 2026: BE-00–08 dan BE-10/11 **Selesai**; BE-09 dan BE-12–17 **Belum mulai**. Stack backend dipilih melalui DEC-10; hosting/provider produksi dan integrasi mobile tetap belum dipilih.
+Status per 20 Oktober 2026: BE-00–08 dan BE-10–12 (BE-09 belum mulai) **Selesai**; BE-13–17 **Belum mulai**. Stack backend dipilih melalui DEC-10; hosting/provider produksi dan integrasi mobile tetap belum dipilih.
 
 Status setiap tiket: **Selesai** berarti seluruh acceptance criteria terpenuhi dan buktinya dicatat; **Sedang dikerjakan** berarti ada progres tetapi acceptance belum lengkap; **Belum mulai** berarti implementasi belum dimulai.
 
@@ -29,7 +29,7 @@ BE-05/06/08 diimplementasikan sebagai slice kontrak bertahap: schema consultatio
 | --- | --- | --- | --- | --- | --- |
 | BE-10 | Selesai | P1 | Catalog search/filter/detail, link recommendations | BE-00/01 | GET `/products` menggabungkan filter dan cursor stabil, detail hanya produk aktif, harga integer IDR berasal dari server; seed internal fiktif non-destruktif; RecommendationItem baru wajib tertaut ke produk aktif bila productId diberikan; Dokter hanya browse/recommend, tanpa stok/toko/checkout. [Bukti BE-10](../TESTING.md#bukti-be-10-20-oktober-2026). |
 | BE-11 | Selesai | P1 | Cart, checkout quote, order and snapshots | BE-02/06/10 | Peternak saja; jumlah positif; harga/alamat/ongkir stale ditolak dengan 409 sampai quote baru ditinjau; total/harga satuan/nama/alamat snapshot; create idempotent; cart/order atomik; fixture smoke lolos. [Bukti BE-11](../TESTING.md#bukti-be-11-20-oktober-2026). |
-| BE-12 | Belum mulai | P1 | Shipment adapter dan order timelines | BE-11 | Transisi status dari hasil adapter; duplicate events ignored; read owner only; pending/failed bukan delivered |
+| BE-12 | Selesai | P1 | Shipment adapter dan order timelines | BE-11 | Transisi status dari hasil adapter tersimpan; event duplikat idempoten; timeline hanya dibaca Peternak pemilik; pending/failed tidak menjadi delivered. [Bukti BE-12](../TESTING.md#bukti-be-12-20-oktober-2026). |
 | BE-13 | Belum mulai | P1 | Review eligibility/uniqueness, profile aggregation | BE-05 | Completed own consultation only, 1–5, one per consultation; aggregate matches records |
 | BE-14 | Belum mulai | P1 | Event/outbox, inbox/read/preferences, notification delivery | BE-05/07/09/11/15 | Unique event/recipient; retry tidak menduplikasi; prefs respected; resource access checked on link; sent based on delivery adapter |
 | BE-15 | Belum mulai | P0 | Earnings ledger, period/detail, withdrawals/destination/reservation | BE-05/06 | Net calculation exact; earning once after paid+completed; available/pending; concurrent withdrawal cannot overspend; reserve atomically; paid no double debit; failure releases once |

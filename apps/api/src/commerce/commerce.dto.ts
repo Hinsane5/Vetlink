@@ -104,6 +104,32 @@ export class OrderResponseDto {
   @ApiProperty({ type: 'integer', minimum: 1 }) version!: number;
 }
 
+export class ShipmentTimelineEventDto {
+  @ApiProperty() id!: string;
+  @ApiProperty({ type: 'string', nullable: true }) eventId!: string | null;
+  @ApiProperty({ enum: ['order_created', 'payment_succeeded', 'shipment_adapter'] }) type!: string;
+  @ApiProperty({ enum: ['pending', 'succeeded', 'failed'] }) outcome!: string;
+  @ApiProperty({ type: 'string', nullable: true, enum: ['awaiting_payment', 'paid', 'processing', 'shipped', 'delivered'] }) orderStatus!: string | null;
+  @ApiProperty({ type: 'string', nullable: true, enum: ['pending', 'processing', 'shipped', 'delivered', 'failed'] }) shipmentStatus!: string | null;
+  @ApiProperty({ type: 'string', nullable: true }) trackingCode!: string | null;
+  @ApiProperty() description!: string;
+  @ApiProperty({ format: 'date-time' }) occurredAt!: string;
+}
+
+export class OrderShipmentSummaryDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty({ enum: ['pending', 'processing', 'shipped', 'delivered', 'failed'] }) status!: string;
+  @ApiProperty({ type: 'string', nullable: true }) trackingCode!: string | null;
+  @ApiProperty({ type: 'integer', minimum: 1 }) version!: number;
+}
+
+export class OrderShipmentResponseDto {
+  @ApiProperty({ format: 'uuid' }) orderId!: string;
+  @ApiProperty({ enum: ['awaiting_payment', 'paid', 'processing', 'shipped', 'delivered'] }) orderStatus!: string;
+  @ApiProperty({ type: OrderShipmentSummaryDto, nullable: true }) shipment!: OrderShipmentSummaryDto | null;
+  @ApiProperty({ type: [ShipmentTimelineEventDto] }) events!: ShipmentTimelineEventDto[];
+}
+
 export class OrderListResponseDto {
   @ApiProperty({ type: [OrderResponseDto] }) items!: OrderResponseDto[];
   @ApiProperty({ type: 'string', nullable: true }) nextCursor!: string | null;

@@ -8,13 +8,15 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { join, resolve } from 'node:path';
 import { Pool } from 'pg';
 import { DatabaseService } from '../dist/database/database.service.js';
-import { adapterFailed } from '../dist/communication/adapter-result.js';
+import { adapterFailed, adapterPending, adapterSucceeded } from '../dist/communication/adapter-result.js';
 import { PostgresConsultationActionAdapter } from '../dist/consultation/consultation-action.adapter.js';
 import { ConsultationService } from '../dist/consultation/consultation.service.js';
 import { LocalPaymentService } from '../dist/payment/payment.adapter.js';
 import { PaymentsService } from '../dist/payment/payment.service.js';
 import { CommerceService } from '../dist/commerce/commerce.service.js';
 import { LocalCheckoutShippingAdapter } from '../dist/commerce/shipping-quote.adapter.js';
+import { LocalShipmentAdapter } from '../dist/commerce/shipment.adapter.js';
+import { ShipmentService } from '../dist/commerce/shipment.service.js';
 
 const appPath = resolve(process.cwd(), 'dist/main.js');
 
@@ -68,6 +70,18 @@ async function startServer(port, overrides = {}) {
   }
   child.kill('SIGKILL');
   throw new Error(`API process did not start:\n${output}`);
+}
+
+async function startServerWithRetry(overrides = {}) {
+  let lastError;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await startServer(await availablePort(), overrides);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw new Error(`API smoke server failed to start after three fresh ports: ${lastError?.message ?? 'unknown startup error'}`);
 }
 
 async function stopServer(child) {
@@ -165,6 +179,7 @@ try {
   assert.ok(openApi.paths['/v1/orders']?.post);
   assert.ok(openApi.paths['/v1/orders']?.get);
   assert.ok(openApi.paths['/v1/orders/{id}']?.get);
+  assert.ok(openApi.paths['/v1/orders/{id}/shipment']?.get);
   assert.equal(openApi.paths['/v1/internal/products'], undefined);
   assert.equal(openApi.paths['/v1/products']?.get?.responses?.['200']?.content?.['application/json']?.schema?.$ref, '#/components/schemas/ProductPageResponseDto');
   assert.equal(openApi.paths['/v1/products/{id}']?.get?.responses?.['200']?.content?.['application/json']?.schema?.$ref, '#/components/schemas/ProductResponseDto');
@@ -250,8 +265,9 @@ try {
     const productIds = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
     const localDb = new DatabaseService();
     const workflow = new ConsultationService(localDb, new PostgresConsultationActionAdapter());
-    const commerce = new CommerceService(localDb, new LocalCheckoutShippingAdapter());
-    const localPayment = new PaymentsService(localDb, new LocalPaymentService(), workflow, commerce);
+    const shipments = new ShipmentService(localDb, new LocalShipmentAdapter());
+    const commerce = new CommerceService(localDb, new LocalCheckoutShippingAdapter(), shipments);
+    const localPayment = new PaymentsService(localDb, new LocalPaymentService(), workflow, commerce, shipments);
     let consultationId;
     let unpaidConsultationId;
     let failedStorageServer;
@@ -478,6 +494,11 @@ try {
       assert.equal((await sendJson(healthy.baseUrl, '/v1/orders', farmer.accessToken, 'GET')).status, 200);
       assert.equal((await sendJson(healthy.baseUrl, `/v1/orders/${order.id}`, outsider.accessToken, 'GET')).status, 404);
       assert.equal((await sendJson(healthy.baseUrl, `/v1/orders/${order.id}`, vet.accessToken, 'GET')).status, 403);
+      const waitingShipment = await sendJson(healthy.baseUrl, `/v1/orders/${order.id}/shipment`, farmer.accessToken, 'GET');
+      assert.equal(waitingShipment.status, 200);
+      assert.equal((await waitingShipment.json()).shipment, null);
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/orders/${order.id}/shipment`, outsider.accessToken, 'GET')).status, 404);
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/orders/${order.id}/shipment`, vet.accessToken, 'GET')).status, 403);
       const outsiderCart = await (await sendJson(healthy.baseUrl, '/v1/me/cart', outsider.accessToken, 'GET')).json();
       assert.equal((await sendJson(healthy.baseUrl, `/v1/me/cart/items/${productIds[0]}`, outsider.accessToken, 'PUT', {
         expectedVersion: outsiderCart.version, quantity: 1,
@@ -504,10 +525,66 @@ try {
         reference: orderPayment.attempt.reference, amountIdr: '71500', eventId: orderPaymentEventId, outcome: 'succeeded',
       });
       const paidOrder = await (await sendJson(healthy.baseUrl, `/v1/orders/${order.id}`, farmer.accessToken, 'GET')).json();
-      assert.equal(paidOrder.status, 'paid');
+      assert.equal(paidOrder.status, 'processing');
       assert.equal(paidOrder.paymentStatus, 'succeeded');
       assert.equal(paidOrder.addressSnapshot.city, 'Sleman');
       assert.equal(paidOrder.items.find((item) => item.productId === productIds[0]).unitPriceIdr, 20000);
+      const shipmentTimelineResponse = await sendJson(healthy.baseUrl, `/v1/orders/${order.id}/shipment`, farmer.accessToken, 'GET');
+      assert.equal(shipmentTimelineResponse.status, 200);
+      let shipmentTimeline = await shipmentTimelineResponse.json();
+      assert.equal(shipmentTimeline.orderStatus, 'processing');
+      assert.equal(shipmentTimeline.shipment.status, 'processing');
+      assert.match(shipmentTimeline.shipment.trackingCode, /^LOCAL-/);
+      assert.deepEqual(shipmentTimeline.events.map(({ type }) => type), ['order_created', 'payment_succeeded', 'shipment_adapter']);
+      assert.equal(shipmentTimeline.events.at(-1).shipmentStatus, 'processing');
+
+      const shipmentRow = (await database.query('SELECT id FROM shipments WHERE order_id=$1', [order.id])).rows[0];
+      assert.ok(shipmentRow);
+      const localProcessingEvent = await new LocalShipmentAdapter().start({ orderId: order.id, shipmentId: shipmentRow.id });
+      const duplicateProcessing = await shipments.recordAdapterResult(order.id, shipmentRow.id, localProcessingEvent);
+      assert.equal(duplicateProcessing.duplicate, true);
+      assert.equal((await database.query('SELECT count(*)::int AS count FROM shipment_events WHERE shipment_id=$1', [shipmentRow.id])).rows[0].count, 1);
+
+      const pendingDelivered = adapterPending({
+        eventId: `pending-${randomUUID()}`, status: 'delivered', trackingCode: shipmentTimeline.shipment.trackingCode,
+        description: 'Hasil adapter masih pending.',
+      });
+      await shipments.recordAdapterResult(order.id, shipmentRow.id, pendingDelivered);
+      const failedDelivery = adapterFailed('LOCAL_SHIPMENT_FAILED', 'Adapter lokal gagal sementara.', true);
+      await shipments.recordAdapterResult(order.id, shipmentRow.id, failedDelivery);
+      let observed = await (await sendJson(healthy.baseUrl, `/v1/orders/${order.id}/shipment`, farmer.accessToken, 'GET')).json();
+      assert.equal(observed.orderStatus, 'processing');
+      assert.equal(observed.shipment.status, 'processing');
+      assert.ok(observed.events.some((event) => event.outcome === 'pending' && event.shipmentStatus === null));
+      assert.ok(observed.events.some((event) => event.outcome === 'failed' && event.shipmentStatus === null));
+
+      await assert.rejects(shipments.recordAdapterResult(order.id, shipmentRow.id, adapterSucceeded({
+        eventId: `skip-${randomUUID()}`, status: 'delivered', trackingCode: shipmentTimeline.shipment.trackingCode,
+        description: 'Event lompatan fiktif harus ditolak.',
+      })));
+      const localShippedEvent = adapterSucceeded({
+        eventId: `shipped-${randomUUID()}`, status: 'shipped', trackingCode: shipmentTimeline.shipment.trackingCode,
+        description: 'Paket fiktif diserahkan untuk pengiriman.',
+      });
+      await shipments.recordAdapterResult(order.id, shipmentRow.id, localShippedEvent);
+      const duplicateShipped = await shipments.recordAdapterResult(order.id, shipmentRow.id, localShippedEvent);
+      assert.equal(duplicateShipped.duplicate, true);
+      await assert.rejects(shipments.recordAdapterResult(order.id, shipmentRow.id, {
+        ...localShippedEvent,
+        value: { ...localShippedEvent.value, description: 'Payload event fiktif berbeda.' },
+      }));
+      const localDeliveredEvent = adapterSucceeded({
+        eventId: `delivered-${randomUUID()}`, status: 'delivered', trackingCode: shipmentTimeline.shipment.trackingCode,
+        description: 'Paket fiktif diterima.',
+      });
+      await shipments.recordAdapterResult(order.id, shipmentRow.id, localDeliveredEvent);
+      observed = await (await sendJson(healthy.baseUrl, `/v1/orders/${order.id}/shipment`, farmer.accessToken, 'GET')).json();
+      assert.equal(observed.orderStatus, 'delivered');
+      assert.equal(observed.shipment.status, 'delivered');
+      assert.equal(observed.events.filter((event) => event.eventId === localShippedEvent.value.eventId).length, 1);
+      await assert.rejects(database.query("UPDATE orders SET status='shipped' WHERE id=$1", [order.id]));
+      await assert.rejects(database.query("UPDATE shipments SET status='failed' WHERE id=$1", [shipmentRow.id]));
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/orders/${order.id}/shipment`, outsider.accessToken, 'GET')).status, 404);
 
       const addQuote = async (startsAt, serviceType, complaint, addressId, key = `be05-quote-${randomUUID()}`) => {
         const body = { vetId: vet.user.id, animalId, serviceType, startsAt, complaint, ...(addressId ? { addressId } : {}) };
@@ -1071,7 +1148,7 @@ try {
       assert.equal(completeChat.status, 200, await completeChat.clone().text());
       assert.equal((await completeChat.json()).consultation.status, 'completed');
 
-      console.log('BE-03/04/05/06/07/08/10/11 smoke: owner/role scope; active catalog; cart quantity and price; stale checkout quote; local shipping adapter; atomic order/cart, snapshots and idempotent retry; order payment pending/succeeded; verified access, visit/completion, chat/media lulus.');
+      console.log('BE-03/04/05/06/07/08/10/11/12 smoke: owner/role scope; active catalog; cart/checkout/order snapshots and idempotency; payment and shipment adapter results; shipment timeline ordering, duplicate events, pending/failed, owner access; verified access, visit/completion, chat/media lulus.');
     } finally {
       if (failedStorageServer) await stopServer(failedStorageServer.child);
       // Smoke teardown is a fixture reset; it must remove immutable final-note rows
@@ -1080,6 +1157,8 @@ try {
       const allConsultationIds = [...new Set([...consultationIds, consultationId, unpaidConsultationId].filter(Boolean))];
       const allOrderIds = [...new Set(orderIds)];
       try {
+        await database.query('DELETE FROM shipment_events WHERE shipment_id IN (SELECT id FROM shipments WHERE order_id = ANY($1::uuid[]))', [allOrderIds]);
+        await database.query('DELETE FROM shipments WHERE order_id = ANY($1::uuid[])', [allOrderIds]);
         await database.query('DELETE FROM order_items WHERE order_id = ANY($1::uuid[])', [allOrderIds]);
         await database.query('DELETE FROM orders WHERE id = ANY($1::uuid[])', [allOrderIds]);
         await database.query('DELETE FROM checkout_quotes WHERE id = ANY($1::uuid[])', [checkoutQuoteIds]);
@@ -1132,7 +1211,7 @@ try {
   await rm(smokeMediaDirectory, { recursive: true, force: true });
 }
 
-const unavailable = await startServer(await availablePort(), { DATABASE_PORT: '1' });
+const unavailable = await startServerWithRetry({ DATABASE_PORT: '1' });
 try {
   const liveResponse = await fetch(`${unavailable.baseUrl}/v1/health/live`);
   assert.equal(liveResponse.status, 200);

@@ -53,6 +53,12 @@ export const domainStatusSchemas = {
   OrderStatus: {
     type: 'string',
     enum: ['awaiting_payment', 'paid', 'processing', 'shipped', 'delivered'],
+    description: 'Pembayaran mengubah order ke paid; status berikutnya hanya berubah dari hasil adapter shipment succeeded yang tersimpan berurutan.',
+  },
+  ShipmentStatus: {
+    type: 'string',
+    enum: ['pending', 'processing', 'shipped', 'delivered', 'failed'],
+    description: 'Pending/failed tidak menyelesaikan pengiriman; delivered hanya dari hasil adapter succeeded setelah shipped.',
   },
   EarningStatus: { type: 'string', enum: ['pending', 'available'] },
   LedgerEntryKind: {

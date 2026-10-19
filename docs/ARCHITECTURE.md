@@ -1,6 +1,6 @@
 # Arsitektur VetLink
 
-Status per 20 Oktober 2026: mobile tetap memakai alur Android lokal tanpa autentikasi dan tanpa koneksi backend. `FrontendFlow` memilih persona fixture lokal; FE-05–14 membaca SQLite lewat service/repository. BE-00–08 dan BE-10 menyediakan modular monolith NestJS + PostgreSQL dengan Health, Auth, Profile, Livestock, Vet, Payment, Consultation, Clinical, Communication, Media, dan Catalog modules. BE-09, mobile API integration, cart/checkout/order, earning/withdrawal, notification dan provider produksi tetap menunggu tiket.
+Status per 20 Oktober 2026: mobile tetap memakai alur Android lokal tanpa autentikasi dan tanpa koneksi backend. `FrontendFlow` memilih persona fixture lokal; FE-05–14 membaca SQLite lewat service/repository. BE-00–08 dan BE-10–12 menyediakan modular monolith NestJS + PostgreSQL dengan Health, Auth, Profile, Livestock, Vet, Payment, Commerce, Consultation, Clinical, Communication, Media, dan Catalog modules. BE-09, mobile API integration, earning/withdrawal, notification dan provider produksi tetap menunggu tiket.
 
 ## Boundary aplikasi
 

@@ -1,6 +1,6 @@
 # Strategi pengujian VetLink
 
-Status QA per 20 Oktober 2026: tahap aktif memakai frontend lokal tanpa autentikasi/backend jaringan; Pilih Peran membuka persona fiktif. Implementasi FE-23 tersedia dan `npm run check` lulus typecheck, lint, serta 126 tes domain/repository. Pemeriksaan ini belum mencakup build atau interaksi Android; QA FE-23 tertunda pada perangkat fisik. Backend BE-00–08 dan BE-10/11 memiliki route executable; BE-09 belum mulai dan mobile belum terhubung ke API. Pemeriksaan Android terdahulu bukan bukti integrasi backend. Interaksi fitur pada perangkat, viewport kecil/font besar, dan pembandingan visual 390 × 844 tetap tertunda; tidak ada pemanggilan Figma MCP baru.
+Status QA per 20 Oktober 2026: tahap aktif memakai frontend lokal tanpa autentikasi/backend jaringan; Pilih Peran membuka persona fiktif. Implementasi FE-23 tersedia dan `npm run check` lulus typecheck, lint, serta 126 tes domain/repository. Pemeriksaan ini belum mencakup build atau interaksi Android; QA FE-23 tertunda pada perangkat fisik. Backend BE-00–08 dan BE-10–12 memiliki route executable; BE-09 belum mulai dan mobile belum terhubung ke API. Pemeriksaan Android terdahulu bukan bukti integrasi backend. Interaksi fitur pada perangkat, viewport kecil/font besar, dan pembandingan visual 390 × 844 tetap tertunda; tidak ada pemanggilan Figma MCP baru.
 
 ## Level pengujian
 
@@ -55,6 +55,18 @@ Pemeriksaan dijalankan dari `apps/api` dengan Node `24.10.0` / npm `11.6.0`; `.n
 - `npm run db:seed` — **Lulus**; seed fiktif mempertahankan existing rows melalui `ON CONFLICT DO NOTHING`.
 - `npm run api:smoke` — **Lulus**. Script memeriksa OpenAPI BE-11, Peternak-only, jumlah positif, harga server, alamat pemilik yang tertaut ke Farm, adapter ongkir lokal (Bogor/Depok Rp9.000; Sleman/Yogyakarta Rp12.000; wilayah lain gagal tertutup), konflik quote stale setelah perubahan harga/alamat, item/unit/total/alamat snapshots, retry paralel dan payload idempotency berbeda, cart terhapus bersama create order, order owner scope, payment amount dari total snapshot, serta status `pending → paid` hanya lewat hasil callback internal `succeeded`. Semua fixture smoke dibersihkan; suite lama BE-03/04/05/06/07/08/10 yang sama juga lulus.
 - Tidak ada script `npm test` atau lint terpisah pada manifest. Tidak ada perubahan UI, uji Android, provider kurir/finansial, transaksi uang nyata, atau integrasi mobile API.
+
+## Bukti BE-12 (20 Oktober 2026)
+
+Pemeriksaan backend dijalankan dari `apps/api` pada Node `24.10.0` / npm `11.6.0`; `.nvmrc` meminta Node `24.15.0`. PostgreSQL `17.4-alpine` lokal memakai port `55432`, terpisah dari service lain pada port 5432. Sesudah run, container dihentikan dan volume lokal dipertahankan.
+
+- `npm ci` — **Lulus**, 253 paket dipasang dan audit melaporkan 0 vulnerability; npm menampilkan peringatan engine untuk Node `24.10.0`.
+- `npm run check` — **Lulus**; `tsc --noEmit` dan `nest build`.
+- `npm run db:migrate` — **Lulus**; 14 migrasi diterapkan, termasuk `20261020_000013_shipment_timeline.sql` dan guard transisi `20261020_000014_shipment_transition_guards.sql`.
+- `npm run db:seed` — **Lulus**; fixture fiktif dipertahankan melalui insert idempoten/non-destruktif.
+- `npm run api:smoke` — **Lulus**. Smoke memeriksa OpenAPI route owner-only; order unpaid memiliki shipment `null`; callback pembayaran internal yang `succeeded` memulai adapter lokal setelah transaksi tersimpan; `processing → shipped → delivered` berurutan; event ID/payload sama diabaikan sementara event ID dengan payload berbeda ditolak; adapter `pending`/`failed` tidak memajukan atau mengklaim delivered; owner lain mendapat 404, Dokter mendapat 403; serta update langsung status order/shipment ditolak trigger PostgreSQL. Teardown menghapus seluruh event, shipment dan order fixture.
+- Dua percobaan smoke awal berhenti pada server terakhir untuk pemeriksaan health 503 sebelum melewati batas startup 15 detik. Smoke terakhir lulus setelah helper tersebut memakai port baru untuk retry startup; pemeriksaan live/ready dan error 503 ikut lulus.
+- Tidak ada script `npm test` atau lint terpisah pada manifest. Tidak ada provider kurir/produksi, callback HTTP publik, transaksi finansial, deployment, atau integrasi API mobile.
 
 ## Bukti BE-03 (19 Oktober 2026)
 
