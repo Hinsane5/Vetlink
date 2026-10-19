@@ -118,6 +118,7 @@ Data fiktif FE-08 disimpan pada SQLite yang sama. Instalasi dengan seed `fe02-v1
 | [Frontend backlog](docs/backlog/FRONTEND.md) | Pekerjaan mobile dan acceptance criteria |
 | [Backend backlog](docs/backlog/BACKEND.md) | Pekerjaan backend, dependensi, acceptance criteria |
 | [Testing](docs/TESTING.md) | Skenario penerimaan dan hasil pemeriksaan aktual |
+| [Orca handoff](docs/ORCA_HANDOFF.md) | Status Run, worker, gate, dan langkah melanjutkan setelah pergantian akun |
 | [Success criteria](docs/SUCCESS_CRITERIA.md) | Gate penerimaan per tahap |
 | [Decisions](docs/DECISIONS.md) | Keputusan pengguna, usulan, dan hal yang perlu dibahas |
 | [Referensi Figma](docs/reference/figma/README.md) | Bukti pemeriksaan dan screenshot lokal |
