@@ -71,6 +71,12 @@ Komponen enum status domain di OpenAPI diturunkan dari [Data model](DATA_MODEL.m
 
 BE-01 menambahkan bearer scheme `bearer` dan operation untuk register, login, logout, refresh, reset kata sandi, dan `/me`. BE-07 menambahkan operation multipart untuk upload privat, commit, metadata/content, daftar/kirim pesan, dan retry. Detail payload auth dan BE-07 ada di bagian berikut.
 
+### BE-06 payment slice
+
+`GET /v1/payment-quotes/{payableType}/{payableId}` dan `POST /v1/payments` memerlukan sesi Peternak. Jenis payable hanya `consultation` atau `order`; ID konsultasi harus dimiliki Peternak dan masih `awaiting_payment`, sedangkan order ditolak sebagai not found sampai schema/use case BE-11 tersedia. Quote mengambil `fee_snapshot_idr` dari konsultasi; body create tidak menerima amount. POST memakai `Idempotency-Key` 8–128 karakter, menyimpan Payment dan PaymentAttempt sebelum memanggil `PaymentService`, lalu mengembalikan status tersimpan (`pending/succeeded/failed`) dan referensi lokal tanpa credential/provider. Adapter lokal saat ini hanya membuat hasil `pending`; pending tidak mengubah status konsultasi/order.
+
+Callback service internal mengunci Payment/Attempt, memeriksa amount integer, referensi adapter dan event ID unik; event yang sama dengan hasil sama idempotent, event conflict ditolak, dan status final tidak dapat ditimpa. Callback bukan route publik/customer dan tidak mengklaim refund; kebutuhan refund tetap `refund_needed`, bukan `refunded`. Operation ini belum menjadi bagian OpenAPI executable sampai review kontrak lintas lane.
+
 Untuk menjalankan server lokal, migrasi, seed, dan smoke check, ikuti [panduan backend](../apps/api/README.md).
 
 ## Auth BE-01

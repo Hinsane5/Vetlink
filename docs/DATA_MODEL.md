@@ -117,6 +117,8 @@ Perawatan done dapat membuat HealthEvent satu kali dengan unique reminder refere
 
 Payment.status: `pending/succeeded/failed/expired`; status berbayar berdasarkan hasil adapter. Percobaan retry mempunyai PaymentAttempt baru; operationKey yang sama harus mengembalikan hasil yang sama. Consultation dan Order memiliki payable ID berbeda.
 
+BE-06 backend menurunkan quote konsultasi dari `consultations.fee_snapshot_idr` dan membatasi baca/buat ke farmer pemilik. `POST /payments` mengabaikan amount dari client, merekam Payment dan PaymentAttempt sebelum adapter; adapter lokal hanya menghasilkan `pending`. Order belum tersedia hingga BE-11 dan payable order fail-closed. `payment_callback_events.event_id` unik; callback internal memvalidasi payment/attempt, referensi dan amount integer sebelum menerima outcome, serta tidak mengganti hasil final atau menduplikasi event. Tidak ada refund otomatis.
+
 Order: `awaiting_payment → paid → processing → shipped → delivered`. Payment gagal tidak menaikkan order menjadi paid. Shipment mempunyai timeline yang disimpan adapter. Alamat, harga dan nama produk disnapshot pada order; perubahan profil/katalog tidak mengubah order lama. Total = Σ(unitPrice × quantity) + shipping; tanpa diskon/pajak tambahan sebelum ada spesifikasi.
 
 EarningTransaction.net = gross − commission. Amount integer IDR; komisi disnapshot saat booking/accept policy dan contoh 10% bukan tarif produksi. Earning hanya dibuat sekali untuk consultation completed dengan payment succeeded. Dana dapat berada pada pending sebelum settlement adapter memindahkannya ke available.

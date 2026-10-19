@@ -592,3 +592,14 @@ Dari `apps/api`, `npm ci` lulus tanpa vulnerability; runtime tersedia Node `24.1
 - Review koordinator menambah assertion bahwa rentang biaya tidak dapat cocok hanya karena dua layanan berada di sisi batas yang berbeda, serta booking `awaiting_payment` tidak muncul di kalender Dokter. `npm run check` dan `api:smoke` dijalankan ulang dan lulus pada PostgreSQL lokal setelah migrasi ketujuh; container kembali dihentikan.
 - Smoke awal menangkap perbandingan enum service rate dengan parameter text/array; query diperbaiki dengan cast tipe yang sesuai, lalu seluruh smoke dijalankan ulang hingga lulus. Tidak ada endpoint yang dapat menandai dokter verified; fixture smoke diotorisasi langsung lewat setup SQL test lalu dipulihkan untuk memeriksa guard BE-07.
 - Tidak ada `npm test` pada manifest. Tidak ada provider produksi, secret, deployment, integrasi mobile, transaksi finansial, atau layanan eksternal.
+## Hasil pemeriksaan BE-06 — 19 Oktober 2026
+
+Slice backend BE-06 menambahkan tabel event callback dedupe, quote konsultasi dengan amount snapshot server, pembuatan Payment/PaymentAttempt atomik, adapter lokal `pending`, idempotency key dengan fingerprint payload, dan validasi callback internal (referensi, amount integer, event unik, hasil final). Order quote fail-closed sampai BE-11 menambah order payable; belum ada provider atau route callback publik.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm ci` dari `apps/api` | Selesai; npm memberi peringatan engine karena runtime Node v24.10.0 lebih rendah dari manifest `>=24.15.0`; tidak ada vulnerability audit. |
+| `npm run typecheck` dari `apps/api` | **Lulus**. |
+| `npm run build` dari `apps/api` | **Lulus**. |
+| Migration / PostgreSQL / API smoke | **Belum dijalankan**; koneksi database tidak disiapkan. Tidak ada test script backend pada manifest. |
+| Batas implementasi | Order belum didukung sampai BE-11; adapter lokal selalu pending. Callback internal service belum dipasang sebagai webhook/OpenAPI route. Retry dengan key yang sama deduped; pembuatan pembayaran dengan key berbeda masih membuat aggregate Payment baru, sehingga retry attempt lanjutan satu Payment menunggu penyelesaian slice BE-06. Tidak ada klaim refund atau transaksi uang nyata. |

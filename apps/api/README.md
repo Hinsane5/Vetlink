@@ -1,6 +1,6 @@
-# VetLink API (BE-00/01/02/03/04/07)
+# VetLink API (BE-00/01/02/03/04/06/07)
 
-Backend ini adalah modular monolith NestJS + PostgreSQL. BE-00 menyediakan healthcheck, migrasi awal, seed fiktif non-destruktif, dan kontrak OpenAPI. BE-01 menambahkan register/login/logout/refresh/reset, sesi bearer dan role guard. BE-02 menambahkan profil, Farm/Address, dokumen profesi privat dan review tepercaya. BE-03 menyediakan CRUD ternak, timeline kesehatan dan daftar pasien dokter dengan scope owner/assignment. BE-04 menyediakan discovery dokter, availability, tarif efektif-dated, blocked intervals, kalender dan slot timezone. BE-07 menyediakan storage media privat lokal, upload/commit/download terotorisasi, persistensi pesan dan transport polling. Domain lain, integrasi payment, dan provider produksi belum tersedia. Mobile belum terhubung ke API.
+Backend ini adalah modular monolith NestJS + PostgreSQL. BE-00 menyediakan healthcheck, migrasi awal, seed fiktif non-destruktif, dan kontrak OpenAPI. BE-01 menambahkan register/login/logout/refresh/reset, sesi bearer dan role guard. BE-02 menambahkan profil, Farm/Address, dokumen profesi privat dan review tepercaya. BE-03 menyediakan CRUD ternak, timeline kesehatan dan daftar pasien dokter dengan scope owner/assignment. BE-04 menyediakan discovery dokter, availability, tarif efektif-dated, blocked intervals, kalender dan slot timezone. BE-06 menambahkan quote konsultasi, Payment/PaymentAttempt, idempotency dan adapter lokal pending (slice awal; lihat batas di Testing). BE-07 menyediakan storage media privat lokal, upload/commit/download terotorisasi, persistensi pesan dan transport polling. Domain lain dan provider produksi belum tersedia. Mobile belum terhubung ke API.
 
 ## Versi yang dipilih
 
@@ -62,7 +62,7 @@ Reset mengembalikan status/message generik tanpa membocorkan apakah email terdaf
 
 ## Batas OpenAPI BE-00/01/02/03/04/07
 
-Route aktif adalah health, Auth BE-01/`GET /v1/me`, profil/verifikasi BE-02, ternak/pasien BE-03, vet discovery/availability/slot BE-04, dan chat/media BE-07. Response, status HTTP, error envelope, pagination, enum status, dan adapter `pending/succeeded/failed` tercantum di OpenAPI. Route domain lain yang ada di [kontrak integrasi](../../docs/API_CONTRACT.md) menunggu tiket backend masing-masing.
+Route aktif adalah health, Auth BE-01/`GET /v1/me`, profil/verifikasi BE-02, ternak/pasien BE-03, vet discovery/availability/slot BE-04, dan chat/media BE-07. BE-06 routes masih slice kontrak bertahap dan belum masuk OpenAPI executable. Response, status HTTP, error envelope, pagination, enum status, dan adapter `pending/succeeded/failed` tercantum di OpenAPI untuk route aktif. Route domain lain yang ada di [kontrak integrasi](../../docs/API_CONTRACT.md) menunggu tiket backend masing-masing.
 
 ## Script yang tersedia
 
