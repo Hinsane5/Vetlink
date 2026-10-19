@@ -715,3 +715,10 @@ FE-22 tetap **Sedang dikerjakan** sampai interaksi perangkat dan visual diterima
 Tes domain/repository tidak membuktikan interaksi UI pada perangkat. FE-23 tetap **Sedang dikerjakan** sampai QA fisik dan visual dapat dijalankan.
 
 Review koordinator: pemeriksaan ulang pertama lulus typecheck lalu lint berhenti dengan `ENOSPC` ketika menulis cache ESLint. Setelah `npm cache clean --force` membebaskan ruang disk, `npm run check` ulang **lulus** typecheck, lint, dan 126 tes. Review juga menambah guard bahwa akun harus benar-benar memiliki peran Dokter dan mengganti label sebelum status paid menjadi “Estimasi dana bersih”. Tidak ada build atau QA Android baru.
+
+## Pemeriksaan lokal FE-24 — 20 Oktober 2026
+
+- `npm run check` di `apps/mobile` **lulus**: typecheck, Expo lint, dan 126 tes domain/repository tanpa gagal. Run pertama terhenti saat lint menulis cache karena `ENOSPC`; setelah cache npm dibersihkan, run ulang lulus. Ini memeriksa kode lokal terbaru sampai FE-23, bukan perilaku sentuhan Android.
+- `git diff --check` di repo utama **lulus**. Pencarian `rg -n -i 'Isi Contoh|Simulasikan|\bdemo\b' apps/mobile/src/ui` tidak menemukan label/kontrol tersebut (exit 1 karena tidak ada match), sebatas folder UI yang dicari.
+- Manifest `apps/mobile/package.json` memang memiliki script `typecheck`, `lint`, `test:domain`, `check`, dan `android`. Tidak ada script QA perangkat atau visual otomatis yang dijalankan.
+- **Gate belum lulus**: build Android terbaru, form/tabs/modal, Back Android, keyboard, scroll, perangkat kecil dan font besar, screenshot 390 × 844, perbandingan referensi visual lokal, serta alur A–D dan Peternak lintas perangkat. Pengguna melarang emulator; pemeriksaan ini menunggu perangkat fisik. Figma MCP tidak dipanggil.
