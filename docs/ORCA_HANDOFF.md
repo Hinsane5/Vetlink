@@ -29,6 +29,8 @@ FE-22 dan BE-11: `worker_done` sukses, commit `892beb1` dan `da21f03` ditinjau, 
 
 Keputusan koordinasi BE-11 (`msg_5f02a1775a30`, dijawab): gunakan route cart/quote/order dalam `docs/API_CONTRACT.md`. Quote dan order membaca ulang cart, produk aktif/harga integer, dan alamat milik Peternak. Jika quote stale, API mengembalikan 409 tanpa membuat order; client membuat quote baru untuk meninjau harga/alamat/ongkir terbaru. `Idempotency-Key` mengikat actor dan payload; retry identik mengembalikan order sama, payload berbeda ditolak. Snapshot order dan pengosongan cart atomik. Tanpa provider atau uang nyata.
 
+Keputusan koordinasi BE-12 (`msg_8fc677b52428`, dijawab): ikuti route kontrak yang sudah ada `GET /v1/orders/{id}/shipment` untuk owner, dengan timeline dalam respons. Adapter pengiriman lokal hanya berjalan setelah pembayaran sukses tersimpan; pending/failed tidak menaikkan status order. Status sukses harus berurutan dan event ID dideduplikasi. Event adapter internal, tanpa callback publik atau kurir/provider produksi.
+
 Gate pending: FE-24 `gate_4f4a203373eb`, FE-26 `gate_a45625245c55`, FE-21 `gate_cd625efb4b2d`, FE-22 `gate_87b5163ee1f1`. Semua memerlukan bukti perangkat/visual yang belum ada. Opsi emulator yang tercatat pada gate FE-24 sudah tidak berlaku karena instruksi pengguna terbaru melarangnya.
 
 ## Melanjutkan setelah pergantian akun
