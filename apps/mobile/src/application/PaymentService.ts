@@ -39,6 +39,7 @@ export class PaymentService {
       if (existing.payload.payableType !== payableType || existing.payload.payableId !== payableId || existing.payload.method !== method || existing.payload.amount !== amount) throw new DomainError('VERSION_CONFLICT', 'Kunci operasi sudah digunakan untuk pembayaran lain.');
       return toSnapshot(existing);
     }
+    if ((await this.storage.read.listByOwner('payment', userId)).some((item) => item.payload.payableType === payableType && item.payload.payableId === payableId && item.payload.status === 'pending')) throw new DomainError('INVALID_STATE', 'Pembayaran sebelumnya masih menunggu konfirmasi.');
     if (payableType === 'consultation') {
       if (payable.payload.status !== 'awaiting_payment') throw new DomainError('INVALID_STATE', 'Konsultasi ini tidak lagi menunggu pembayaran.');
       const vetProfile = (await this.storage.read.listByOwner('vetProfile', String(payable.payload.vetId ?? '')))[0];
@@ -54,6 +55,7 @@ export class PaymentService {
         if (duplicate.payload.payableType !== payableType || duplicate.payload.payableId !== payableId || duplicate.payload.method !== method || duplicate.payload.amount !== amount) throw new DomainError('VERSION_CONFLICT', 'Kunci operasi sudah digunakan untuk pembayaran lain.');
         return duplicate;
       }
+      if ((await repository.listByOwner('payment', userId)).some((item) => item.payload.payableType === payableType && item.payload.payableId === payableId && item.payload.status === 'pending')) throw new DomainError('INVALID_STATE', 'Pembayaran sebelumnya masih menunggu konfirmasi.');
       await repository.create(pending, [relation]);
       return null;
     });

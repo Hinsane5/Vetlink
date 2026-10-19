@@ -97,6 +97,10 @@ export function CartCheckoutFlow({ store, session, onExit }: Props) {
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (screen === 'payment') {
+        setScreen('order');
+        return true;
+      }
       if (screen === 'checkout') {
         setScreen('cart');
         return true;

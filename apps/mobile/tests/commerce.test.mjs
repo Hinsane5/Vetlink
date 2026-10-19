@@ -40,6 +40,7 @@ test('FE19 selecting a method is inert; persisted adapter outcome is idempotent 
     assert.equal(first.status, 'pending');
     assert.equal((await s.repository.findById('order', order.id)).payload.status, 'awaiting_payment');
     assert.equal(calls, 1);
+    await assert.rejects(payments.submit(ids.budi, 'farmer', 'order', order.id, 'e_wallet', 'another-pending-attempt'), { code: 'INVALID_STATE' });
     await assert.rejects(payments.submit(ids.budi, 'vet', 'order', order.id, 'bank_transfer', 'vet-attempt'), { code: 'FORBIDDEN' });
   } finally { s.db.close(); }
 });
