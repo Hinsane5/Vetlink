@@ -15,6 +15,12 @@ Status QA per 19 Oktober 2026: tahap aktif memakai frontend lokal tanpa autentik
 
 Framework tes domain/UI dan E2E pada [Tech](TECH.md) belum dipasang. Jalankan script yang benar-benar tersedia dari manifest; backend belum memiliki `npm test`, sehingga pemeriksaan runtime BE-07 memakai `npm run api:smoke` yang memang ada pada manifest.
 
+## Bukti BE-08 (19 Oktober 2026)
+
+Di `apps/api`, `npm ci` lulus dengan peringatan engine karena runtime tersedia Node `24.10.0` sedangkan `.nvmrc` meminta `24.15.0`. `npm run check` lulus (TypeScript typecheck dan Nest build). Database PostgreSQL lokal 17.4 di Compose memakai port 55432 karena port 5432 sudah terpakai; `npm run db:migrate` menerapkan seluruh sembilan migrasi termasuk `20261019_000009_clinical_recommendations.sql`.
+
+`npm run api:smoke` lulus: tambahan BE-08 memeriksa required fields, draft parsial, stale review conflict, final note immutable, pembacaan final oleh Peternak, final tidak mengubah status konsultasi, recommendation edit replacement, empty send denied, send/read scoped, dan dokter tidak memiliki route orders/checkout. Smoke suite juga mengulang pemeriksaan yang sudah ada untuk BE-03/04/06/07. Tidak ada provider produksi, credential nyata, atau transaksi finansial. Pemeriksaan visual/mobile tidak berlaku untuk API slice.
+
 ## Bukti BE-03 (19 Oktober 2026)
 
 Pemeriksaan dari `apps/api` menggunakan Node `24.10.0` / npm `11.6.0`; `.nvmrc` meminta Node `24.15.0`, sehingga npm menampilkan peringatan engine. `npm ci` lulus tanpa vulnerability. PostgreSQL `17.4-alpine` lokal dijalankan oleh Compose di port `55432` karena `5432` telah digunakan; keenam migrasi dan seed fiktif berhasil. Tidak digunakan provider produksi, secret, atau layanan finansial.

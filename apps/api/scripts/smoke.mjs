@@ -387,16 +387,50 @@ try {
       assert.equal(careAgain.status, 201);
       assert.equal((await careAgain.json()).id, (await careFirst.json()).id);
 
-      await database.query(`INSERT INTO clinical_notes(consultation_id,farmer_id,vet_id,animal_id,assessment) VALUES($1,$2,$3,$4,'Draft fiktif yang tidak boleh tampil')`,[consultationId,farmer.user.id,vet.user.id,animalId]);
+      const notePath = `/v1/consultations/${consultationId}/note`;
+      assert.equal((await sendJson(healthy.baseUrl, notePath, farmer.accessToken, 'GET')).status, 404);
+      const emptyDraft = await sendJson(healthy.baseUrl, notePath, vet.accessToken, 'GET');
+      assert.equal(emptyDraft.status, 200);
+      assert.equal((await emptyDraft.json()).version, 1);
+      const partialNote = await sendJson(healthy.baseUrl, notePath, vet.accessToken, 'PUT', { expectedVersion: 1, assessment: 'Penilaian fiktif awal' });
+      assert.equal(partialNote.status, 200);
+      const requiredFailure = await sendJson(healthy.baseUrl, `${notePath}/finalize`, vet.accessToken, 'POST', { expectedVersion: 1 });
+      assert.equal(requiredFailure.status, 422);
+      const completeDraft = await sendJson(healthy.baseUrl, notePath, vet.accessToken, 'PUT', { expectedVersion: 1, complaint: 'Keluhan fiktif', findings: 'Temuan pemeriksaan fiktif', assessment: 'Penilaian fiktif akhir', actions: 'Tindakan fiktif', careInstructions: 'Instruksi perawatan fiktif' });
+      assert.equal(completeDraft.status, 200);
+      const staleReview = await sendJson(healthy.baseUrl, `${notePath}/finalize`, vet.accessToken, 'POST', { expectedVersion: 1 });
+      assert.equal(staleReview.status, 409);
+      const finalizedNote = await sendJson(healthy.baseUrl, `${notePath}/finalize`, vet.accessToken, 'POST', { expectedVersion: 2 });
+      assert.equal(finalizedNote.status, 201);
+      assert.equal((await finalizedNote.json()).status, 'final');
+      assert.equal((await database.query('SELECT status FROM consultations WHERE id=$1', [consultationId])).rows[0].status, 'scheduled');
+      assert.equal((await sendJson(healthy.baseUrl, notePath, farmer.accessToken, 'GET')).status, 200);
+      assert.equal((await sendJson(healthy.baseUrl, notePath, vet.accessToken, 'PUT', { expectedVersion: 3, assessment: 'Tidak dapat mengubah final' })).status, 409);
+      const recommendationPath = `/v1/consultations/${consultationId}/recommendation`;
+      const emptyRecommendation = await sendJson(healthy.baseUrl, `${recommendationPath}/send`, vet.accessToken, 'POST', { expectedVersion: 1 });
+      assert.equal(emptyRecommendation.status, 422);
+      const savedEmpty = await sendJson(healthy.baseUrl, recommendationPath, vet.accessToken, 'PUT', { expectedVersion: 1, items: [] });
+      assert.equal(savedEmpty.status, 200);
+      const editOne = await sendJson(healthy.baseUrl, recommendationPath, vet.accessToken, 'PUT', { expectedVersion: 1, items: [{ title: 'Produk fiktif satu', instructions: 'Instruksi fiktif satu' }] });
+      assert.equal(editOne.status, 200);
+      const editTwo = await sendJson(healthy.baseUrl, recommendationPath, vet.accessToken, 'PUT', { expectedVersion: 2, items: [{ title: 'Produk fiktif dua', note: 'Catatan fiktif dua' }] });
+      assert.equal(editTwo.status, 200);
+      assert.equal((await editTwo.json()).items[0].title, 'Produk fiktif dua');
+      const sentRecommendation = await sendJson(healthy.baseUrl, `${recommendationPath}/send`, vet.accessToken, 'POST', { expectedVersion: 3 });
+      assert.equal(sentRecommendation.status, 201);
+      assert.equal((await sentRecommendation.json()).status, 'sent');
+      const farmerRecommendation = await sendJson(healthy.baseUrl, recommendationPath, farmer.accessToken, 'GET');
+      assert.equal(farmerRecommendation.status, 200);
+      assert.equal((await farmerRecommendation.json()).items[0].title, 'Produk fiktif dua');
+      assert.equal((await sendJson(healthy.baseUrl, '/v1/orders', vet.accessToken, 'GET')).status, 404);
       const hiddenDraftTimeline = await sendJson(healthy.baseUrl, `/v1/livestock/${animalId}/health-events`, farmer.accessToken, 'GET');
       assert.equal(hiddenDraftTimeline.status, 200);
-      assert.equal((await hiddenDraftTimeline.json()).length, 0);
-      await database.query(`UPDATE clinical_notes SET status='final',assessment='Temuan final fiktif',finalized_at=now(),finalized_by=$2 WHERE consultation_id=$1`,[consultationId,vet.user.id]);
+      assert.equal((await hiddenDraftTimeline.json()).length, 1);
       const finalTimeline = await sendJson(healthy.baseUrl, `/v1/livestock/${animalId}/health-events`, vet.accessToken, 'GET');
       assert.equal(finalTimeline.status, 200);
       const finalEvents = await finalTimeline.json();
       assert.equal(finalEvents.length, 1);
-      assert.equal(finalEvents[0].description, 'Temuan final fiktif');
+      assert.equal(finalEvents[0].description, 'Penilaian fiktif akhir');
       assert.equal('attachments' in finalEvents[0], false);
 
       const messagesPath = `/v1/consultations/${consultationId}/messages`;
@@ -528,13 +562,15 @@ try {
       assert.equal(pageTwo.items.length, 2);
       assert.equal(new Set([...pageOne.items, ...pageTwo.items].map((item) => item.id)).size, 4);
 
-      console.log('BE-03/04/06/07 smoke: livestock/patient and vet scope; availability/slot conflicts; payment quote owner, pending, retry attempts, callback dedupe; care-event idempotency; chat/media scope and retry lulus.');
+      console.log('BE-03/04/06/07/08 smoke: livestock/patient and vet scope; availability/slot conflicts; payment quote owner, pending, retry attempts, callback dedupe; care-event idempotency; chat/media scope and retry; clinical note version/final immutability and recommendation edit/review/send lulus.');
     } finally {
       if (failedStorageServer) await stopServer(failedStorageServer.child);
       // Smoke teardown is a fixture reset; it must remove immutable final-note rows
       // without weakening the production immutability trigger.
       await database.query("SET session_replication_role = 'replica'");
       if (consultationId) {
+        await database.query('DELETE FROM recommendation_items WHERE recommendation_id IN (SELECT id FROM recommendations WHERE consultation_id=$1)', [consultationId]);
+        await database.query('DELETE FROM recommendations WHERE consultation_id=$1', [consultationId]);
         await database.query('DELETE FROM message_attachments WHERE consultation_id = $1', [consultationId]);
         await database.query('DELETE FROM consultation_messages WHERE consultation_id = $1', [consultationId]);
         await database.query('DELETE FROM attachments WHERE consultation_id = $1', [consultationId]);
