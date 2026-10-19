@@ -12,7 +12,7 @@ Setiap tiket harus menyertakan implementasi UI/domain/adapter lokal yang relevan
 | --- | --- | --- |
 | M0 Fondasi | FE-00–04 | App Android bootstrap, peran, session, profil, data persisten dan tokens |
 | M1 Alur wajib | FE-05–16, FE-19, FE-23 | Booking awal tersedia; flow Dokter A–D dan guard berjalan pada data lokal |
-| M2 Seluruh scope lokal | FE-17/18/20/21/22, penyempurnaan M1 | Semua F-01…20 dan V-01…18 mempunyai fungsi dan states relevan |
+| M2 Seluruh scope lokal | FE-17/18/20/21/22/26, penyempurnaan M1 | Semua F-01…20 dan V-01…18 mempunyai fungsi dan states relevan, termasuk banyak peternakan per Peternak |
 | M3 Penerimaan Android | FE-24 | Build dan pengujian native/visual sesuai Success criteria |
 | M4 Backend | FE-25, backlog backend | Adapter API lulus kontrak dan flow dua perangkat |
 
@@ -76,6 +76,7 @@ FE-08/09 bergantung availability dari FE-11; kerjakan FE-11 lebih awal dalam sli
 | FE-23 | Belum mulai | P0 | Earnings/period/detail, destination, amount/review/confirm/submitted/history | FE-02/14/19 | Gross−commission=net; pending/available berbeda; amount invalid/zero blocked; partial reserve sesuai jumlah; cancel review tanpa debit; retry tidak duplikat; submitted bukan paid |
 | FE-24 | Belum mulai | P0 | QA Android, visual comparison, accessibility, regression A–D dan farmer flow | Semua P0/P1 untuk acceptance lengkap | Bukti build, tests, native interactions dan screenshots; zero blocking errors; semua selisih dicatat; README run steps terbukti; tidak ada kontrol pengujian produk |
 | FE-25 | Belum mulai | P2 | API adapters dan integrasi bertahap | BE-00/16 + persetujuan tahap backend | Contract tests local/API; session/security server; dua perangkat; network/retry; tidak fallback payment gagal ke sukses lokal |
+| FE-26 | Belum mulai | P1 | Banyak peternakan untuk satu akun Peternak: daftar/tambah/ubah/pilih konteks, ternak dan booking per peternakan | FE-04/06/09 | Farm tersimpan tanpa menimpa farm lain; pemilihan farm eksplisit saat menambah ternak dan booking; detail ternak lama tetap dapat diakses lintas farm milik akun; ID ternak unik per farm; alamat kunjungan sesuai farm; owner lain ditolak; fixture dan data lama tetap terbaca |
 
 FE-19 dibuat dengan consultation payable pada M1; cabang order diselesaikan setelah FE-18 pada M2. FE-24 dapat dijalankan per slice, tetapi acceptance lengkap menunggu seluruh P0/P1. FE-25 tidak menjadi syarat penerimaan lokal.
 

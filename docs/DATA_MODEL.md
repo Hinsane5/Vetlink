@@ -13,7 +13,7 @@ Entitas memiliki `id`, `createdAt`, `updatedAt`; entitas mutable memiliki `versi
 | Session | userId, activeRole harus terdaftar sebagai membership, access hash/expiry, refresh hash, expiry sesi absolut 30 hari, status active/revoked; token hanya dikembalikan saat issue/rotate dan hash disimpan di backend |
 | RefreshTokenHistory | sessionId, hash refresh yang telah dipakai, consumedAt; replay mencabut sesi |
 | PasswordResetRequest | userId, token hash, adapter delivery status/operationId, expiresAt, deliveredAt/consumedAt; token hanya dapat dipakai satu kali setelah delivery succeeded |
-| FarmerProfile | userId, photoAttachmentId, farmId |
+| FarmerProfile | userId, photoAttachmentId; `selectedFarmId` opsional hanya preferensi konteks UI, bukan batas kepemilikan |
 | Farm | ownerId, nama, species[], lokasi, visitAddressId |
 | Address | ownerId, label, penerima, telepon, alamat, kota/provinsi/kode pos, optional koordinat |
 | VetProfile | userId, nama profesi, nomor profesi fiktif, pengalaman, bidang layanan[], species[], lokasi praktik, wilayah kunjungan[], verificationStatus |
@@ -55,7 +55,7 @@ BE-03 memetakan `health_events` pada PostgreSQL dengan `source_key` unik per pro
 | Notification | recipientId, type, contextId, eventId unik per penerima, title/body, readAt, deliveryStatus |
 | Preferences | userId, notification categories, enabled; bantuan berupa konten aplikasi |
 
-Relasi utama: Peternak → Farm → Livestock → Consultation ← Dokter. Consultation → ClinicalNote/Visit/Messages/Recommendation/FollowUp/Payment. Message → MessageAttachment → Attachment dengan FK composite pada consultation dan sender/owner. RecommendationItem → Product → Cart → Order → Payment/Shipment. Consultation → EarningTransaction → Ledger → Withdrawal.
+Relasi utama: Peternak → banyak Farm → banyak Livestock → Consultation ← Dokter. Setiap Farm memiliki satu owner Peternak; `farmId` pada Livestock dan alamat kunjungan pada booking harus dipilih secara eksplisit dan diperiksa terhadap owner yang sama. ID peternakan terpilih hanya konteks layar, tidak boleh membatasi akses Peternak ke ternak atau konsultasi di peternakan lain. Consultation → ClinicalNote/Visit/Messages/Recommendation/FollowUp/Payment. Message → MessageAttachment → Attachment dengan FK composite pada consultation dan sender/owner. RecommendationItem → Product → Cart → Order → Payment/Shipment. Consultation → EarningTransaction → Ledger → Withdrawal.
 
 ## Penerapan penyimpanan FE-02
 

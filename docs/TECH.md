@@ -84,6 +84,8 @@ Kode autentikasi FE-03 tidak dipakai pada alur aktif. Verifier SHA-256 bersalt p
 
 ## Realisasi awal FE-04: profil, farm, alamat, dan verifikasi
 
+DEC-27 memperluas konteks lokal: satu `FarmerProfile` dapat memiliki banyak `Farm`. `selectedFarmId` hanya preferensi tampilan; repository dan use case harus menerima ID farm eksplisit saat membuat ternak atau memilih alamat kunjungan, serta tetap bisa membaca detail ternak di farm lain milik akun. PostgreSQL BE-02 sudah memakai `farms.owner_id` tanpa batas satu farm per Peternak dan route `GET/POST /me/farms` mengembalikan/membuat banyak record.
+
 | Kebutuhan | Implementasi aktual |
 | --- | --- |
 | Profil Peternak | `ProfileService` menyimpan nama, foto opsional, farm, species, wilayah, alamat, telepon, dan penerima; perubahan profil/farm/alamat disatukan dalam transaksi SQLite |

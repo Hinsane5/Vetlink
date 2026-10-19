@@ -64,6 +64,7 @@ Alur alternatif wajib: belum terverifikasi, permintaan ditolak dengan alasan, pe
 | BR-11 | Data fiktif tanpa dosis pengobatan nyata | Fixture, resep contoh dan media tidak berisi dosis nyata |
 | BR-12 | Semua fitur membaca sumber data yang sama | Perubahan tercermin pada dashboard, jadwal, pasien, hasil dan riwayat |
 | BR-13 | Sukses berdasarkan hasil layanan yang tersimpan | Kegagalan/retry tidak menghasilkan sukses palsu atau duplikasi |
+| BR-14 | Satu Peternak dapat memiliki banyak peternakan | Peternakan dapat dibuat dan dipilih tanpa menimpa peternakan lain; ternak, alamat kunjungan dan booking memakai ID peternakan yang tepat; akses lintas pemilik ditolak |
 
 Kebijakan tambahan untuk rancangan awal, belum keputusan komersial: tidak ada refund otomatis pada milestone lokal; riwayat pembayaran tetap utuh bila layanan ditolak/dibatalkan, dengan refund ditandai belum diproses. Besaran komisi fixture boleh 10% tetapi bukan tarif platform yang disepakati. Lihat [Decisions](DECISIONS.md).
 

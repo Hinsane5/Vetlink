@@ -40,7 +40,7 @@ Semua route memakai bearer; actor ID selalu berasal dari sesi. Farm dan address 
 | Method / path | Request → response | Otorisasi / aturan |
 | --- | --- | --- |
 | `GET/PATCH /v1/me/farmer`, `/v1/me/vet` | profil; PATCH nama dan field profesi terbatas | owner sesi; status verifikasi dan owner tidak dapat diubah |
-| `GET/POST /v1/me/farms`; `PATCH /v1/me/farms/{id}` | farm; PATCH wajib `expectedVersion` | Peternak owner, update hanya saat versi cocok |
+| `GET/POST /v1/me/farms`; `PATCH /v1/me/farms/{id}` | daftar banyak farm milik akun, tambah farm baru, ubah satu farm; PATCH wajib `expectedVersion` | Peternak owner, update hanya saat versi cocok; pilihan farm pada mobile tidak mengubah otoritas ownership |
 | `GET/POST /v1/me/addresses`; `PATCH /v1/me/addresses/{id}`; `DELETE /v1/me/addresses/{id}` | address tersimpan; PATCH wajib `expectedVersion` | Peternak owner; arbitrary ID mendapat 404 |
 | `POST /v1/me/vet/professional-documents` | multipart `file` → metadata privat | Dokter pemilik; signature MIME, ukuran dan adapter storage diperiksa |
 | `POST /v1/me/vet/verification-submissions`; `GET /v1/me/vet/verification` | `documentIds[]` → riwayat submission | Dokter sendiri; verified tidak dapat submit ulang |
