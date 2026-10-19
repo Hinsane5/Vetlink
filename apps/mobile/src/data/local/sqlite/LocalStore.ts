@@ -14,6 +14,7 @@ import { PatientService } from '../../../application/PatientService';
 import { FrontendPreviewService } from '../../../application/FrontendPreviewService';
 import { AvailabilityService } from '../../../application/AvailabilityService';
 import { CareCoordinationService } from '../../../application/CareCoordinationService';
+import { ReviewService } from '../../../application/ReviewService';
 import { ChatService } from '../../../application/ChatService';
 import { ConsultationService } from '../../../application/ConsultationService';
 import { ClinicalNoteService } from '../../../application/ClinicalNoteService';
@@ -54,6 +55,7 @@ export interface LocalStore {
   chat: ChatService;
   availability: AvailabilityService;
   careCoordination: CareCoordinationService;
+  reviews: ReviewService;
   authStore: ExpoSecureAuthStore;
   schemaVersion: number;
   fixtureSeedVersion: string | null;
@@ -120,6 +122,7 @@ async function createLocalStore(): Promise<LocalStore> {
   const chat = new ChatService(bookingRepository, attachmentMedia, new ExpoIdFactory());
   const availability = new AvailabilityService(bookingRepository, attachmentMedia, new ExpoIdFactory());
   const careCoordination = new CareCoordinationService(bookingRepository);
+  const reviews = new ReviewService(bookingRepository, profiles, new ExpoIdFactory());
   const counts = await repositories.countAll();
 
   if (__DEV__) {
@@ -129,5 +132,5 @@ async function createLocalStore(): Promise<LocalStore> {
     );
   }
 
-  return { database, repositories, events, auth, profiles, dashboard, farms, livestock, healthRecords, patients, preview, vetDirectory, catalog, commerce, payments, booking, consultations, clinicalNotes, recommendations, chat, availability, careCoordination, authStore, schemaVersion, fixtureSeedVersion, seedResult };
+  return { database, repositories, events, auth, profiles, dashboard, farms, livestock, healthRecords, patients, preview, vetDirectory, catalog, commerce, payments, booking, consultations, clinicalNotes, recommendations, chat, availability, careCoordination, reviews, authStore, schemaVersion, fixtureSeedVersion, seedResult };
 }

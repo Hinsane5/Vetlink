@@ -365,3 +365,9 @@ Inventory dan cache screenshot lokal tidak menyediakan frame khusus untuk daftar
 `FarmFlow` menambahkan list/detail/create/edit/select mandiri di Beranda Peternak. `LivestockFlow` memakai picker Farm eksplisit saat create dan menampilkan nama Farm pada list/detail tanpa membatasi daftar ke pilihan aktif. Booking menunjukkan Farm dari animal dan mengisi alamat kunjungan dari alamat Farm tersebut. Perbedaan ini mengikuti DEC-27 dan aturan owner/context; tidak mempertahankan picker alamat bebas untuk kunjungan.
 
 Farm management dirancang dengan tokens/Inter/Lucide dan komponen input/dialog yang sudah ada sesuai DEC-24 karena frame khusus tidak tersedia dalam cache lokal. Tidak ada screenshot prototype yang dipakai sebagai UI. Perbandingan desain terkini, layar Android 390 × 844, ukuran kecil/font besar, taps, keyboard, Back, dan scroll **Belum diuji** karena sesi tidak memiliki Android SDK atau `adb`; FE-26 tetap menunggu gate QA native.
+
+## Implementasi FE-21: rating dan ulasan Peternak
+
+Inventory lokal memetakan Review `12:2425` dan Review Success `12:2446`; route usulan yang sudah dicatat adalah `/farmer/consultations/:id/review`. Inventory lokal menjadi rujukan yang dipakai pada tiket ini. Cache screenshot lokal tidak memiliki layar Review, dan Figma MCP tidak dipanggil sesuai instruksi.
+
+Form dibuka dari detail konsultasi selesai milik Peternak, menggunakan tokens FE-01, Inter, Lucide, bintang dengan target sentuh 48 dp, TextArea, dan status sukses hanya setelah Review tersimpan. Ulasan tersimpan tampil baca-saja. Ini rancangan kode berdasarkan kontrak/domain dan komponen lokal, bukan pixel-match terhadap Figma. Build Android berhenti pada timeout unduhan Gradle; Back, keyboard, scroll, 390 × 844, layar kecil, font besar, tangkapan layar, dan perbandingan visual **Belum diuji**.

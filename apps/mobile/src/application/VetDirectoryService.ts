@@ -16,13 +16,17 @@ export class VetDirectoryService {
     const [users, reviews, consultations] = await Promise.all([
       this.repository.listByKind('user'), this.repository.listByKind('review'), this.repository.listByKind('consultation'),
     ]);
+    const seenConsultations = new Set<string>();
     const publicReviews = reviews.filter((review) => {
       const consultation = consultations.find((item) => item.id === review.payload.consultationId);
-      return consultation?.payload.status === 'completed'
+      const eligible = consultation?.payload.status === 'completed'
         && consultation.payload.vetId === review.payload.vetId
         && consultation.payload.farmerId === review.payload.farmerId
         && review.ownerId === review.payload.farmerId
         && Number.isInteger(review.payload.stars) && Number(review.payload.stars) >= 1 && Number(review.payload.stars) <= 5;
+      if (!eligible || typeof review.payload.consultationId !== 'string' || seenConsultations.has(review.payload.consultationId)) return false;
+      seenConsultations.add(review.payload.consultationId);
+      return true;
     });
     const vets = users.filter((user) => user.payload.status === 'active' && Array.isArray(user.payload.roles) && user.payload.roles.includes('vet'));
     return Promise.all(vets.map(async (user) => {
@@ -30,20 +34,24 @@ export class VetDirectoryService {
         this.profiles.load(user.id, 'vet'), this.repository.listByOwner('availability', user.id), this.repository.listByOwner('serviceRate', user.id),
       ]);
       const services = profile.vet?.services ?? [];
+      const vetReviews = publicReviews.filter((review) => review.payload.vetId === user.id).map((review) => ({
+        id: review.id, stars: Number(review.payload.stars), text: typeof review.payload.text === 'string' ? review.payload.text : '', submittedAt: Number.isFinite(Date.parse(String(review.payload.submittedAt))) ? String(review.payload.submittedAt) : review.createdAt,
+      })).sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
+      const ratingTotal = vetReviews.reduce((total, review) => total + review.stars, 0);
       return {
         id: user.id, name: profile.vet?.professionalName || profile.displayName, photoUri: profile.photo?.localUri || null,
         verified: profile.verificationStatus === 'verified',
         accepting: newestAvailability(availability)?.payload.acceptingNewRequests === true && profile.verificationStatus === 'verified',
         species: profile.vet?.species ?? [], services, location: profile.vet?.practiceLocation ?? '',
         visitRegions: profile.vet?.visitRegions ?? [], experienceYears: profile.vet?.experienceYears ?? 0,
+        ratingAverage: vetReviews.length ? Math.round((ratingTotal / vetReviews.length) * 10) / 10 : null,
+        reviewCount: vetReviews.length,
         rates: services.flatMap((service) => {
           const rate = rates.filter((item) => item.payload.serviceType === service && Number.isSafeInteger(item.payload.amount) && Number(item.payload.amount) >= 0 && Date.parse(String(item.payload.effectiveAt)) <= clock)
             .sort((a, b) => Date.parse(String(b.payload.effectiveAt)) - Date.parse(String(a.payload.effectiveAt)) || Number(b.payload.configurationVersion ?? 0) - Number(a.payload.configurationVersion ?? 0) || b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id))[0];
           return rate ? [{ service, amount: Number(rate.payload.amount) }] : [];
         }),
-        reviews: publicReviews.filter((review) => review.payload.vetId === user.id).map((review) => ({
-          id: review.id, stars: Number(review.payload.stars), text: typeof review.payload.text === 'string' ? review.payload.text : '', submittedAt: Number.isFinite(Date.parse(String(review.payload.submittedAt))) ? String(review.payload.submittedAt) : review.createdAt,
-        })).sort((a, b) => b.submittedAt.localeCompare(a.submittedAt)),
+        reviews: vetReviews,
       } satisfies DirectoryVet;
     }));
   }

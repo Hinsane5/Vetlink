@@ -181,7 +181,7 @@ function filterLabels(filters: VetFilters): string[] {
   return [filters.service !== 'all' ? serviceNames[filters.service] : '', filters.species !== 'all' ? speciesNames[filters.species] : '', filters.location.trim(), filters.maxFee !== null ? `≤ ${money(filters.maxFee)}` : '', filters.availableOnly ? 'Menerima permintaan' : ''].filter(Boolean);
 }
 function ratingLabel(vet: DirectoryVet): string {
-  return vet.reviews.length ? `${(vet.reviews.reduce((total, review) => total + review.stars, 0) / vet.reviews.length).toFixed(1)} / 5 · ${vet.reviews.length} ulasan` : 'Belum ada ulasan';
+  return vet.ratingAverage !== null && vet.reviewCount > 0 ? `${vet.ratingAverage.toFixed(1)} / 5 · ${vet.reviewCount} ulasan` : 'Belum ada ulasan';
 }
 function dateKey(instant: string, timezone: string): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(instant));

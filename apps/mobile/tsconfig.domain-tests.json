@@ -39,6 +39,7 @@
     "src/application/ConsultationService.ts",
     "src/application/ClinicalNoteService.ts",
     "src/application/RecommendationService.ts",
+    "src/application/ReviewService.ts",
     "src/application/ChatService.ts",
     "src/application/AvailabilityService.ts",
     "src/application/CareCoordinationService.ts",
