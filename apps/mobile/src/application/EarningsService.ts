@@ -158,6 +158,7 @@ export class EarningsService {
     if (!destinationId.trim()) throw new DomainError('VALIDATION_FAILED', 'Pilih tujuan pencairan.');
 
     return this.repository.transact(async (repository) => {
+      await requireVetAccount(repository, userId);
       const [withdrawalRecords, ledgerRecords, destinationRecords] = await Promise.all([
         repository.listByOwner('withdrawal', userId),
         repository.listByOwner('ledgerEntry', userId),
@@ -225,8 +226,7 @@ export class EarningsService {
   }
 
   private async readData(repository: DomainRepository, userId: string) {
-    const user = await repository.findById('user', userId);
-    if (!user) throw new DomainError('NOT_FOUND', 'Akun Dokter tidak ditemukan.');
+    await requireVetAccount(repository, userId);
     const [earningRecords, ledgerRecords, destinationRecords, withdrawalRecords, assignedConsultations] = await Promise.all([
       repository.listByOwner('earningTransaction', userId),
       repository.listByOwner('ledgerEntry', userId),
@@ -263,6 +263,14 @@ export class EarningsService {
 
 function assertVet(role: AccountRole): void {
   if (role !== 'vet') throw new DomainError('FORBIDDEN', 'Pendapatan hanya dapat diakses oleh Dokter.');
+}
+
+async function requireVetAccount(repository: DomainRepository, userId: string): Promise<void> {
+  const user = await repository.findById('user', userId);
+  if (!user) throw new DomainError('NOT_FOUND', 'Akun Dokter tidak ditemukan.');
+  if (!Array.isArray(user.payload.roles) || !user.payload.roles.includes('vet')) {
+    throw new DomainError('FORBIDDEN', 'Akun ini tidak memiliki peran Dokter.');
+  }
 }
 
 function assertAmount(amount: number): void {

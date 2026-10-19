@@ -28,6 +28,8 @@ test('FE23 earnings use owner scoped assigned services, exact net and separate l
     assert.deepEqual(new Set(snapshot.transactions.map((item) => item.status)), new Set(['pending', 'available']));
     assert.equal(snapshot.transactions.some((item) => item.consultationId === ids.completedPending), true);
     await assert.rejects(s.service.load(ids.vetZero, 'farmer'), { code: 'FORBIDDEN' });
+    await assert.rejects(s.service.load(ids.budi, 'vet'), { code: 'FORBIDDEN' });
+    await assert.rejects(s.service.submitWithdrawal(ids.budi, 'vet', 1, 'unknown', 'fe23-spoofed-role'), { code: 'FORBIDDEN' });
     await assert.rejects(s.service.getTransaction(ids.rani, 'vet', snapshot.transactions[0].id), { code: 'NOT_FOUND' });
   } finally { s.db.close(); }
 });

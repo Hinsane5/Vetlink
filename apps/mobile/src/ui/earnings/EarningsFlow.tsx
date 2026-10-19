@@ -455,7 +455,7 @@ function WithdrawalReview({ amount, destination, busy, onConfirm, onEditAmount, 
         <DetailLine label="Nomor" value={destination?.accountMasked ?? '—'} />
         <DetailLine label="Pemilik" value={destination?.accountHolder ?? '—'} />
         <DetailLine label="Biaya" value={formatRupiah(0)} />
-        <DetailLine label="Dana diterima" value={formatRupiah(amount)} strong />
+        <DetailLine label="Estimasi dana bersih" value={formatRupiah(amount)} strong />
       </View>
       <Text style={styles.muted}>Setelah tersimpan, dana ini dicadangkan dan statusnya menjadi Diajukan. Ini belum berarti dana diterima.</Text>
       <Button label="Konfirmasi" role="vet" onPress={onConfirm} disabled={busy || !destination} />
@@ -519,7 +519,7 @@ function WithdrawalDetail({ withdrawal }: { withdrawal: WithdrawalSnapshot }) {
         <DetailLine label="Nomor" value={withdrawal.destination.accountMasked || '—'} />
         {withdrawal.destination.accountHolder ? <DetailLine label="Pemilik" value={withdrawal.destination.accountHolder} /> : null}
         <DetailLine label="Biaya" value={formatRupiah(withdrawal.fee)} />
-        <DetailLine label="Dana diterima" value={formatRupiah(withdrawal.netAmount)} strong />
+        <DetailLine label={withdrawal.status === 'paid' ? 'Dana diterima' : 'Estimasi dana bersih'} value={formatRupiah(withdrawal.netAmount)} strong />
       </View>
       <InlineFeedback message={message} tone={withdrawal.status === 'paid' ? 'success' : 'info'} />
     </View>

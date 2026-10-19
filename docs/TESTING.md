@@ -701,3 +701,5 @@ FE-22 tetap **Sedang dikerjakan** sampai interaksi perangkat dan visual diterima
 | Referensi desain | Inventory lokal memetakan earnings `46:28`, transaction `46:29`, withdraw `46:30`, review `46:31`, submitted `46:32` serta state `82:6376`–`82:6720`. Screenshot lokal `vet-earnings.png` dan `vet-withdrawal-review.png` ditinjau; Figma MCP tidak dipanggil. Perbandingan visual aplikasi tetap tertunda. |
 
 Tes domain/repository tidak membuktikan interaksi UI pada perangkat. FE-23 tetap **Sedang dikerjakan** sampai QA fisik dan visual dapat dijalankan.
+
+Review koordinator: pemeriksaan ulang pertama lulus typecheck lalu lint berhenti dengan `ENOSPC` ketika menulis cache ESLint. Setelah `npm cache clean --force` membebaskan ruang disk, `npm run check` ulang **lulus** typecheck, lint, dan 126 tes. Review juga menambah guard bahwa akun harus benar-benar memiliki peran Dokter dan mengganti label sebelum status paid menjadi “Estimasi dana bersih”. Tidak ada build atau QA Android baru.
