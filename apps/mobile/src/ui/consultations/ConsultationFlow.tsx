@@ -16,6 +16,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { ConfirmationDialog } from '../components/ConfirmationDialog';
 import { Icon } from '../components/Icon';
 import { colors, fonts, radii, roleTokens, spacing } from '../theme/tokens';
+import { PaymentPanel } from '../payment/PaymentPanel';
 
 type Form = { action: 'propose' | 'reject' | 'cancel'; input: ProposalInput; saved: ProposalInput; draft: DomainEntity | null; schedule: DirectorySchedule | null };
 type Tab = 'requests' | 'appointments' | 'history';
@@ -39,6 +40,7 @@ export function ConsultationFlow({ store, session, initialId, initialTab = 'requ
   const [confirm, setConfirm] = useState<ConsultationCommand | null>(null);
   const [visitConfirm, setVisitConfirm] = useState<VisitAction | null>(null);
   const [photoId, setPhotoId] = useState('');
+  const [paymentOpen, setPaymentOpen] = useState(false);
   const locked = useRef(false);
   const reload = useCallback(async () => {
     setError(''); setLoading(true);
@@ -57,12 +59,13 @@ export function ConsultationFlow({ store, session, initialId, initialTab = 'requ
   useEffect(() => { const timer = setTimeout(() => { void reload(); }, 0); return () => clearTimeout(timer); }, [reload]);
   const back = useCallback(() => {
     if (busy) return;
+    if (paymentOpen) { setPaymentOpen(false); return; }
     if (photoId) { setPhotoId(''); return; }
     if (form) {
       if (JSON.stringify(form.input) !== JSON.stringify(form.saved)) setLeave(true); else setForm(null);
     } else if (selectedId && !initialId) { setSelectedId(''); setFeedback(''); }
     else onExit();
-  }, [busy, form, initialId, onExit, photoId, selectedId]);
+  }, [busy, form, initialId, onExit, photoId, selectedId, paymentOpen]);
   useEffect(() => { const handler = BackHandler.addEventListener('hardwareBackPress', () => { back(); return true; }); return () => handler.remove(); }, [back]);
   const run = async (action: () => Promise<void>) => {
     if (locked.current) return;
@@ -130,6 +133,7 @@ export function ConsultationFlow({ store, session, initialId, initialTab = 'requ
     && ((status === 'in_progress' && detail.verified && detail.paid) || recommendation?.status === 'sent');
   const photo = detail?.attachments.find((item) => item.id === photoId && item.kind === 'image');
   const shown = items.filter((item) => consultationTab(item.record) === tab && [item.otherPartyName, item.animalName, item.record.payload.displayCode].join(' ').toLocaleLowerCase('id').includes(query.trim().toLocaleLowerCase('id')));
+  if (paymentOpen && detail) return <PaymentPanel store={store} session={session} payableType="consultation" payableId={detail.record.id} amount={Number(detail.record.payload.feeSnapshot)} onBack={() => { setPaymentOpen(false); void reload(); }} />;
   return <View style={styles.root}>
     <View style={styles.header}><Pressable accessibilityRole="button" accessibilityLabel="Kembali" disabled={busy} onPress={back} style={styles.back}><Icon name="arrow-left" color={colors.brown} size={22} /></Pressable><Text accessibilityRole="header" style={styles.title}>{form ? form.action === 'propose' ? 'Usulkan jadwal' : form.action === 'reject' ? 'Tolak permintaan' : 'Batalkan layanan' : selectedId ? 'Detail layanan' : role === 'farmer' ? 'Konsultasi saya' : 'Layanan dokter'}</Text></View>
     <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
@@ -155,6 +159,7 @@ export function ConsultationFlow({ store, session, initialId, initialTab = 'requ
           {detail.record.payload.type === 'visit' ? detail.record.payload.visitAddressSnapshot ? <><Line label="Alamat kunjungan tersimpan" value={String(detail.record.payload.visitAddressSnapshot)} /><Button role={role} variant="secondary" label="Buka alamat di peta" disabled={busy} onPress={() => { void openAddressMap(String(detail.record.payload.visitAddressSnapshot)); }} /></> : <InlineFeedback message="Alamat kunjungan belum tersedia pada booking ini." /> : null}
           <Line label="Biaya layanan" value={rupiah(Number(detail.record.payload.feeSnapshot))} /><Line label="Pembayaran" value={detail.paid ? 'Pembayaran berhasil' : 'Belum dibayar'} />
           {status === 'awaiting_payment' ? <InlineFeedback message="Booking menunggu pembayaran. Layanan belum dikirim ke dokter." /> : null}
+          {role === 'farmer' && status === 'awaiting_payment' ? <Button role={role} label="Lanjut ke Pembayaran" onPress={() => setPaymentOpen(true)} /> : null}
           {detail.record.payload.refundStatus === 'refund_needed' ? <InlineFeedback message="Pengembalian dana diperlukan. Dana belum dikembalikan." /> : null}
           {detail.record.payload.rejectionReason || detail.record.payload.cancellationReason ? <Line label="Alasan" value={String(detail.record.payload.rejectionReason || detail.record.payload.cancellationReason)} /> : null}
           {detail.record.payload.type === 'visit' && detail.visit ? <VisitProgress role={role} stage={String(detail.visit.payload.stage)} visit={detail.visit} timezone={detail.timezone} action={detail.proposal ? null : nextVisitAction(String(detail.visit.payload.stage))} pendingProposal={!!detail.proposal} busy={busy} onAdvance={setVisitConfirm} /> : null}
