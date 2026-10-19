@@ -6,6 +6,7 @@ import type { SessionSnapshot } from '../../domain/auth';
 import type { DomainEntity } from '../../domain/entities';
 import type { ClinicalNoteSnapshot } from '../../domain/clinicalNotes';
 import type { RecommendationSnapshot } from '../../domain/recommendations';
+import type { ReviewContext } from '../../application/ReviewService';
 import type { DirectorySchedule } from '../../domain/directory';
 import { actionLabels, consultationLabel, consultationTab, emptyProposalInput, type ConsultationAction, type ConsultationCommand, type ConsultationDetail, type ProposalInput, type VisitAction } from '../../domain/consultations';
 import { DomainError } from '../../domain/errors';
@@ -20,13 +21,14 @@ import { PaymentPanel } from '../payment/PaymentPanel';
 
 type Form = { action: 'propose' | 'reject' | 'cancel'; input: ProposalInput; saved: ProposalInput; draft: DomainEntity | null; schedule: DirectorySchedule | null };
 type Tab = 'requests' | 'appointments' | 'history';
-export function ConsultationFlow({ store, session, initialId, initialTab = 'requests', onExit, onOpenAnimal, onOpenChat, onOpenClinicalNote, onOpenRecommendation, onOpenCare, onOpenMarketplace }: { store: LocalStore; session: SessionSnapshot; initialId?: string; initialTab?: Tab; onExit: () => void; onOpenAnimal: (id: string) => void; onOpenChat: (id: string) => void; onOpenClinicalNote: (id: string) => void; onOpenRecommendation: (id: string) => void; onOpenCare: (id: string) => void; onOpenMarketplace?: (context: { recommendationId: string; consultationId: string; productId?: string }) => void }) {
+export function ConsultationFlow({ store, session, initialId, initialTab = 'requests', onExit, onOpenAnimal, onOpenChat, onOpenClinicalNote, onOpenRecommendation, onOpenCare, onOpenReview, onOpenMarketplace }: { store: LocalStore; session: SessionSnapshot; initialId?: string; initialTab?: Tab; onExit: () => void; onOpenAnimal: (id: string) => void; onOpenChat: (id: string) => void; onOpenClinicalNote: (id: string) => void; onOpenRecommendation: (id: string) => void; onOpenCare: (id: string) => void; onOpenReview?: (id: string) => void; onOpenMarketplace?: (context: { recommendationId: string; consultationId: string; productId?: string }) => void }) {
   const role = session.activeRole;
   const [selectedId, setSelectedId] = useState(initialId ?? '');
   const [items, setItems] = useState<ConsultationDetail[]>([]);
   const [detail, setDetail] = useState<ConsultationDetail | null>(null);
   const [clinicalNote, setClinicalNote] = useState<ClinicalNoteSnapshot | null>(null);
   const [recommendation, setRecommendation] = useState<RecommendationSnapshot | null>(null);
+  const [reviewContext, setReviewContext] = useState<ReviewContext | null>(null);
   const [tab, setTab] = useState<Tab>(initialTab);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -46,14 +48,16 @@ export function ConsultationFlow({ store, session, initialId, initialTab = 'requ
     setError(''); setLoading(true);
     try {
       if (selectedId) {
-        const [nextDetail, nextNote, nextRecommendation] = await Promise.all([
-          store.consultations.detail(session.userId, role, selectedId),
+        const nextDetail = await store.consultations.detail(session.userId, role, selectedId);
+        const [nextNote, nextRecommendation, nextReview] = await Promise.all([
           store.clinicalNotes.load(session.userId, role, selectedId),
           store.recommendations.load(session.userId, role, selectedId),
+          role === 'farmer' && nextDetail.record.payload.status === 'completed'
+            ? store.reviews.load(session.userId, role, selectedId) : Promise.resolve(null),
         ]);
-        setDetail(nextDetail); setClinicalNote(nextNote); setRecommendation(nextRecommendation);
-      } else { setItems(await store.consultations.list(session.userId, role)); setDetail(null); setClinicalNote(null); setRecommendation(null); }
-    } catch (cause) { setDetail(null); setClinicalNote(null); setRecommendation(null); setItems([]); setError(message(cause)); }
+        setDetail(nextDetail); setClinicalNote(nextNote); setRecommendation(nextRecommendation); setReviewContext(nextReview);
+      } else { setItems(await store.consultations.list(session.userId, role)); setDetail(null); setClinicalNote(null); setRecommendation(null); setReviewContext(null); }
+    } catch (cause) { setDetail(null); setClinicalNote(null); setRecommendation(null); setReviewContext(null); setItems([]); setError(message(cause)); }
     finally { setLoading(false); }
   }, [role, selectedId, session.userId, store]);
   useEffect(() => { const timer = setTimeout(() => { void reload(); }, 0); return () => clearTimeout(timer); }, [reload]);
@@ -167,6 +171,14 @@ export function ConsultationFlow({ store, session, initialId, initialTab = 'requ
           {canWriteClinicalNote ? <Button role={role} label={clinicalNote ? 'Lanjutkan Catatan Pemeriksaan' : 'Catat Hasil Pemeriksaan'} onPress={() => onOpenClinicalNote(detail.record.id)} /> : null}
           {role === 'vet' && canShowClinicalResult && status === 'in_progress' ? <Button role={role} label="Selesaikan layanan" onPress={() => onOpenClinicalNote(detail.record.id)} /> : null}
           {role === 'farmer' && canShowClinicalResult ? <Button role={role} variant="secondary" label="Hasil pemeriksaan" onPress={() => onOpenClinicalNote(detail.record.id)} /> : null}
+          {role === 'farmer' && status === 'completed' ? <View style={styles.card}>
+            <Text style={styles.heading}>Ulasan layanan</Text>
+            {reviewContext?.review ? <>
+              <View accessibilityLabel={`${Number(reviewContext.review.payload.stars)} dari 5 bintang`} style={styles.row}><Icon name="star" size={18} color={colors.gold} /><Text style={styles.body}>{Number(reviewContext.review.payload.stars)} / 5</Text></View>
+              <Text style={styles.body}>{String(reviewContext.review.payload.text || 'Tanpa komentar')}</Text>
+            </> : <Text style={styles.body}>Bagikan rating Anda setelah layanan selesai.</Text>}
+            <Button role="farmer" variant={reviewContext?.review ? 'secondary' : 'primary'} disabled={busy || !onOpenReview} label={reviewContext?.review ? 'Lihat ulasan Anda' : 'Beri rating'} onPress={() => onOpenReview?.(detail.record.id)} />
+          </View> : null}
           {role === 'vet' && canShowClinicalResult && status !== 'in_progress' ? <Button role={role} variant="secondary" label="Lihat catatan final" onPress={() => onOpenClinicalNote(detail.record.id)} /> : null}
           {canOpenRecommendation ? <Button role={role} variant="secondary" label={recommendation?.status === 'sent' ? 'Lihat Rekomendasi Terkirim' : recommendation?.status === 'draft' ? 'Lanjutkan Rekomendasi' : 'Buat Rekomendasi'} disabled={busy} onPress={() => onOpenRecommendation(detail.record.id)} /> : null}
           {canShowClinicalResult ? <Button role={role} variant="secondary" label={role === 'vet' ? 'Tindak lanjut & pengingat' : 'Tindak lanjut & laporan'} disabled={busy} onPress={() => onOpenCare(detail.record.id)} /> : null}
@@ -253,5 +265,5 @@ function visitActionConfirmation(action: VisitAction, detail: ConsultationDetail
 }
 function message(cause: unknown) { return cause instanceof DomainError ? cause.message : 'Layanan belum dapat disimpan atau dimuat. Coba lagi.'; }
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.cream }, header: { flexDirection: 'row', alignItems: 'center', padding: spacing[4], gap: spacing[3] }, back: { minHeight: 48, minWidth: 48, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.white, borderRadius: radii.button }, title: { flex: 1, fontFamily: fonts.bold, color: colors.brown, fontSize: 22, flexShrink: 1 }, content: { padding: spacing[4], gap: spacing[4], width: '100%', maxWidth: 480, alignSelf: 'center', flexGrow: 1 }, card: { backgroundColor: colors.white, padding: spacing[4], borderRadius: radii.cardVet, gap: spacing[3], minHeight: 48 }, heading: { color: colors.brown, fontFamily: fonts.semiBold, fontSize: 18, flexShrink: 1 }, body: { color: colors.dark, fontFamily: fonts.regular, fontSize: 14, lineHeight: 22, flexShrink: 1 }, line: { gap: spacing[1] }, label: { color: colors.muted, fontFamily: fonts.medium, fontSize: 12, lineHeight: 18 }, visitStep: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing[3], minHeight: 42 }, visitDot: { width: 14, height: 14, marginTop: 4, borderRadius: 7, borderWidth: 2, borderColor: colors.gold, backgroundColor: colors.white }, visitDotActive: { borderColor: colors.brown, backgroundColor: colors.brown }, visitStepText: { flex: 1, gap: spacing[1] }, tabs: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] }, tab: { minHeight: 48, padding: spacing[3], borderRadius: radii.button, backgroundColor: colors.white, justifyContent: 'center' }, activeTab: { borderWidth: 2, borderColor: colors.brown }, tabText: { color: colors.brown, fontFamily: fonts.semiBold, fontSize: 13 }, history: { gap: spacing[2], paddingTop: spacing[3], borderTopWidth: 1, borderColor: colors.cream }, thumbnail: { width: '100%', height: 180 }, media: { minHeight: 48 }, fullPhoto: { flex: 1 }, backdrop: { flex: 1, justifyContent: 'center', padding: spacing[5], backgroundColor: 'rgba(58,23,13,0.5)' },
+  root: { flex: 1, backgroundColor: colors.cream }, header: { flexDirection: 'row', alignItems: 'center', padding: spacing[4], gap: spacing[3] }, back: { minHeight: 48, minWidth: 48, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.white, borderRadius: radii.button }, title: { flex: 1, fontFamily: fonts.bold, color: colors.brown, fontSize: 22, flexShrink: 1 }, content: { padding: spacing[4], gap: spacing[4], width: '100%', maxWidth: 480, alignSelf: 'center', flexGrow: 1 }, card: { backgroundColor: colors.white, padding: spacing[4], borderRadius: radii.cardVet, gap: spacing[3], minHeight: 48 }, heading: { color: colors.brown, fontFamily: fonts.semiBold, fontSize: 18, flexShrink: 1 }, body: { color: colors.dark, fontFamily: fonts.regular, fontSize: 14, lineHeight: 22, flexShrink: 1 }, line: { gap: spacing[1] }, row: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] }, label: { color: colors.muted, fontFamily: fonts.medium, fontSize: 12, lineHeight: 18 }, visitStep: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing[3], minHeight: 42 }, visitDot: { width: 14, height: 14, marginTop: 4, borderRadius: 7, borderWidth: 2, borderColor: colors.gold, backgroundColor: colors.white }, visitDotActive: { borderColor: colors.brown, backgroundColor: colors.brown }, visitStepText: { flex: 1, gap: spacing[1] }, tabs: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] }, tab: { minHeight: 48, padding: spacing[3], borderRadius: radii.button, backgroundColor: colors.white, justifyContent: 'center' }, activeTab: { borderWidth: 2, borderColor: colors.brown }, tabText: { color: colors.brown, fontFamily: fonts.semiBold, fontSize: 13 }, history: { gap: spacing[2], paddingTop: spacing[3], borderTopWidth: 1, borderColor: colors.cream }, thumbnail: { width: '100%', height: 180 }, media: { minHeight: 48 }, fullPhoto: { flex: 1 }, backdrop: { flex: 1, justifyContent: 'center', padding: spacing[5], backgroundColor: 'rgba(58,23,13,0.5)' },
 });

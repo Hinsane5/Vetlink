@@ -625,3 +625,17 @@ Backend BE-06 menambahkan tabel event callback dedupe, quote konsultasi dengan a
 | Referensi desain | Node lokal terkait `12:1889`, `12:1980`, `12:2032`, dan `12:2280` dipetakan; screenshot booking lokal ditinjau. Inventory/cache tidak menunjukkan frame manajemen Farm khusus. Tidak ada pemanggilan Figma MCP sesuai scope task. |
 
 Farm management tetap **Sedang dikerjakan** sampai interaksi/visual Android dapat diuji. Tidak ada perubahan backend, provider, transaksi uang nyata, atau deployment.
+
+## Hasil pemeriksaan FE-21 — 19 Oktober 2026
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm run check` dari `apps/mobile` | **Lulus**: TypeScript typecheck, Expo lint, kompilasi tes TypeScript, dan 114 tes domain/repository (0 gagal). Dependency dipulihkan dari lockfile dengan `npm ci` setelah pemeriksaan awal tidak menemukan `tsc`. |
+| Review SQLite | **Lulus**: hanya owner dengan konsultasi `completed`; bintang integer 1–5 dan batas komentar divalidasi; relasi konsultasi/Peternak/Dokter tersimpan; review lama ditampilkan baca-saja. |
+| Idempotensi dan rollback | **Lulus**: submit serentak dengan isi sama menghasilkan satu Review; isi berbeda ditolak; kegagalan tulis relasi membatalkan entity Review sehingga submit dapat dicoba ulang. |
+| Agregat profil Dokter | **Lulus**: Review tersimpan atas konsultasi Budi menambah jumlah ulasan dan memperbarui rata-rata Yuda yang dibaca `VetDirectoryService`; review duplikat untuk konsultasi yang sama tidak dihitung dua kali. |
+| `npm run android` dari `apps/mobile` | **Terhalang sebelum build/install**: Expo prebuild selesai dan mencoba membuka emulator Pixel_7, tetapi Gradle wrapper timeout saat mengunduh `gradle-9.3.1-bin.zip` dari `services.gradle.org`. Tidak ada APK baru atau interaksi Android. |
+| QA interaksi/visual | **Belum diuji**: kirim ulasan, penanganan Back/dialog perubahan, keyboard/scroll, viewport 390 × 844, layar kecil, font besar, screenshot aplikasi, dan pixel-match. |
+| Referensi desain | Inventory lokal memetakan Review `12:2425` dan Review Success `12:2446`; cache tidak memuat screenshot layar Review. Tidak ada panggilan Figma MCP. |
+
+FE-21 tetap **Sedang dikerjakan** sampai QA Android/interaksi dan visual dapat diterima. Tes yang dijalankan mencakup service/repository SQLite; tes tersebut tidak membuktikan input atau navigasi React Native pada perangkat.

@@ -51,11 +51,13 @@ BE-03 memetakan `health_events` pada PostgreSQL dengan `source_key` unik per pro
 | LedgerEntry | vetId, earningId/withdrawalId, kind, amount, operationKey unik, occurredAt; append-only |
 | PayoutDestination | vetId, bankLabel fiktif, accountMasked, accountHolder; data rekening nyata tidak dipakai tahap lokal |
 | Withdrawal | vetId, destinationSnapshot, amount, feeSnapshot, netAmount, status, operationKey, submittedAt, serviceReference |
-| Review | consultationId unik, farmerId, vetId, stars integer 1–5, text, submittedAt |
+| Review | consultationId unik, farmerId, vetId, stars integer 1–5, text opsional, submittedAt |
 | Notification | recipientId, type, contextId, eventId unik per penerima, title/body, readAt, deliveryStatus |
 | Preferences | userId, notification categories, enabled; bantuan berupa konten aplikasi |
 
 Relasi utama: Peternak → banyak Farm → banyak Livestock → Consultation ← Dokter. Setiap Farm memiliki satu owner Peternak dan satu Address kunjungan; `farmId` pada Livestock, BookingDraft, dan Consultation harus menunjuk Farm yang sama dengan relasi dan konteks record. Saat membuat Livestock, Peternak memilih Farm. Daftar, detail, dan edit Livestock membaca semua Farm milik akun; pilihan Farm aktif hanya konteks UI. Booking menyalin farmId serta alamat Farm dari animal terpilih dan memeriksa kecocokannya saat review/submit. Konsultasi Dokter tetap terbatas pada layanan assigned dan relasi owner Farm/animal yang valid. Consultation → ClinicalNote/Visit/Messages/Recommendation/FollowUp/Payment. Message → MessageAttachment → Attachment dengan FK composite pada consultation dan sender/owner. RecommendationItem → Product → Cart → Order → Payment/Shipment. Consultation → EarningTransaction → Ledger → Withdrawal.
+
+Review FE-21 hanya dibuat oleh Peternak pemilik setelah Consultation `completed`; setiap Consultation memiliki paling banyak satu Review. Record immutable menyimpan integer stars 1–5, komentar opsional yang dinormalisasi maksimal 1.000 karakter, serta relasi ke Consultation, Peternak, dan Dokter. Retry dengan isi yang sama mengembalikan Review tersimpan; payload kedua yang berbeda ditolak. Agregat rating profil Dokter dihitung dari Review tersimpan yang masih cocok dengan owner/Dokter dan Consultation selesai.
 
 ## Penerapan penyimpanan FE-02
 

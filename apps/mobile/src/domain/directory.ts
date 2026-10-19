@@ -6,6 +6,7 @@ export type DirectoryVet = {
   id: string; name: string; photoUri: string | null; verified: boolean; accepting: boolean;
   species: LivestockSpecies[]; services: DirectoryServiceType[]; location: string;
   visitRegions: string[]; experienceYears: number;
+  ratingAverage: number | null; reviewCount: number;
   rates: { service: DirectoryServiceType; amount: number }[];
   reviews: { id: string; stars: number; text: string; submittedAt: string }[];
 };
