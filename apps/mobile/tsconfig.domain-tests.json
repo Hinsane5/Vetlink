@@ -17,6 +17,7 @@
     "src/application/ProfileService.ts",
     "src/application/DashboardService.ts",
     "src/application/LivestockService.ts",
+    "src/application/FarmService.ts",
     "src/application/HealthRecordService.ts",
     "src/application/PatientService.ts",
     "src/application/VetDirectoryService.ts",

@@ -2,19 +2,20 @@ import type { DirectoryServiceType } from './directory';
 import { DomainError } from './errors';
 
 export type BookingInput = {
-  service: DirectoryServiceType; animalId: string; startsAt: string; endsAt: string;
+  service: DirectoryServiceType; animalId: string; farmId: string; startsAt: string; endsAt: string;
   complaint: string; visitAddress: string; attachmentIds: string[]; selectedDay?: string;
 };
 export type BookingDraft = {
   id: string; vetId: string; version: number; updatedAt: string; input: BookingInput;
 };
 export type BookingAttachment = { id: string; kind: 'image' | 'video'; filename: string; localUri: string; byteSize: number };
-export type BookingReview = { draftId: string; version: number; total: number; vetName: string; animalName: string; timezone: string; input: BookingInput };
-export const emptyBookingInput: BookingInput = { service: 'chat', animalId: '', startsAt: '', endsAt: '', complaint: '', visitAddress: '', attachmentIds: [], selectedDay: '' };
+export type BookingReview = { draftId: string; version: number; total: number; vetName: string; animalName: string; farmName: string; timezone: string; input: BookingInput };
+export const emptyBookingInput: BookingInput = { service: 'chat', animalId: '', farmId: '', startsAt: '', endsAt: '', complaint: '', visitAddress: '', attachmentIds: [], selectedDay: '' };
 
 export function validateBookingInput(input: BookingInput): BookingInput {
   if (!['chat', 'visit'].includes(input.service)) throw new DomainError('VALIDATION_FAILED', 'Pilih layanan yang tersedia.');
   if (!input.animalId) throw new DomainError('VALIDATION_FAILED', 'Pilih ternak yang akan diperiksa.');
+  if (!input.farmId) throw new DomainError('VALIDATION_FAILED', 'Peternakan ternak belum dipilih. Pilih ulang ternak yang akan diperiksa.');
   if (!Number.isFinite(Date.parse(input.startsAt)) || !Number.isFinite(Date.parse(input.endsAt)) || Date.parse(input.startsAt) >= Date.parse(input.endsAt)) {
     throw new DomainError('VALIDATION_FAILED', 'Pilih tanggal dan waktu yang tersedia.');
   }

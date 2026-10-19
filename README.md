@@ -2,7 +2,7 @@
 
 Aplikasi mobile berbahasa Indonesia untuk pengelolaan kesehatan ternak, konsultasi dokter hewan, kunjungan, dan pembelian produk kesehatan hewan.
 
-**Fokus mobile tetap flow frontend Android lokal.** Aplikasi membuka “Pilih Peran” dan memakai data fiktif persisten. FE-06–19 mencakup ternak, pasien, direktori dokter, booking, respons layanan, jadwal, chat, kunjungan, catatan klinis, rekomendasi, tindak lanjut, laporan perkembangan, Marketplace, checkout dan pembayaran lokal. FE-00/02 selesai; FE-01/04–19 masih memerlukan penerimaan visual/interaksi Android dan FE-03 autentikasi tetap ditunda sesuai DEC-23. `npm run check` FE-19 lulus dengan 105 tes; build Android saat ini terhalang SDK/ADB yang tidak tersedia. Backend NestJS/PostgreSQL mencakup fondasi BE-00, autentikasi internal BE-01, profil/Farm/Address dan review profesi BE-02, ternak/pasien/timeline kesehatan BE-03, discovery dokter/availability/tarif/slot BE-04, serta chat/media BE-07 dengan penyimpanan privat lokal dan transport polling. Mobile belum terhubung ke API. [Catatan Testing](docs/TESTING.md) memisahkan bukti pemeriksaan lokal dari QA Android yang tertunda.
+**Fokus mobile tetap flow frontend Android lokal.** Aplikasi membuka “Pilih Peran” dan memakai data fiktif persisten. FE-06–20 mencakup ternak, pasien, direktori dokter, booking, respons layanan, jadwal, chat, kunjungan, catatan klinis, rekomendasi, tindak lanjut, laporan perkembangan, Marketplace, checkout, pembayaran lokal, dan pesanan. FE-26 menambahkan pengelolaan banyak Farm, pemilihan Farm saat membuat ternak, serta booking yang mengikuti Farm/address animal. FE-00/02 selesai; FE-01/04–20 masih memerlukan penerimaan visual/interaksi Android dan FE-03 autentikasi tetap ditunda sesuai DEC-23. `npm run check` FE-26 lulus dengan 110 tes; pemeriksaan Android visual/interaksi tetap menjadi gate karena Android SDK dan `adb` tidak tersedia pada run ini. Backend NestJS/PostgreSQL mencakup fondasi BE-00, autentikasi internal BE-01, profil/Farm/Address dan review profesi BE-02, ternak/pasien/timeline kesehatan BE-03, discovery dokter/availability/tarif/slot BE-04, serta chat/media BE-07 dengan penyimpanan privat lokal dan transport polling. Mobile belum terhubung ke API. [Catatan Testing](docs/TESTING.md) memisahkan bukti pemeriksaan lokal dari QA Android yang tertunda.
 
 ## Arah yang telah dipilih
 
@@ -22,6 +22,7 @@ Aplikasi mobile berbahasa Indonesia untuk pengelolaan kesehatan ternak, konsulta
 | TypeScript | `~6.0.3` |
 | Development client | `expo-dev-client ~57.0.19` |
 | Database FE-02 | `expo-sqlite ~57.0.3` |
+| SQLite schema | `user_version=3`; v3 backfill Farm/animal/consultation lama bersifat non-destruktif |
 | Crypto FE-03 | `expo-crypto ~57.0.3` |
 | Credential/sesi FE-03 | `expo-secure-store ~57.0.4` |
 | Foto, dokumen, file lokal FE-04 | `expo-image-picker ~57.0.20`, `expo-document-picker ~57.0.3`, `expo-file-system ~57.0.7` |
@@ -97,6 +98,8 @@ Untuk melihat FE-18: dari rekomendasi terkirim Peternak, buka **Lihat Produk** a
 
 Untuk melihat FE-20: pilih Peternak lalu buka tab **Pesanan**. **Aktif** dan **Selesai** membaca order pemilik dari SQLite; pilih pesanan untuk melihat jumlah/harga/alamat snapshot, pembayaran, nomor pelacakan, dan timeline shipment. Order hanya tampil dibayar bila payment terkait sukses; timeline hanya membaca shipment adapter lokal. Adapter pembayaran lokal saat ini memberi hasil `pending`, sehingga order checkout baru menunggu konfirmasi dan tidak otomatis masuk status dibayar. QA layar Android/visual belum selesai.
 
+Untuk melihat FE-26: pilih Peternak, buka **Beranda → Kelola Peternakan** untuk melihat, menambah, mengubah, atau memilih Farm aktif. **Ternak → Tambah ternak** meminta pilihan Farm secara eksplisit; daftar dan detail tetap membaca ternak dari semua Farm milik akun. Saat booking kunjungan, pilih ternak dan alamat kunjungan tampil dari Farm terkait; service menolak farmId atau alamat yang tidak cocok. Domain/repository telah diperiksa, tetapi QA Android layar dan interaksi masih tertunda.
+
 Data fiktif FE-08 disimpan pada SQLite yang sama. Instalasi dengan seed `fe02-v1` mendapat ekstensi `fe08-v1` satu kali: hanya field profil/jadwal yang belum ada ditambahkan, disertai satu ulasan fiktif atas konsultasi selesai. Nilai yang sudah disimpan, termasuk availability off, daftar kosong yang sengaja disimpan, dan lokasi hasil edit, dipertahankan. Tidak ada akun atau layanan jaringan baru.
 
 ## Panduan dokumen
@@ -147,6 +150,8 @@ Verifikasi FE-05: `npm run check` lulus dengan 20 tes; lima tes baru mencakup se
 Verifikasi FE-06/07 terbaru: `npm run check` lulus dengan 32 tes; `npx expo export --platform android` membundel 724 modul; Gradle `assembleDebug` lulus dan APK terpasang di Xiaomi. Metro memuat bundle dan LocalStore (`schema=2`, 61 entitas) sampai “Pilih Peran”. Interaksi list, form, filter, modal, keyboard, serta perbandingan visual belum dapat diuji karena MIUI menolak input ADB dengan `INJECT_EVENTS`. Node Figma pasien Dokter berhasil diperiksa sebelumnya; node Peternak FE-06/07 tidak dapat diambil karena batas Starter, sehingga layar riwayat Peternak dirancang dari tokens dan aturan fitur. Rincian ada di [Testing](docs/TESTING.md) dan [Figma mapping](docs/FIGMA_MAPPING.md).
 
 Verifikasi FE-08: `npm run check` lulus dengan 40 tes, termasuk delapan skenario direktori/jadwal dan ekstensi fixture; export Android membundel 736 modul; build akhir Gradle `assembleDebug` lulus dalam 3 menit 28 detik setelah perbaikan safe area. APK dipasang pada Xiaomi dan Metro membaca schema 2, 62 entitas, serta seed lama yang dipertahankan. Salinan database perangkat memiliki marker `fixture_directory_version=fe08-v1`, 82 relasi, `integrity_check=ok`, dan tidak ada pelanggaran foreign key. Interaksi layar tetap belum diuji karena MIUI menolak `INJECT_EVENTS`. Figma FE-08 terhalang izin file utama dan kuota Starter; UI dirancang mandiri sesuai arahan pengguna. Rincian serta batas bukti ada di [Testing](docs/TESTING.md).
+
+Verifikasi FE-26: `npm run check` lulus (typecheck, Expo lint, 110 tes domain/repository). Tes baru memeriksa Farm CRUD/pilihan, ternak lintas Farm termasuk ID sama di Farm berbeda, penolakan owner lain, migration v2→v3 tanpa kehilangan record, dan booking yang mengikat farmId/alamat dari animal. Android build, sentuh, keyboard/back/scroll dan visual 390 × 844/layar kecil/font besar tidak diuji: `ANDROID_HOME`/`ANDROID_SDK_ROOT` menunjuk path yang tidak ada dan `adb` tidak ditemukan. Figma MCP tidak dipanggil sesuai scope; pemetaan dan selisih layar ada di [Figma mapping](docs/FIGMA_MAPPING.md).
 
 `npm ci` FE-00 melaporkan 23 advisori (7 moderate, 16 high); instalasi dependency hingga FE-04 melaporkan 24 (8 moderate, 16 high). Rincian belum diaudit dan tidak ada perbaikan otomatis.
 

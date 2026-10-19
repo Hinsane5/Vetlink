@@ -3,6 +3,7 @@ import type { BookingRepository, BookingUnit } from './ports/BookingRepository';
 import type { AccountRole } from '../domain/auth';
 import type { DomainEntity, EntityKind, EntityRelation } from '../domain/entities';
 import { DomainError } from '../domain/errors';
+import { hasConsultationFarmContext } from './livestockAccess';
 import { assertClinicalNoteEditable, assertClinicalNoteFinalizable } from '../domain/policies';
 import {
   clinicalNoteFieldsFrom,
@@ -206,7 +207,8 @@ export class ClinicalNoteService {
       unit.repository.listRelated('consultation', consultation.id, 'animal'),
       unit.repository.findById('livestock', animalId),
     ]);
-    if (!farmers.some((item) => item.id === farmerId) || !vets.some((item) => item.id === vetId) || !animals.some((item) => item.id === animalId) || animal?.ownerId !== farmerId) {
+    if (!farmers.some((item) => item.id === farmerId) || !vets.some((item) => item.id === vetId) || !animals.some((item) => item.id === animalId) || !animal
+      || !(await hasConsultationFarmContext(unit.repository, consultation, animal, farmerId))) {
       throw new DomainError('FORBIDDEN', 'Relasi pasien dan layanan tidak valid.');
     }
     return { consultation, farmerId, vetId, animalId, verificationStatus: aggregate.profile.payload.verificationStatus };

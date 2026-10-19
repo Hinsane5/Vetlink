@@ -117,10 +117,10 @@ export const fixtureEntities: DomainEntity[] = [
   entity('user', ids.rani, { name: 'drh. Rani Putri', email: 'rani@example.test', roles: ['vet'], status: 'active' }),
   entity('user', ids.damar, { name: 'drh. Damar Wijaya', email: 'damar@example.test', roles: ['vet'], status: 'active' }),
   entity('user', ids.vetZero, { name: 'drh. Yuda Pratama', email: 'yuda@example.test', roles: ['vet'], status: 'active' }),
-  entity('address', ids.budiAddress, { label: 'Kandang Budi', recipient: 'Budi', city: 'Bogor', province: 'Jawa Barat', postalCode: '16111', timezone: 'Asia/Jakarta' }, ids.budi),
-  entity('address', ids.sariAddress, { label: 'Kandang Sari', recipient: 'Sari', city: 'Sleman', province: 'DI Yogyakarta', postalCode: '55511', timezone: 'Asia/Jakarta' }, ids.sari),
   entity('farm', ids.budiFarm, { name: 'Ternak Budi', species: ['cattle'], visitAddressId: ids.budiAddress }, ids.budi),
   entity('farm', ids.sariFarm, { name: 'Kebun Sari', species: ['goat'], visitAddressId: ids.sariAddress }, ids.sari),
+  entity('address', ids.budiAddress, { label: 'Kandang Budi', recipient: 'Budi Santoso', phone: '081234567890', address: 'Jalan Ternak Fiktif Nomor 1', city: 'Bogor', province: 'Jawa Barat', postalCode: '16111', timezone: 'Asia/Jakarta' }, ids.budi, ids.budiFarm),
+  entity('address', ids.sariAddress, { label: 'Kandang Sari', recipient: 'Sari Lestari', phone: '081234567891', address: 'Jalan Kebun Fiktif Nomor 2', city: 'Sleman', province: 'DI Yogyakarta', postalCode: '55511', timezone: 'Asia/Jakarta' }, ids.sari, ids.sariFarm),
   entity('farmerProfile', ids.budiProfile, { userId: ids.budi, farmId: ids.budiFarm }, ids.budi),
   entity('farmerProfile', ids.sariProfile, { userId: ids.sari, farmId: ids.sariFarm }, ids.sari),
   entity('vetProfile', ids.raniProfile, { ...directoryFixturePatches[ids.raniProfile], userId: ids.rani, professionalName: 'drh. Rani Putri', verificationStatus: 'verified', services: ['chat'] }, ids.rani),
@@ -131,14 +131,14 @@ export const fixtureEntities: DomainEntity[] = [
   entity('availability', ids.yudaAvailability, { ...directoryFixturePatches[ids.yudaAvailability], vetId: ids.vetZero, acceptingNewRequests: true, timezone: 'Asia/Jakarta', services: ['visit'] }, ids.vetZero),
   entity('serviceRate', ids.raniChatRate, { vetId: ids.rani, serviceType: 'chat', amount: 75000, currency: 'IDR', effectiveAt: fixtureDate }, ids.rani),
   entity('serviceRate', ids.yudaVisitRate, { vetId: ids.vetZero, serviceType: 'visit', amount: 150000, currency: 'IDR', effectiveAt: fixtureDate }, ids.vetZero),
-  entity('livestock', ids.cow, { displayCode: 'BUD-01', name: 'Mawar', species: 'cattle', breed: 'Sapi fiktif', sex: 'female', weightKg: 340, estimatedAgeMonths: 48 }, ids.budi),
-  entity('livestock', ids.goat, { displayCode: 'SAR-01', name: 'Luna', species: 'goat', breed: 'Kambing fiktif', sex: 'female', weightKg: 42, estimatedAgeMonths: 24 }, ids.sari),
-  entity('consultation', ids.request, { displayCode: 'VL-C-104', farmerId: ids.budi, vetId: ids.rani, animalId: ids.cow, type: 'chat', status: 'requested', complaint: 'Nafsu makan berkurang.', startsAt: '2026-10-06T02:00:00.000Z', endsAt: '2026-10-06T02:30:00.000Z', feeSnapshot: 75000, commissionSnapshot: 7500 }, ids.budi),
-  entity('consultation', ids.awaitingPayment, { displayCode: 'VL-C-105', farmerId: ids.sari, vetId: ids.rani, animalId: ids.goat, type: 'chat', status: 'awaiting_payment', complaint: 'Perlu konsultasi umum.', startsAt: '2026-10-07T02:00:00.000Z', endsAt: '2026-10-07T02:30:00.000Z', feeSnapshot: 75000, commissionSnapshot: 7500 }, ids.sari),
-  entity('consultation', ids.chat, { displayCode: 'VL-C-102', farmerId: ids.sari, vetId: ids.rani, animalId: ids.goat, type: 'chat', status: 'in_progress', complaint: 'Memeriksa kondisi ternak.', startsAt: '2026-10-03T02:00:00.000Z', endsAt: '2026-10-03T02:30:00.000Z', feeSnapshot: 75000, commissionSnapshot: 7500 }, ids.sari),
-  entity('consultation', ids.visit, { displayCode: 'VL-V-103', farmerId: ids.budi, vetId: ids.vetZero, animalId: ids.cow, type: 'visit', status: 'scheduled', complaint: 'Pemeriksaan terjadwal.', startsAt: '2026-10-08T02:00:00.000Z', endsAt: '2026-10-08T03:00:00.000Z', feeSnapshot: 150000, commissionSnapshot: 15000, visitAddressSnapshot: 'Kandang Budi, Bogor' }, ids.budi),
-  entity('consultation', ids.completed, { displayCode: 'VL-V-100', farmerId: ids.sari, vetId: ids.vetZero, animalId: ids.goat, type: 'visit', status: 'completed', complaint: 'Pemeriksaan kondisi umum.', startsAt: '2026-10-01T02:00:00.000Z', endsAt: '2026-10-01T03:00:00.000Z', completionAt: '2026-10-01T03:00:00.000Z', feeSnapshot: 120000, commissionSnapshot: 12000 }, ids.sari),
-  entity('consultation', ids.completedPending, { displayCode: 'VL-C-099', farmerId: ids.budi, vetId: ids.vetZero, animalId: ids.cow, type: 'chat', status: 'completed', complaint: 'Pemeriksaan umum melalui chat.', startsAt: '2026-09-30T02:00:00.000Z', endsAt: '2026-09-30T02:30:00.000Z', completionAt: '2026-09-30T02:30:00.000Z', feeSnapshot: 90000, commissionSnapshot: 9000 }, ids.budi),
+  entity('livestock', ids.cow, { farmerId: ids.budi, farmId: ids.budiFarm, displayCode: 'BUD-01', name: 'Mawar', species: 'cattle', breed: 'Sapi fiktif', sex: 'female', weightKg: 340, estimatedAgeMonths: 48 }, ids.budi, ids.budiFarm),
+  entity('livestock', ids.goat, { farmerId: ids.sari, farmId: ids.sariFarm, displayCode: 'SAR-01', name: 'Luna', species: 'goat', breed: 'Kambing fiktif', sex: 'female', weightKg: 42, estimatedAgeMonths: 24 }, ids.sari, ids.sariFarm),
+  entity('consultation', ids.request, { displayCode: 'VL-C-104', farmerId: ids.budi, farmId: ids.budiFarm, vetId: ids.rani, animalId: ids.cow, type: 'chat', status: 'requested', complaint: 'Nafsu makan berkurang.', startsAt: '2026-10-06T02:00:00.000Z', endsAt: '2026-10-06T02:30:00.000Z', feeSnapshot: 75000, commissionSnapshot: 7500 }, ids.budi, ids.budiFarm),
+  entity('consultation', ids.awaitingPayment, { displayCode: 'VL-C-105', farmerId: ids.sari, farmId: ids.sariFarm, vetId: ids.rani, animalId: ids.goat, type: 'chat', status: 'awaiting_payment', complaint: 'Perlu konsultasi umum.', startsAt: '2026-10-07T02:00:00.000Z', endsAt: '2026-10-07T02:30:00.000Z', feeSnapshot: 75000, commissionSnapshot: 7500 }, ids.sari, ids.sariFarm),
+  entity('consultation', ids.chat, { displayCode: 'VL-C-102', farmerId: ids.sari, farmId: ids.sariFarm, vetId: ids.rani, animalId: ids.goat, type: 'chat', status: 'in_progress', complaint: 'Memeriksa kondisi ternak.', startsAt: '2026-10-03T02:00:00.000Z', endsAt: '2026-10-03T02:30:00.000Z', feeSnapshot: 75000, commissionSnapshot: 7500 }, ids.sari, ids.sariFarm),
+  entity('consultation', ids.visit, { displayCode: 'VL-V-103', farmerId: ids.budi, farmId: ids.budiFarm, vetId: ids.vetZero, animalId: ids.cow, type: 'visit', status: 'scheduled', complaint: 'Pemeriksaan terjadwal.', startsAt: '2026-10-08T02:00:00.000Z', endsAt: '2026-10-08T03:00:00.000Z', feeSnapshot: 150000, commissionSnapshot: 15000, visitAddressSnapshot: 'Kandang Budi, Bogor' }, ids.budi, ids.budiFarm),
+  entity('consultation', ids.completed, { displayCode: 'VL-V-100', farmerId: ids.sari, farmId: ids.sariFarm, vetId: ids.vetZero, animalId: ids.goat, type: 'visit', status: 'completed', complaint: 'Pemeriksaan kondisi umum.', startsAt: '2026-10-01T02:00:00.000Z', endsAt: '2026-10-01T03:00:00.000Z', completionAt: '2026-10-01T03:00:00.000Z', feeSnapshot: 120000, commissionSnapshot: 12000 }, ids.sari, ids.sariFarm),
+  entity('consultation', ids.completedPending, { displayCode: 'VL-C-099', farmerId: ids.budi, farmId: ids.budiFarm, vetId: ids.vetZero, animalId: ids.cow, type: 'chat', status: 'completed', complaint: 'Pemeriksaan umum melalui chat.', startsAt: '2026-09-30T02:00:00.000Z', endsAt: '2026-09-30T02:30:00.000Z', completionAt: '2026-09-30T02:30:00.000Z', feeSnapshot: 90000, commissionSnapshot: 9000 }, ids.budi, ids.budiFarm),
   entity('visit', ids.visitStage, { consultationId: ids.visit, stage: 'scheduled', departureAt: null, arrivalAt: null, examinationStartedAt: null }, ids.vetZero),
   entity('scheduleProposal', ids.proposal, { consultationId: ids.visit, proposedByVetId: ids.vetZero, startsAt: '2026-10-08T03:00:00.000Z', endsAt: '2026-10-08T04:00:00.000Z', reason: 'Penyesuaian jadwal fiktif.', status: 'pending' }, ids.vetZero),
   entity('clinicalNote', ids.draftNote, { consultationId: ids.chat, animalId: ids.goat, vetId: ids.rani, complaint: 'Perubahan nafsu makan.', findings: 'Catatan awal.', assessment: '', actions: '', careInstructions: '', status: 'draft', finalizedAt: null }, ids.rani),
@@ -223,6 +223,7 @@ for (const [consultation, farmer, vet, animal] of [
   link(consultation, 'farmer', farmer);
   link(consultation, 'veterinarian', vet);
   link(consultation, 'animal', animal);
+  link(consultation, 'farm', animal === ids.cow ? ids.budiFarm : ids.sariFarm);
 }
 link(ids.visitStage, 'consultation', ids.visit);
 link(ids.proposal, 'consultation', ids.visit);
@@ -277,19 +278,20 @@ export const fixtureSeedVersion = 'fe02-v1';
 
 // Extension FE-10: fictitious pre-paid request, independent of live FE-09 bookings.
 export const consultationFixtureEntities: DomainEntity[] = [
-  entity('consultation', ids.visitRequest, { displayCode: 'VL-V-106', farmerId: ids.budi, vetId: ids.vetZero, animalId: ids.cow, type: 'visit', status: 'requested', complaint: 'Pemeriksaan kondisi ternak di kandang.', startsAt: '2026-10-07T04:00:00.000Z', endsAt: '2026-10-07T05:00:00.000Z', feeSnapshot: 150000, commissionSnapshot: 15000, visitAddressSnapshot: 'Kandang Budi, Bogor' }, ids.budi),
+  entity('consultation', ids.visitRequest, { displayCode: 'VL-V-106', farmerId: ids.budi, farmId: ids.budiFarm, vetId: ids.vetZero, animalId: ids.cow, type: 'visit', status: 'requested', complaint: 'Pemeriksaan kondisi ternak di kandang.', startsAt: '2026-10-07T04:00:00.000Z', endsAt: '2026-10-07T05:00:00.000Z', feeSnapshot: 150000, commissionSnapshot: 15000, visitAddressSnapshot: 'Kandang Budi, Bogor' }, ids.budi, ids.budiFarm),
   entity('payment', ids.visitRequestPayment, { ownerId: ids.budi, payableType: 'consultation', payableId: ids.visitRequest, method: 'bank_transfer', amount: 150000, status: 'succeeded', operationKey: 'fixture-fe10-visit-request-paid' }, ids.budi),
 ];
 export const consultationFixtureRelations: EntityRelation[] = [
   { sourceId: ids.visitRequest, targetId: ids.budi, relationship: 'farmer' },
   { sourceId: ids.visitRequest, targetId: ids.vetZero, relationship: 'veterinarian' },
   { sourceId: ids.visitRequest, targetId: ids.cow, relationship: 'animal' },
+  { sourceId: ids.visitRequest, targetId: ids.budiFarm, relationship: 'farm' },
   { sourceId: ids.visitRequestPayment, targetId: ids.visitRequest, relationship: 'payable' },
 ];
 
 // Accepted, paid local conversation makes the shared farmer/vet chat reachable from the active personas.
 export const chatFixtureEntities: DomainEntity[] = [
-  entity('consultation', ids.chatFlow, { displayCode: 'VL-C-107', farmerId: ids.budi, vetId: ids.vetZero, animalId: ids.cow, type: 'chat', status: 'in_progress', complaint: 'Pemeriksaan kondisi umum ternak.', startsAt: '2026-10-05T02:00:00.000Z', endsAt: '2026-10-05T02:30:00.000Z', feeSnapshot: 75000, commissionSnapshot: 7500 }, ids.budi),
+  entity('consultation', ids.chatFlow, { displayCode: 'VL-C-107', farmerId: ids.budi, farmId: ids.budiFarm, vetId: ids.vetZero, animalId: ids.cow, type: 'chat', status: 'in_progress', complaint: 'Pemeriksaan kondisi umum ternak.', startsAt: '2026-10-05T02:00:00.000Z', endsAt: '2026-10-05T02:30:00.000Z', feeSnapshot: 75000, commissionSnapshot: 7500 }, ids.budi, ids.budiFarm),
   entity('payment', ids.chatFlowPayment, { ownerId: ids.budi, payableType: 'consultation', payableId: ids.chatFlow, method: 'bank_transfer', amount: 75000, status: 'succeeded', operationKey: 'fixture-fe12-chat-paid' }, ids.budi),
   entity('message', ids.chatFlowMessage, { consultationId: ids.chatFlow, senderId: ids.vetZero, clientMessageId: 'fixture-fe12-initial-message', text: 'Selamat pagi, Pak Budi. Bagaimana kondisi Mawar hari ini?', deliveryStatus: 'sent', sentAt: fixtureUpdate }, ids.vetZero, ids.chatFlow),
 ];
@@ -298,6 +300,7 @@ export const chatFixtureRelations: EntityRelation[] = [
   { sourceId: ids.chatFlow, targetId: ids.budi, relationship: 'farmer' },
   { sourceId: ids.chatFlow, targetId: ids.vetZero, relationship: 'veterinarian' },
   { sourceId: ids.chatFlow, targetId: ids.cow, relationship: 'animal' },
+  { sourceId: ids.chatFlow, targetId: ids.budiFarm, relationship: 'farm' },
   { sourceId: ids.chatFlowPayment, targetId: ids.chatFlow, relationship: 'payable' },
   { sourceId: ids.chatFlowMessage, targetId: ids.chatFlow, relationship: 'consultation' },
 ];

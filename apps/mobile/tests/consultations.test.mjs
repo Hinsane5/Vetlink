@@ -301,7 +301,7 @@ test('FE10 media requires submitted booking context and cannot leak foreign or u
     await s.repo.create({ ...media, id: 'own-photo' });
     await s.repo.create({ ...media, id: 'foreign-photo', ownerId: ids.sari });
     await s.repo.create({ ...media, id: 'unsafe-photo', payload: { ...media.payload, localUri: 'https://example.test/foto.jpg' } });
-    await s.repo.update({ ...r, version: 2, payload: { ...r.payload, attachmentIds: ['own-photo', 'foreign-photo', 'unsafe-photo'] } }, 1, [{ sourceId: r.id, targetId: ids.budi, relationship: 'farmer' }, { sourceId: r.id, targetId: ids.vetZero, relationship: 'veterinarian' }, { sourceId: r.id, targetId: ids.cow, relationship: 'animal' }, ...['own-photo', 'foreign-photo', 'unsafe-photo'].map(targetId => ({ sourceId: r.id, targetId, relationship: 'attachment' }))]);
+    await s.repo.update({ ...r, version: 2, payload: { ...r.payload, attachmentIds: ['own-photo', 'foreign-photo', 'unsafe-photo'] } }, 1, [{ sourceId: r.id, targetId: ids.budi, relationship: 'farmer' }, { sourceId: r.id, targetId: ids.vetZero, relationship: 'veterinarian' }, { sourceId: r.id, targetId: ids.cow, relationship: 'animal' }, { sourceId: r.id, targetId: ids.budiFarm, relationship: 'farm' }, ...['own-photo', 'foreign-photo', 'unsafe-photo'].map(targetId => ({ sourceId: r.id, targetId, relationship: 'attachment' }))]);
     assert.deepEqual((await s.service.detail(ids.vetZero, 'vet', r.id)).attachments.map(x => x.id), ['own-photo']);
     await change(s, 'attachment', 'own-photo', { uploadStatus: 'removed' });
     assert.deepEqual((await s.service.detail(ids.budi, 'farmer', r.id)).attachments, []);

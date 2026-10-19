@@ -3,6 +3,7 @@ import type { ChatAttachment, ChatConversation, ChatMessage, ChatSendInput, Mess
 import { validateChatInput } from '../domain/chat';
 import type { DomainEntity, EntityKind } from '../domain/entities';
 import { DomainError } from '../domain/errors';
+import { hasConsultationFarmContext } from './livestockAccess';
 import type { SelectedAsset } from '../domain/profiles';
 import type { BookingMedia, BookingRepository, BookingUnit } from './ports/BookingRepository';
 import type { IdFactory } from './ports/AuthRepository';
@@ -190,7 +191,7 @@ export class ChatService {
       unit.repository.findById('livestock', String(payload.animalId)),
       this.paid(unit, record),
     ]);
-    if (!farmers.some((item) => item.id === payload.farmerId) || !vets.some((item) => item.id === payload.vetId) || !animals.some((item) => item.id === payload.animalId) || animal?.ownerId !== payload.farmerId) throw new DomainError('FORBIDDEN', 'Hubungan akun dan pasien tidak valid.');
+    if (!farmers.some((item) => item.id === payload.farmerId) || !vets.some((item) => item.id === payload.vetId) || !animals.some((item) => item.id === payload.animalId) || !animal || !(await hasConsultationFarmContext(unit.repository, record, animal, String(payload.farmerId)))) throw new DomainError('FORBIDDEN', 'Hubungan akun, peternakan, dan pasien tidak valid.');
     if (!paid) throw new DomainError('INVALID_STATE', 'Chat tersedia setelah pembayaran layanan berhasil.');
     if (!['scheduled', 'in_progress', 'reschedule_pending', 'completed', 'cancelled'].includes(String(payload.status))) throw new DomainError('INVALID_STATE', 'Chat tersedia setelah dokter menerima layanan.');
     const vetProfile = await profiles.load(String(payload.vetId), 'vet');

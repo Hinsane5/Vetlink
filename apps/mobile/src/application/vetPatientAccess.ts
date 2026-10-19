@@ -1,5 +1,6 @@
 import type { DomainEntity } from '../domain/entities';
 import type { DomainRepository } from './ports/DomainRepository';
+import { hasConsultationFarmContext } from './livestockAccess';
 
 const patientConsultationStatuses = new Set([
   'requested',
@@ -48,7 +49,8 @@ export async function listVetPatientAssignments(
     if (!farmersOnConsultation.some((item) => item.id === farmerId && item.kind === 'user')) continue;
     if (!vetsOnConsultation.some((item) => item.id === vetId && item.kind === 'user')) continue;
     if (!farmersOnAnimal.some((item) => item.id === farmerId && item.kind === 'user')) continue;
-    if (!farmsOnAnimal.some((item) => item.kind === 'farm' && item.ownerId === farmerId)) continue;
+    if (!farmsOnAnimal.some((item) => item.kind === 'farm' && item.ownerId === farmerId)
+      || !(await hasConsultationFarmContext(repository, consultation, animal, farmerId))) continue;
     results.push({ consultation, animal, farmer });
   }
   return results;

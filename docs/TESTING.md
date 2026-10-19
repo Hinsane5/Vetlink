@@ -610,3 +610,18 @@ Backend BE-06 menambahkan tabel event callback dedupe, quote konsultasi dengan a
 | `npm run db:migrate` | **Lulus** pada PostgreSQL 17.4 lokal di port 55444; migrasi 000008 diterapkan setelah tujuh migrasi sebelumnya. |
 | `npm run api:smoke` | **Lulus**; quote owner-scoped, order fail-closed, role Dokter ditolak, pending, retry key sama, key lain saat pending ditolak, callback amount/reference mismatch ditolak, event sama idempoten, retry setelah gagal membuat attempt kedua pada Payment yang sama, callback sukses tersimpan dan outcome konflik ditolak. Smoke BE-03/04/07 juga lulus. |
 | Batas implementasi | Order belum didukung sampai BE-11; adapter aktif selalu `pending`. Callback internal diuji langsung sebagai metode service dan tidak dipasang sebagai webhook/OpenAPI route. Alur booking BE-05 belum mengubah konsultasi dari `awaiting_payment` setelah hasil sukses tersimpan. Tidak ada klaim refund atau transaksi uang nyata. PostgreSQL lokal dihentikan setelah uji. |
+
+## Hasil pemeriksaan FE-26 — 19 Oktober 2026
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm run check` dari `apps/mobile` | **Lulus**: `tsc --noEmit`, Expo lint, kompilasi tes TypeScript, dan 110 tes domain/repository (0 gagal). |
+| Multi-Farm SQLite tests | **Lulus**: Farm create/list/detail/update/select tersimpan; `displayCode` sama diterima di dua Farm berbeda; Peternak tetap dapat list/detail/edit ternak dari Farm lain miliknya; owner Farm/animal akun lain ditolak. |
+| Booking tests | **Lulus**: animal pada Farm kedua muncul di booking; farmId yang tidak cocok ditolak; submit menyimpan farmId, relasi Farm, dan snapshot alamat kunjungan Farm yang sama. |
+| Migrasi data lama | **Lulus**: tes mensimulasikan schema v2 yang berisi Farm/alamat/ternak/konsultasi tanpa farmId, memigrasikan ke v3, lalu memeriksa record count, field alamat, nama, tanggal dan foreign key tetap valid. Migration menambah relasi/konteks tanpa reset atau menghapus record. |
+| `git diff --check` | **Lulus** setelah perubahan FE-26 dan dokumentasi. |
+| Android SDK/ADB | **Tidak tersedia pada run ini**: `ANDROID_HOME` dan `ANDROID_SDK_ROOT` menunjuk `/Volumes/HowSSD/AndroidStudio/SDK/sdk` yang tidak ada; `command -v adb` tidak menemukan executable. Build Android/emulator tidak dijalankan. |
+| Interaksi dan visual Android | **Belum diuji**: create/edit/list/detail/select Farm, picker Farm saat membuat ternak, booking lintas Farm, owner lain, hardware Back, keyboard, scroll, 390 × 844, layar kecil, font besar, dan pixel-match. Tes service/repository tidak membuktikan sentuhan UI. |
+| Referensi desain | Node lokal terkait `12:1889`, `12:1980`, `12:2032`, dan `12:2280` dipetakan; screenshot booking lokal ditinjau. Inventory/cache tidak menunjukkan frame manajemen Farm khusus. Tidak ada pemanggilan Figma MCP sesuai scope task. |
+
+Farm management tetap **Sedang dikerjakan** sampai interaksi/visual Android dapat diuji. Tidak ada perubahan backend, provider, transaksi uang nyata, atau deployment.

@@ -11,6 +11,7 @@ import {
   type LivestockSnapshot,
 } from '../domain/livestock';
 import { livestockSpecies, type AttachmentSelection, type SelectedAsset } from '../domain/profiles';
+import { hasOwnedFarmContext } from './livestockAccess';
 import type { IdFactory } from './ports/AuthRepository';
 
 export class LivestockService {
@@ -27,27 +28,32 @@ export class LivestockService {
   }
 
   async list(userId: string, filters: LivestockFilters = {}): Promise<LivestockSnapshot[]> {
-    const { farm } = await this.loadFarmerContext(userId);
-    const records = await this.repository.listByRelated('livestock', farm.id, 'farm');
+    await this.loadFarmerProfile(userId);
+    const farms = await this.repository.listByOwner('farm', userId);
     const owned: LivestockSnapshot[] = [];
-    for (const record of records) {
-      if (record.kind !== 'livestock' || record.ownerId !== userId) continue;
-      if (!(await this.hasFarmerAndFarmRelations(record.id, userId, farm.id))) continue;
-      owned.push(await this.toSnapshot(record, farm.id));
+    for (const farm of farms) {
+      if (farm.kind !== 'farm' || farm.ownerId !== userId || !(await this.hasFarmOwnerRelation(farm.id, userId))) continue;
+      const records = await this.repository.listByRelated('livestock', farm.id, 'farm');
+      for (const record of records) {
+        if (record.kind !== 'livestock' || record.ownerId !== userId) continue;
+        if (!(await hasOwnedFarmContext(this.repository, userId, record))) continue;
+        owned.push(await this.toSnapshot(record, farm));
+      }
     }
     return selectLivestock(owned, filters);
   }
 
   async get(userId: string, livestockId: string): Promise<LivestockSnapshot> {
-    const { farm } = await this.loadFarmerContext(userId);
+    await this.loadFarmerProfile(userId);
     const animal = await this.repository.findById('livestock', livestockId);
     if (!animal) throw new DomainError('NOT_FOUND', 'Data ternak tidak ditemukan.');
-    await this.assertOwnedByFarm(animal, userId, farm.id);
-    return this.toSnapshot(animal, farm.id);
+    const farmId = stringValue(animal.payload.farmId) || animal.contextId || '';
+    const farm = await this.assertOwnedByFarm(animal, userId, farmId);
+    return this.toSnapshot(animal, farm);
   }
 
-  async create(userId: string, input: LivestockInput, photo?: AttachmentSelection): Promise<LivestockSnapshot> {
-    const { farm, supportedSpecies } = await this.loadFarmerContext(userId);
+  async create(userId: string, farmId: string, input: LivestockInput, photo?: AttachmentSelection): Promise<LivestockSnapshot> {
+    const { farm, supportedSpecies } = await this.loadFarmerContext(userId, farmId);
     const values = this.validateForFarm(input, supportedSpecies);
     await this.assertUniqueCode(farm.id, values.displayCode);
     const id = this.ids.create();
@@ -71,7 +77,7 @@ export class LivestockService {
       await this.removeStoredPhoto(materialized.storedUri);
       throw error;
     }
-    return snapshot(animal, farm.id, materialized.attachment ? photoSummary(materialized.attachment) : null);
+    return this.toSnapshot(animal, farm, materialized.attachment ? photoSummary(materialized.attachment) : null);
   }
 
   async update(
@@ -80,10 +86,13 @@ export class LivestockService {
     input: LivestockInput,
     photo?: AttachmentSelection | null,
   ): Promise<LivestockSnapshot> {
-    const { farm, supportedSpecies } = await this.loadFarmerContext(userId);
+    await this.loadFarmerProfile(userId);
     const animal = await this.repository.findById('livestock', livestockId);
     if (!animal) throw new DomainError('NOT_FOUND', 'Data ternak tidak ditemukan.');
-    const previous = await this.assertOwnedByFarm(animal, userId, farm.id);
+    const farmId = stringValue(animal.payload.farmId) || animal.contextId || '';
+    const farm = await this.assertOwnedByFarm(animal, userId, farmId);
+    const previous = await this.photoLinks(animal, userId);
+    const supportedSpecies = Array.isArray(farm.payload.species) ? farm.payload.species.filter((item): item is string => typeof item === 'string') : [];
     const values = this.validateForFarm(input, supportedSpecies);
     await this.assertUniqueCode(farm.id, values.displayCode, animal.id);
 
@@ -126,18 +135,24 @@ export class LivestockService {
       await this.removeStoredPhoto(storedUri);
       throw error;
     }
-    return snapshot(updated, farm.id, returnedPhoto);
+    return this.toSnapshot(updated, farm, returnedPhoto);
   }
 
-  private async loadFarmerContext(userId: string): Promise<{ farm: DomainEntity; supportedSpecies: readonly string[] }> {
+  private async loadFarmerProfile(userId: string) {
     const profile = await this.profiles.loadProfile(userId, 'farmer');
     if (profile.user.id !== userId || profile.profile.kind !== 'farmerProfile' || profile.profile.ownerId !== userId) {
       throw new DomainError('FORBIDDEN', 'Fitur ternak hanya tersedia untuk profil Peternak milik akun ini.');
     }
-    const farm = profile.farm;
+    return profile;
+  }
+
+  private async loadFarmerContext(userId: string, farmId: string): Promise<{ farm: DomainEntity; supportedSpecies: readonly string[] }> {
+    await this.loadFarmerProfile(userId);
+    const farm = await this.repository.findById('farm', farmId);
     if (!farm || farm.kind !== 'farm' || farm.ownerId !== userId) {
-      throw new DomainError('INVALID_STATE', 'Lengkapi profil peternakan sebelum menambahkan ternak.');
+      throw new DomainError('FORBIDDEN', 'Pilih peternakan milik akun ini sebelum menambahkan ternak.');
     }
+    if (!(await this.hasFarmOwnerRelation(farm.id, userId))) throw new DomainError('FORBIDDEN', 'Relasi kepemilikan peternakan tidak valid.');
     const supportedSpecies = Array.isArray(farm.payload.species)
       ? farm.payload.species.filter((value): value is string => typeof value === 'string' && livestockSpecies.includes(value as (typeof livestockSpecies)[number]) )
       : [];
@@ -161,30 +176,41 @@ export class LivestockService {
     }
   }
 
-  private async assertOwnedByFarm(animal: DomainEntity, userId: string, farmId: string): Promise<{ photos: DomainEntity[] }> {
+  private async assertOwnedByFarm(animal: DomainEntity, userId: string, farmId: string): Promise<DomainEntity> {
     if (animal.kind !== 'livestock' || animal.ownerId !== userId) {
       throw new DomainError('FORBIDDEN', 'Ternak ini bukan milik akun Peternak yang sedang aktif.');
     }
-    if (!(await this.hasFarmerAndFarmRelations(animal.id, userId, farmId))) {
+    const farm = await this.repository.findById('farm', farmId);
+    if (!farm || farm.kind !== 'farm' || farm.ownerId !== userId || !(await this.hasFarmOwnerRelation(farm.id, userId))) {
+      throw new DomainError('FORBIDDEN', 'Peternakan ternak ini bukan milik akun Peternak yang sedang aktif.');
+    }
+    if (!(await hasOwnedFarmContext(this.repository, userId, animal))) {
       throw new DomainError('FORBIDDEN', 'Ternak ini tidak terhubung ke peternakan milik akun tersebut.');
     }
+    return farm;
+  }
+
+  private async photoLinks(animal: DomainEntity, userId: string): Promise<{ photos: DomainEntity[] }> {
     const linkedPhotos = await this.repository.listRelated('livestock', animal.id, 'photo');
     return { photos: linkedPhotos.filter((item) => isLivestockPhoto(item, userId, animal.id)) };
   }
 
-  private async hasFarmerAndFarmRelations(animalId: string, userId: string, farmId: string): Promise<boolean> {
-    const [farmLinks, farmerLinks] = await Promise.all([
-      this.repository.listRelated('livestock', animalId, 'farm'),
-      this.repository.listRelated('livestock', animalId, 'farmer'),
-    ]);
-    return farmLinks.some((item) => item.id === farmId && item.ownerId === userId)
-      && farmerLinks.some((item) => item.id === userId && item.kind === 'user');
+  private async hasFarmOwnerRelation(farmId: string, userId: string): Promise<boolean> {
+    const owners = await this.repository.listRelated('farm', farmId, 'owner');
+    return owners.some((item) => item.id === userId && item.kind === 'user' && item.ownerId === null);
   }
 
-  private async toSnapshot(animal: DomainEntity, farmId: string): Promise<LivestockSnapshot> {
+  private async toSnapshot(animal: DomainEntity, farm: DomainEntity, photoOverride?: LivestockPhoto | null): Promise<LivestockSnapshot> {
     const linked = await this.repository.listRelated('livestock', animal.id, 'photo');
     const photo = linked.find((item) => isLivestockPhoto(item, animal.ownerId ?? '', animal.id));
-    return snapshot(animal, farmId, photo ? photoSummary(photo) : null);
+    const addressId = typeof farm.payload.visitAddressId === 'string' ? farm.payload.visitAddressId : null;
+    const address = addressId ? await this.repository.findById('address', addressId) : null;
+    const addressLinks = addressId ? await this.repository.listRelated('farm', farm.id, 'visitAddress') : [];
+    const farmVisitAddress = address && address.kind === 'address' && address.ownerId === animal.ownerId && address.contextId === farm.id
+      && addressLinks.some((item) => item.kind === 'address' && item.id === addressId)
+      ? [address.payload.address, address.payload.city, address.payload.province, address.payload.postalCode].filter((part) => typeof part === 'string' && part).join(', ')
+      : '';
+    return snapshot(animal, farm.id, photoOverride === undefined ? (photo ? photoSummary(photo) : null) : photoOverride, String(farm.payload.name ?? ''), farmVisitAddress);
   }
 
   private async materializePhoto(
@@ -239,11 +265,13 @@ function reviseEntity(current: DomainEntity, payload: Record<string, unknown>, t
   return { ...current, contextId, payload, updatedAt: timestamp, version: current.version + 1 };
 }
 
-function snapshot(animal: DomainEntity, farmId: string, photo: LivestockPhoto | null): LivestockSnapshot {
+function snapshot(animal: DomainEntity, farmId: string, photo: LivestockPhoto | null, farmName: string, farmVisitAddress: string): LivestockSnapshot {
   const payload = animal.payload;
   return {
     id: animal.id,
     farmId,
+    farmName,
+    farmVisitAddress,
     displayCode: String(payload.displayCode ?? ''),
     name: String(payload.name ?? ''),
     species: payload.species as LivestockInput['species'],
@@ -256,6 +284,8 @@ function snapshot(animal: DomainEntity, farmId: string, photo: LivestockPhoto | 
     updatedAt: animal.updatedAt,
   };
 }
+
+function stringValue(value: unknown): string { return typeof value === 'string' ? value : ''; }
 
 function isLivestockPhoto(entity: DomainEntity, userId: string, livestockId: string): boolean {
   return entity.kind === 'attachment'

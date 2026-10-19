@@ -25,6 +25,8 @@ export interface LivestockPhoto {
 export interface LivestockSnapshot extends LivestockInput {
   id: string;
   farmId: string;
+  farmName: string;
+  farmVisitAddress: string;
   photo: LivestockPhoto | null;
   createdAt: string;
   updatedAt: string;

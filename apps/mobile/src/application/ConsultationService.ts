@@ -4,6 +4,7 @@ import type { IdFactory } from './ports/AuthRepository';
 import type { AccountRole } from '../domain/auth';
 import type { DomainEntity, EntityKind } from '../domain/entities';
 import { DomainError } from '../domain/errors';
+import { hasConsultationFarmContext } from './livestockAccess';
 import { assertVisitTransition, type VisitStage } from '../domain/policies';
 import { projectDirectorySlots } from '../domain/directory';
 import type { ConsultationCommand, ConsultationDetail, ProposalInput, VisitAction, VisitCommand } from '../domain/consultations';
@@ -223,7 +224,7 @@ export class ConsultationService {
     const [farmers, vets, animals, animal] = await Promise.all([
       unit.repository.listRelated('consultation', id, 'farmer'), unit.repository.listRelated('consultation', id, 'veterinarian'), unit.repository.listRelated('consultation', id, 'animal'), unit.repository.findById('livestock', String(payload.animalId)),
     ]);
-    if (!farmers.some((item) => item.id === payload.farmerId) || !vets.some((item) => item.id === payload.vetId) || !animals.some((item) => item.id === payload.animalId) || animal?.ownerId !== payload.farmerId) throw new DomainError('FORBIDDEN', 'Hubungan akun dan pasien tidak valid.');
+    if (!farmers.some((item) => item.id === payload.farmerId) || !vets.some((item) => item.id === payload.vetId) || !animals.some((item) => item.id === payload.animalId) || !animal || !(await hasConsultationFarmContext(unit.repository, record, animal, String(payload.farmerId)))) throw new DomainError('FORBIDDEN', 'Hubungan akun, peternakan, dan pasien tidak valid.');
     return record;
   }
   private profile(unit: BookingUnit, userId: string, role: AccountRole) { return new ProfileService(unit.profiles, this.media, this.ids, this.now).load(userId, role); }
