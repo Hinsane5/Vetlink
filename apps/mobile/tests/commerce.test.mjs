@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { CommerceService } from '../.test-build/src/application/CommerceService.js';
 import { PaymentService } from '../.test-build/src/application/PaymentService.js';
 import { LocalShippingQuoteAdapter } from '../.test-build/src/data/local/commerce/LocalShippingQuoteAdapter.js';
+import { LocalShipmentStatusAdapter } from '../.test-build/src/data/local/commerce/LocalShipmentStatusAdapter.js';
 import { SqliteCommerceRepository } from '../.test-build/src/data/local/sqlite/SqliteCommerceRepository.js';
 import { SqliteDomainRepository } from '../.test-build/src/data/local/sqlite/SqliteDomainRepository.js';
 import { SqliteProfileRepository } from '../.test-build/src/data/local/sqlite/SqliteProfileRepository.js';
@@ -21,8 +22,46 @@ async function setup() {
   let nextId = 1;
   const idFactory = { create: () => `commerce-test-${nextId++}` };
   const now = () => new Date('2026-10-13T00:00:00.000Z');
-  return { db, repository, storage, idFactory, service: new CommerceService(storage, profiles, new LocalShippingQuoteAdapter(), idFactory, now) };
+  return { db, repository, storage, idFactory, service: new CommerceService(storage, profiles, new LocalShippingQuoteAdapter(), idFactory, now, new LocalShipmentStatusAdapter(storage)) };
 }
+
+test('FE20 order list is owner scoped, uses item price snapshots and shipment adapter timeline', async () => {
+  const s = await setup();
+  try {
+    const orders = await s.service.listOrders(ids.budi, 'farmer');
+    const shipped = orders.find((order) => order.id === ids.order);
+    const delivered = orders.find((order) => order.id === ids.deliveredOrder);
+    assert.equal(shipped.status, 'shipped');
+    assert.equal(shipped.paymentStatus, 'succeeded');
+    assert.equal(shipped.totalAmount, 99000);
+    assert.deepEqual(shipped.items.map((item) => [item.nameSnapshot, item.unitPrice, item.quantity, item.lineTotal]), [['Paket perawatan ternak fiktif', 45000, 2, 90000]]);
+    assert.equal(shipped.trackingCode, 'TRK-FIKTIF-201');
+    assert.equal(shipped.shipmentEvents[0].status, 'shipped');
+    assert.equal(delivered.status, 'delivered');
+    await assert.rejects(s.service.getOrder(ids.sari, 'farmer', ids.order), { code: 'NOT_FOUND' });
+    await assert.rejects(s.service.listOrders(ids.vetZero, 'vet'), { code: 'FORBIDDEN' });
+  } finally { s.db.close(); }
+});
+
+test('FE20 failed shipment remains a paid order and never appears delivered', async () => {
+  const s = await setup();
+  try {
+    const quote = await s.service.createQuote(ids.budi, 'farmer', { address: validAddress() });
+    const order = await s.service.submitOrder(ids.budi, 'farmer', quote.id);
+    const payments = new PaymentService(s.storage, { submit: async () => ({ outcome: 'succeeded' }) }, s.idFactory);
+    const payment = await payments.submit(ids.budi, 'farmer', 'order', order.id, 'bank_transfer', 'fe20-paid-order');
+    const stamp = '2026-10-13T00:00:00.000Z';
+    await s.repository.create({ id: 'shipment-failed-fe20', kind: 'shipment', ownerId: ids.budi, contextId: order.id, createdAt: stamp, updatedAt: stamp, version: 1, payload: { orderId: order.id, status: 'failed', trackingCode: 'TRK-FIKTIF-FAIL', events: [{ status: 'failed', time: stamp, description: 'Pengiriman tertunda.' }] } }, [{ sourceId: 'shipment-failed-fe20', targetId: order.id, relationship: 'order' }]);
+    const detail = await s.service.getOrder(ids.budi, 'farmer', order.id);
+    assert.equal(payment.status, 'succeeded');
+    assert.equal(detail.status, 'paid');
+    assert.equal(detail.shipmentEvents[0].status, 'failed');
+    assert.notEqual(detail.status, 'delivered');
+    const stored = await s.repository.findById('order', order.id);
+    await s.repository.update({ ...stored, version: stored.version + 1, payload: { ...stored.payload, status: 'delivered' } }, stored.version);
+    assert.equal((await s.service.getOrder(ids.budi, 'farmer', order.id)).status, 'paid');
+  } finally { s.db.close(); }
+});
 
 test('FE19 selecting a method is inert; persisted adapter outcome is idempotent and order remains separate', async () => {
   const s = await setup();

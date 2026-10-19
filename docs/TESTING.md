@@ -566,3 +566,18 @@ Kontrak checkout diselaraskan dengan koordinator via Orca tanpa mengubah `API_CO
 PaymentPanel dapat dibuka dari detail konsultasi `awaiting_payment` dan setelah submit order, dengan metode transfer bank/dompet digital dan riwayat owner scoped. Adapter lokal yang dikonfigurasi saat ini mengembalikan pending; provider, callback konfirmasi, dan outcome sukses/gagal lokal tetap belum tersedia. Tidak ada uang nyata yang dipindahkan. `npm run android` dicoba dan berhenti setelah prebuild karena `ANDROID_HOME` menunjuk `/Volumes/HowSSD/AndroidStudio/SDK/sdk` yang tidak ada serta `adb` tidak ditemukan (`spawn adb ENOENT`). QA interaksi/tampilan 390 × 844, layar kecil, font besar, keyboard/back/scroll tertunda; screenshot lokal tidak memiliki layar pembayaran dan Figma MCP tidak dipanggil sesuai instruksi.
 
 Review koordinator menolak pengajuan kedua untuk payable yang sudah memiliki pembayaran `pending`, termasuk pemeriksaan ulang di transaksi SQLite, dan memperbaiki Back Android dari layar pembayaran pesanan agar kembali ke detail order. `npm run check` dijalankan ulang dan lulus (typecheck, lint, 105 tes; 0 gagal). QA perangkat dan sumber outcome tetap terbuka.
+
+## Hasil pemeriksaan FE-20 — 19 Oktober 2026
+
+`npm ci` dari `apps/mobile` berhasil memasang dependency. Pemeriksaan FE-20:
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm run check` dari `apps/mobile` | **Lulus**: typecheck, Expo lint, dan 107 tes domain/repository (0 gagal). Dua tes FE-20 memeriksa snapshot item/harga/alamat, payment sukses tertaut, daftar dan detail owner-scoped, role Dokter ditolak, status/timeline dari adapter SQLite, dan shipment `failed` yang tidak ditampilkan sebagai `delivered`. |
+| `npm run android` dari `apps/mobile` | **Terhalang sebelum build/install native**: Expo prebuild selesai, tetapi `ANDROID_HOME` menunjuk path SDK yang tidak ada (`/Volumes/HowSSD/AndroidStudio/SDK/sdk`) dan `adb` tidak ditemukan (`spawn adb ENOENT`). Tidak ada APK baru atau interaksi Android. |
+| Referensi lokal | Inventory memetakan Orders `12:2925`, Orders Done `12:2963`, Order Detail `12:2997`, Tracking `12:3032`; PNG layar tidak tersedia pada cache. Tidak ada panggilan Figma MCP. |
+| QA interaksi/visual | **Belum diuji**: tab, detail, payment entry, Back Android, viewport 390 × 844, ukuran kecil, font besar, scrolling, serta pixel-match. |
+
+FE-20 tetap **Sedang dikerjakan** sampai QA perangkat/visual tersedia. Payment adapter aktif masih mengembalikan `pending`; layar checkout baru karena itu tetap menunggu pembayaran. GET order API tetap usulan kontrak berikutnya dan lane backend tidak diubah.
+
+Review koordinator memperketat proyeksi order: status pengiriman hanya mengikuti record shipment tersimpan; jika shipment gagal atau tidak ada, order yang sudah dibayar tetap ditampilkan `paid`, sekalipun status order tersimpan lebih maju. Tes regresi mencakup status order `delivered` yang bertentangan dengan shipment `failed`. `npm run check` dijalankan ulang dan lulus: typecheck, lint, 107 tes, 0 gagal.

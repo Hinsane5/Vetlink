@@ -25,6 +25,7 @@ import { CommerceService } from '../../../application/CommerceService';
 import { PaymentService, type PaymentAdapter } from '../../../application/PaymentService';
 import { ExpoAttachmentMedia } from '../ExpoAttachmentMedia';
 import { LocalShippingQuoteAdapter } from '../commerce/LocalShippingQuoteAdapter';
+import { LocalShipmentStatusAdapter } from '../commerce/LocalShipmentStatusAdapter';
 import { SqliteCommerceRepository } from './SqliteCommerceRepository';
 import { migrateDatabase } from './migrations';
 import { readFixtureSeedVersion, seedFixturesIfEmpty, type SeedResult } from './seed';
@@ -104,6 +105,8 @@ async function createLocalStore(): Promise<LocalStore> {
     profileRepository,
     new LocalShippingQuoteAdapter(),
     new ExpoIdFactory(),
+    () => new Date(),
+    new LocalShipmentStatusAdapter(new SqliteCommerceRepository(database)),
   );
   const payments = new PaymentService(new SqliteCommerceRepository(database), { submit: async () => ({ outcome: 'pending', message: 'Instruksi pembayaran lokal tersimpan dan menunggu konfirmasi.' }) } satisfies PaymentAdapter, new ExpoIdFactory());
   const bookingRepository = new SqliteBookingRepository(database);

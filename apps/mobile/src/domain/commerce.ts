@@ -64,13 +64,22 @@ export interface OrderItemSnapshot extends CartLineSnapshot {
 export interface OrderSnapshot {
   id: string;
   displayCode: string;
-  status: 'awaiting_payment';
-  paymentId: null;
+  status: 'awaiting_payment' | 'paid' | 'processing' | 'shipped' | 'delivered';
+  paymentId: string | null;
   address: CheckoutAddressSnapshot;
   items: OrderItemSnapshot[];
   subtotal: number;
   shippingAmount: number;
   totalAmount: number;
+  paymentStatus: 'pending' | 'succeeded' | 'failed' | 'expired' | null;
+  trackingCode: string | null;
+  shipmentEvents: ShipmentEventSnapshot[];
+}
+
+export interface ShipmentEventSnapshot {
+  status: string;
+  time: string;
+  description: string;
 }
 
 export function validateCheckoutAddress(input: Partial<CheckoutAddressInput>): CheckoutAddressInput {

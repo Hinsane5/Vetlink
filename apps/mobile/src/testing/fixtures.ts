@@ -58,6 +58,11 @@ export const fixtureIds = {
   notification: id(51),
   message: id(52),
   emptyCartItem: id(53),
+  orderItem: id(100),
+  deliveredOrder: id(101),
+  deliveredOrderItem: id(102),
+  deliveredShipment: id(103),
+  deliveredOrderPayment: id(104),
   vetZero: id(54),
   yudaProfile: id(55),
   preferences: id(57),
@@ -148,15 +153,20 @@ export const fixtureEntities: DomainEntity[] = [
   entity('cart', ids.budiCart, { farmerId: ids.budi, itemCount: 1 }, ids.budi),
   entity('cart', ids.sariCart, { farmerId: ids.sari, itemCount: 0 }, ids.sari),
   entity('cartItem', ids.cartItem, { cartId: ids.budiCart, productId: ids.product, quantity: 2 }, ids.budi),
-  entity('order', ids.order, { displayCode: 'VL-O-201', farmerId: ids.budi, status: 'shipped', totalSnapshot: 90000, addressSnapshot: 'Kandang Budi, Bogor' }, ids.budi),
+  entity('order', ids.order, { displayCode: 'VL-O-201', farmerId: ids.budi, status: 'shipped', paymentId: ids.orderPaymentSucceeded, subtotalSnapshot: 90000, shippingSnapshot: 9000, totalSnapshot: 99000, addressSnapshot: { id: ids.budiAddress, label: 'Kandang', recipient: 'Budi Santoso', phone: '081234567890', address: 'Jalan Ternak Fiktif Nomor 1', city: 'Bogor', province: 'Jawa Barat', postalCode: '16111' } }, ids.budi),
+  entity('orderItem', ids.orderItem, { orderId: ids.order, productId: ids.product, cartItemId: ids.cartItem, nameSnapshot: 'Paket perawatan ternak fiktif', categorySnapshot: 'care', unitPrice: 45000, quantity: 2, lineTotal: 90000 }, ids.budi),
   entity('shipment', ids.shipment, { orderId: ids.order, status: 'shipped', trackingCode: 'TRK-FIKTIF-201', events: [{ status: 'shipped', time: fixtureDate, description: 'Paket diserahkan ke kurir fiktif.' }] }, ids.budi),
+  entity('order', ids.deliveredOrder, { displayCode: 'VL-O-202', farmerId: ids.budi, status: 'delivered', paymentId: ids.deliveredOrderPayment, subtotalSnapshot: 45000, shippingSnapshot: 9000, totalSnapshot: 54000, addressSnapshot: { id: ids.budiAddress, label: 'Kandang', recipient: 'Budi Santoso', phone: '081234567890', address: 'Jalan Ternak Fiktif Nomor 1', city: 'Bogor', province: 'Jawa Barat', postalCode: '16111' } }, ids.budi),
+  entity('orderItem', ids.deliveredOrderItem, { orderId: ids.deliveredOrder, productId: ids.product, cartItemId: ids.cartItem, nameSnapshot: 'Paket perawatan ternak fiktif', categorySnapshot: 'care', unitPrice: 45000, quantity: 1, lineTotal: 45000 }, ids.budi),
+  entity('shipment', ids.deliveredShipment, { orderId: ids.deliveredOrder, status: 'delivered', trackingCode: 'TRK-FIKTIF-202', events: [{ status: 'delivered', time: fixtureUpdate, description: 'Pesanan diterima di alamat tujuan fiktif.' }, { status: 'shipped', time: fixtureDate, description: 'Paket diserahkan ke kurir fiktif.' }] }, ids.budi),
   entity('payment', ids.paymentSucceeded, { ownerId: ids.sari, payableType: 'consultation', payableId: ids.completed, method: 'bank_transfer', amount: 120000, status: 'succeeded', operationKey: 'fixture-consultation-paid' }, ids.sari),
   entity('payment', ids.paymentSucceededPending, { ownerId: ids.budi, payableType: 'consultation', payableId: ids.completedPending, method: 'bank_transfer', amount: 90000, status: 'succeeded', operationKey: 'fixture-consultation-paid-pending-earning' }, ids.budi),
   entity('payment', ids.requestPaymentSucceeded, { ownerId: ids.budi, payableType: 'consultation', payableId: ids.request, method: 'bank_transfer', amount: 75000, status: 'succeeded', operationKey: 'fixture-consultation-requested-paid' }, ids.budi),
   entity('payment', ids.chatPaymentSucceeded, { ownerId: ids.sari, payableType: 'consultation', payableId: ids.chat, method: 'bank_transfer', amount: 75000, status: 'succeeded', operationKey: 'fixture-consultation-chat-paid' }, ids.sari),
   entity('payment', ids.visitPaymentSucceeded, { ownerId: ids.budi, payableType: 'consultation', payableId: ids.visit, method: 'bank_transfer', amount: 150000, status: 'succeeded', operationKey: 'fixture-consultation-visit-paid' }, ids.budi),
   entity('payment', ids.paymentPending, { ownerId: ids.sari, payableType: 'consultation', payableId: ids.awaitingPayment, method: 'bank_transfer', amount: 75000, status: 'pending', operationKey: 'fixture-consultation-pending' }, ids.sari),
-  entity('payment', ids.orderPaymentSucceeded, { ownerId: ids.budi, payableType: 'order', payableId: ids.order, method: 'wallet', amount: 90000, status: 'succeeded', operationKey: 'fixture-order-paid' }, ids.budi),
+  entity('payment', ids.orderPaymentSucceeded, { ownerId: ids.budi, payableType: 'order', payableId: ids.order, method: 'e_wallet', amount: 99000, status: 'succeeded', operationKey: 'fixture-order-paid' }, ids.budi),
+  entity('payment', ids.deliveredOrderPayment, { ownerId: ids.budi, payableType: 'order', payableId: ids.deliveredOrder, method: 'bank_transfer', amount: 54000, status: 'succeeded', operationKey: 'fixture-order-delivered-paid' }, ids.budi),
   entity('paymentAttempt', ids.paymentFailed, { paymentId: ids.orderPaymentSucceeded, method: 'wallet', amount: 90000, status: 'failed', operationKey: 'fixture-order-failed', attemptedAt: fixtureDate }, ids.budi),
   entity('earningTransaction', ids.earningAvailable, { vetId: ids.vetZero, consultationId: ids.completed, gross: 120000, commission: 12000, net: 108000, status: 'available', earnedAt: fixtureUpdate }, ids.vetZero),
   entity('earningTransaction', ids.earningPending, { vetId: ids.vetZero, consultationId: ids.completedPending, gross: 90000, commission: 9000, net: 81000, status: 'pending', earnedAt: fixtureUpdate }, ids.vetZero),
@@ -235,6 +245,11 @@ link(ids.reminderDone, 'animal', ids.goat);
 link(ids.cartItem, 'cart', ids.budiCart);
 link(ids.cartItem, 'product', ids.product);
 link(ids.shipment, 'order', ids.order);
+link(ids.orderItem, 'order', ids.order);
+link(ids.orderItem, 'product', ids.product);
+link(ids.deliveredShipment, 'order', ids.deliveredOrder);
+link(ids.deliveredOrderItem, 'order', ids.deliveredOrder);
+link(ids.deliveredOrderItem, 'product', ids.product);
 link(ids.paymentSucceeded, 'payable', ids.completed);
 link(ids.paymentSucceededPending, 'payable', ids.completedPending);
 link(ids.requestPaymentSucceeded, 'payable', ids.request);
@@ -242,6 +257,7 @@ link(ids.chatPaymentSucceeded, 'payable', ids.chat);
 link(ids.visitPaymentSucceeded, 'payable', ids.visit);
 link(ids.paymentPending, 'payable', ids.awaitingPayment);
 link(ids.orderPaymentSucceeded, 'payable', ids.order);
+link(ids.deliveredOrderPayment, 'payable', ids.deliveredOrder);
 link(ids.paymentFailed, 'payment', ids.orderPaymentSucceeded);
 link(ids.earningAvailable, 'consultation', ids.completed);
 link(ids.earningPending, 'consultation', ids.completedPending);
