@@ -1,6 +1,6 @@
 # Kontrak integrasi backend v1
 
-Status per 20 Oktober 2026: OpenAPI executable memuat route BE-00–08 dan BE-10: health/auth, profil/verifikasi, ternak/pasien/riwayat, vet discovery/availability, booking/request/proposal/visit/completion, payment quote/create, chat/media, note/recommendation, dan pencarian/detail katalog aktif. BE-09 dan domain setelah BE-10 tetap kontrak target tiket berikutnya. Aplikasi mobile belum memakai backend jaringan.
+Status per 20 Oktober 2026: OpenAPI executable memuat route BE-00–08 dan BE-10/11: health/auth, profil/verifikasi, ternak/pasien/riwayat, vet discovery/availability, booking/request/proposal/visit/completion, payment quote/create, chat/media, note/recommendation, katalog aktif, cart, checkout quote, order, dan snapshot. BE-09 dan domain setelah BE-11 tetap kontrak target tiket berikutnya. Aplikasi mobile belum memakai backend jaringan.
 
 ## Konvensi
 
@@ -10,7 +10,7 @@ Mutasi concurrency-sensitive menerima `expectedVersion`. Mutasi pembayaran, orde
 
 Gunakan action endpoint untuk transisi yang membutuhkan syarat; jangan menyediakan PATCH umum yang membolehkan client mengatur `verified`, `completed`, `paid`, `balance`, atau `finalizedAt`.
 
-## OpenAPI executable BE-00–08 dan BE-10
+## OpenAPI executable BE-00–08 dan BE-10/11
 
 NestJS melayani Swagger UI di `/docs` dan JSON di `/openapi.json`. Endpoint runtime yang tersedia:
 
@@ -27,6 +27,13 @@ NestJS melayani Swagger UI di `/docs` dan JSON di `/openapi.json`. Endpoint runt
 | `GET /v1/me` | Bearer access token | Akun aktif dan memberships | 401/403 |
 | `GET /v1/products` | Filter opsional `name`, `category`, `species`, `minPrice`, `maxPrice`, `cursor`, `limit` | 200 `ProductPageResponseDto` berisi `items: ProductResponseDto[]`, `nextCursor`, `hasMore` | 400/401/403/503 `ApiErrorResponseDto` |
 | `GET /v1/products/{id}` | ID produk UUID | 200 `ProductResponseDto` dan `unitPriceIdr` authoritative | 401/403/404/503 `ApiErrorResponseDto` |
+| `GET /v1/me/cart` | Tanpa body; membuat cart kosong milik sesi bila belum ada | 200 `CartResponseDto`, harga aktif dibaca dari katalog | 401/403/503 `ApiErrorResponseDto` |
+| `PUT /v1/me/cart/items/{productId}` | `{expectedVersion,quantity}`; jumlah bilangan bulat positif | 200 `CartResponseDto`; jumlah ditetapkan dan subtotal dihitung server | 400/401/403/404/409/422/503 `ApiErrorResponseDto` |
+| `DELETE /v1/me/cart/items/{productId}?expectedVersion=` | Versi cart terkini | 200 `CartResponseDto`; menghapus item yang ada | 400/401/403/409/503 `ApiErrorResponseDto` |
+| `POST /v1/checkout-quotes` | `{addressId}` alamat pengiriman tersimpan | 201 `CheckoutQuoteResponseDto` dengan harga/item/alamat/ongkir/total snapshot terkini | 400/401/403/404/422/503 `ApiErrorResponseDto` |
+| `POST /v1/orders` | `{quoteId}`; header `Idempotency-Key` | 201 `{operationId,replayed,order}`; order tersimpan dan cart dikosongkan atomik | 400/401/403/404/409/422/503 `ApiErrorResponseDto` |
+| `GET /v1/orders` | `cursor?`, `limit?` 1–100 (default 20) | 200 `{items,nextCursor,hasMore}` order milik Peternak | 400/401/403/503 `ApiErrorResponseDto` |
+| `GET /v1/orders/{id}` | ID order UUID | 200 `OrderResponseDto` dengan item, alamat, total dan harga snapshot | 401/403/404/503 `ApiErrorResponseDto` |
 | `POST /v1/attachments/uploads` | Multipart `consultationId`, `file`; `Idempotency-Key` | 201 `Attachment` status `uploaded` | 400/401/403/404/409/413/422/503 |
 | `POST /v1/attachments/{id}/commit` | ID lampiran yang diunggah actor | 200 `Attachment` status `committed` | 401/403/404/409/422/503 |
 | `GET /v1/attachments/{id}` | ID lampiran | 200 metadata dan URL content privat | 401/403/404 |
@@ -75,9 +82,9 @@ BE-01 menambahkan bearer scheme `bearer` dan operation untuk register, login, lo
 
 ### BE-06 payment slice
 
-`GET /v1/payment-quotes/{payableType}/{payableId}` dan `POST /v1/payments` memerlukan sesi Peternak. Jenis payable hanya `consultation` atau `order`; ID konsultasi harus dimiliki Peternak dan masih `awaiting_payment`, sedangkan order ditolak sebagai not found sampai schema/use case BE-11 tersedia. Quote mengambil `fee_snapshot_idr` dari konsultasi; body create tidak menerima amount. POST memakai `Idempotency-Key` 8–128 karakter, menyimpan satu Payment per payable dan PaymentAttempt sebelum memanggil `PaymentService`, lalu mengembalikan status tersimpan (`pending/succeeded/failed`) dan referensi lokal tanpa credential/provider. Key yang sama tidak membuat attempt baru; setelah gagal, key baru membuat attempt pada Payment yang sama dengan metode dan nominal yang sama. Adapter lokal saat ini hanya membuat hasil `pending`; pending tidak mengubah status konsultasi/order.
+`GET /v1/payment-quotes/{payableType}/{payableId}` dan `POST /v1/payments` memerlukan sesi Peternak. Jenis payable hanya `consultation` atau `order`; konsultasi harus dimiliki Peternak dan masih `awaiting_payment`, sedangkan order harus dimiliki Peternak dan menunggu pembayaran. Quote konsultasi mengambil `fee_snapshot_idr`; quote order mengambil `orders.total_snapshot_idr`. Body create tidak menerima amount. POST memakai `Idempotency-Key` 8–128 karakter, menyimpan satu Payment per payable dan PaymentAttempt sebelum memanggil `PaymentService`, lalu mengembalikan status tersimpan (`pending/succeeded/failed`) dan referensi lokal tanpa credential/provider. Key yang sama tidak membuat attempt baru; setelah gagal, key baru membuat attempt pada Payment yang sama dengan metode dan nominal yang sama. Adapter lokal saat ini hanya membuat hasil `pending`; pending tidak mengubah status konsultasi/order. Hasil order `succeeded` yang sudah tersimpan mengubah status order menjadi `paid` dalam transaksi yang sama; callback lokal tetap internal dan bukan transaksi uang nyata.
 
-Callback service internal mengunci Payment/Attempt, memeriksa amount integer, referensi adapter dan event ID unik; event yang sama dengan hasil sama idempotent, event conflict ditolak, dan status final tidak dapat ditimpa. Callback bukan route publik/customer dan tidak mengklaim refund; kebutuhan refund tetap `refund_needed`, bukan `refunded`. Route quote/create sudah executable; callback internal belum menjadi route atau bagian OpenAPI. Perubahan status konsultasi setelah pembayaran sukses termasuk alur booking BE-05.
+Callback service internal mengunci Payment/Attempt, memeriksa amount integer, referensi adapter dan event ID unik; event yang sama dengan hasil sama idempotent, event conflict ditolak, dan status final tidak dapat ditimpa. Callback bukan route publik/customer dan tidak mengklaim refund; kebutuhan refund tetap `refund_needed`, bukan `refunded`. Route quote/create sudah executable; callback internal belum menjadi route atau bagian OpenAPI. Perubahan status konsultasi setelah pembayaran sukses termasuk alur booking BE-05; order berpindah ke `paid` hanya ketika hasil adapter sukses tersimpan.
 
 Untuk menjalankan server lokal, migrasi, seed, dan smoke check, ikuti [panduan backend](../apps/api/README.md).
 
@@ -185,6 +192,16 @@ Recommendation PUT mengganti item sesuai payload (termasuk daftar kosong untuk d
 
 Saat Dokter menulis Recommendation, productId opsional harus menunjuk produk aktif. Produk dibaca dengan row lock `FOR SHARE` dalam transaksi penyimpanan yang sama; jika produk hilang/nonaktif, seluruh edit ditolak. Untuk item tertaut, `titleSnapshot` diturunkan dari nama katalog server, bukan teks judul client. Rekomendasi terkirim tetap immutable dan dapat dibaca melalui snapshot meski produk kemudian nonaktif atau harganya berubah. Harga produk tidak disnapshot sebagai otoritas pembayaran; pembelian/checkout adalah BE-11 milik Peternak.
 
+### BE-11 executable contract
+
+Semua route cart, checkout dan order hanya menerima active role Peternak. Perubahan peran tidak mengubah owner scoping. `GET /me/cart` menyediakan cart kosong persisten bila belum ada. `PUT /me/cart/items/{productId}` menerima `expectedVersion` dan `quantity` integer positif; jumlah adalah nilai akhir, bukan increment client. Produk baru harus aktif. `DELETE /me/cart/items/{productId}` menerima `expectedVersion`; penghapusan retry aman. Cart menyimpan kuantitas saja; harga pada read/quote berasal dari katalog server.
+
+`POST /checkout-quotes` menerima `addressId` tersimpan yang dimiliki Peternak dan tertaut ke salah satu Farm miliknya (`farms.visit_address_id`). Server mengunci cart, item aktif, produk dan alamat untuk membuat snapshot nama/kategori/harga satuan/jumlah/alamat serta subtotal/ongkir/total rupiah integer. Harga tidak diterima dari client. Adapter ongkir lokal fiktif mengikuti FE-18: Bogor/Depok (Jawa Barat) Rp9.000 dan Sleman/Yogyakarta (DI Yogyakarta) Rp12.000. Wilayah lain gagal sebagai aturan yang belum tersedia; tidak ada kurir/provider yang dihubungi. Hasil adapter `succeeded` diperlukan; `pending`/kegagalan dependency tidak membuat quote dan mengembalikan 503. Quote berlaku 15 menit.
+
+`POST /orders` menerima `quoteId` dan `Idempotency-Key` 8–128 karakter. Dalam satu transaksi server mengunci operasi, quote, cart, produk dan alamat, lalu mengecek expiry, versi/isi cart, harga/nama/kategori terbaru, alamat Farm dan versi/snapshot alamat, serta ongkir terkini. Jika harga, cart, alamat, atau ongkir berubah, order tidak dibuat dan cart tidak dihapus; respons 409 meminta client membuat quote baru agar total terbaru dapat ditinjau. Key dan payload sama mengembalikan order tersimpan; key sama dengan quote berbeda mendapat 409. Pada sukses, order `awaiting_payment` tanpa Payment dibuat bersama item dan alamat/total snapshots, quote dikonsumsi, cart dikosongkan dan operation disimpan atomik. Order items dan snapshot harga/alamat immutable; GET list/detail hanya mengembalikan data pemilik. Shipment/timeline menunggu BE-12.
+
+BE-06 kini dapat membuat quote/payment untuk order dari `total_snapshot_idr`; nominal client tidak diterima. Payment adapter aktif tetap lokal `pending`, sehingga order menunggu pembayaran. Status menjadi `paid` hanya bila hasil adapter `succeeded` tersimpan bersama order/payment; tidak ada layanan finansial nyata. Adapter ongkir dan pembayaran produksi belum dipilih.
+
 ### BE-04 executable contract
 
 Semua route BE-04 memerlukan bearer dan active role membership. Discovery/slot dapat dibaca Peternak maupun Dokter; konfigurasi, block dan kalender hanya Dokter pemilik. Vet discovery hanya mengembalikan profil `verified` dengan profil direktori, availability dan tarif yang telah dikonfigurasi. Query `name`, `species`, `service`, `location`, `available`, `minFee`, `maxFee` dapat digabungkan; biaya adalah integer rupiah dan sedikitnya satu tarif layanan aktif harus berada dalam seluruh batas tarif yang diminta.
@@ -219,4 +236,4 @@ Payload event minimal: eventId, aggregateId, actorId, occurredAt, version. Efek 
 
 Jalankan suite yang sama terhadap repository lokal dan API: scope ownership, verified guard, slot conflicts, final-note immutability, complete guard, sequence visit, computed totals, earning once, withdrawal reservation/retry, notification recipient. Perbedaan teknis error harus dinormalisasi ke domain error yang sama.
 
-OpenAPI executable BE-00–08 dan BE-10 memuat healthcheck, auth, profil/verifikasi, livestock/patient, vet discovery/availability/slots/blocked-times/schedule, booking/request/proposal/visit/completion, payment quote/create, chat/media, note/recommendation, dan katalog produk aktif. Follow-up BE-09, cart/checkout, order, ledger, payout, dan domain lain pada tabel tetap menunggu tiket backend berikutnya. Perubahan kontrak BE-10 telah dikoordinasikan lewat Orca sebelum implementasi.
+OpenAPI executable BE-00–08 dan BE-10/11 memuat healthcheck, auth, profil/verifikasi, livestock/patient, vet discovery/availability/slots/blocked-times/schedule, booking/request/proposal/visit/completion, payment quote/create, chat/media, note/recommendation, katalog produk aktif, cart, checkout quote, order dan snapshots. Follow-up BE-09, ledger, payout, shipment timeline, dan domain lain pada tabel tetap menunggu tiket backend berikutnya. Routes dan semantik BE-11 dibagikan melalui Orca untuk koordinasi.

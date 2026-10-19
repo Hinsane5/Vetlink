@@ -1,6 +1,6 @@
 # Strategi pengujian VetLink
 
-Status QA per 20 Oktober 2026: tahap aktif memakai frontend lokal tanpa autentikasi/backend jaringan; Pilih Peran membuka persona fiktif. UI FE-06–18 tersedia dan pemeriksaan FE-18 `npm run check` lulus typecheck, lint, serta 103 tes domain/repository. `npm run android` FE-18 berhenti sebelum build karena Android SDK/ADB tidak tersedia. Backend BE-00–08 dan BE-10 memiliki route executable; BE-09 belum mulai dan mobile belum terhubung ke API. Pemeriksaan Android terdahulu bukan bukti integrasi backend. Interaksi fitur pada perangkat, viewport kecil/font besar, dan pembandingan visual 390 × 844 tetap tertunda; tidak ada pemanggilan Figma MCP baru.
+Status QA per 20 Oktober 2026: tahap aktif memakai frontend lokal tanpa autentikasi/backend jaringan; Pilih Peran membuka persona fiktif. UI FE-06–18 tersedia dan pemeriksaan FE-18 `npm run check` lulus typecheck, lint, serta 103 tes domain/repository. `npm run android` FE-18 berhenti sebelum build karena Android SDK/ADB tidak tersedia. Backend BE-00–08 dan BE-10/11 memiliki route executable; BE-09 belum mulai dan mobile belum terhubung ke API. Pemeriksaan Android terdahulu bukan bukti integrasi backend. Interaksi fitur pada perangkat, viewport kecil/font besar, dan pembandingan visual 390 × 844 tetap tertunda; tidak ada pemanggilan Figma MCP baru.
 
 ## Level pengujian
 
@@ -44,6 +44,17 @@ Pemeriksaan dijalankan dari `apps/api` dengan Node `24.10.0` / npm `11.6.0`; `.n
 - `npm run api:smoke` — **Lulus**. OpenAPI memuat route, filter `maxPrice`, serta schema response katalog; smoke menguji filter gabungan nama/kategori/spesies/harga, cursor halaman stabil, harga rupiah integer dari DB, visibilitas aktif/nonaktif, akses browse Dokter, penolakan link recommendation ke produk nonaktif, judul snapshot berasal dari Product, harga detail terbaru, dan snapshot rekomendasi terkirim setelah produk dinonaktifkan. Pemeriksaan existing BE-03/04/05/06/07/08 dalam script yang sama juga lulus.
 - Percobaan smoke pertama menemukan nama fixture uji bertabrakan dengan katalog seed; fixture smoke diganti menjadi nama unik dan run akhir lulus. Script melakukan teardown fixture uji; kontainer PostgreSQL sementara dihentikan setelah pemeriksaan.
 - Tidak ada `npm test`/lint script terpisah pada manifest. Tidak ada Figma/UI/API mobile test untuk slice ini; aplikasi mobile masih memakai adapter lokal. Tidak ada provider produksi, secret, stok/toko Dokter, checkout, transaksi finansial, atau deployment.
+
+## Bukti BE-11 (20 Oktober 2026)
+
+Pemeriksaan dijalankan dari `apps/api` dengan Node `24.10.0` / npm `11.6.0`; `.nvmrc` meminta Node `24.15.0` dan `nvm` tidak tersedia, sehingga `npm ci` menampilkan peringatan engine. PostgreSQL `17.4-alpine` lokal memakai port `15432` untuk menghindari benturan; migrasi, seed dan smoke memakai database lokal `vetlink`. Container dihentikan setelah pemeriksaan dan volume lokal dipertahankan.
+
+- `npm ci` — **Lulus**, 253 paket dipasang dan audit melaporkan 0 vulnerability; ada peringatan engine untuk Node `24.10.0`.
+- `npm run check` — **Lulus** setelah implementasi: `tsc --noEmit` dan `nest build`.
+- `npm run db:migrate` — **Lulus**; sembilan migrasi terdahulu sudah ada, lalu migrasi workflow, katalog, dan baru `20261020_000012_commerce.sql` diterapkan; database berisi 12 migrasi.
+- `npm run db:seed` — **Lulus**; seed fiktif mempertahankan existing rows melalui `ON CONFLICT DO NOTHING`.
+- `npm run api:smoke` — **Lulus**. Script memeriksa OpenAPI BE-11, Peternak-only, jumlah positif, harga server, alamat pemilik yang tertaut ke Farm, adapter ongkir lokal (Bogor/Depok Rp9.000; Sleman/Yogyakarta Rp12.000; wilayah lain gagal tertutup), konflik quote stale setelah perubahan harga/alamat, item/unit/total/alamat snapshots, retry paralel dan payload idempotency berbeda, cart terhapus bersama create order, order owner scope, payment amount dari total snapshot, serta status `pending → paid` hanya lewat hasil callback internal `succeeded`. Semua fixture smoke dibersihkan; suite lama BE-03/04/05/06/07/08/10 yang sama juga lulus.
+- Tidak ada script `npm test` atau lint terpisah pada manifest. Tidak ada perubahan UI, uji Android, provider kurir/finansial, transaksi uang nyata, atau integrasi mobile API.
 
 ## Bukti BE-03 (19 Oktober 2026)
 

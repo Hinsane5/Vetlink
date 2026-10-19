@@ -13,6 +13,8 @@ import { PostgresConsultationActionAdapter } from '../dist/consultation/consulta
 import { ConsultationService } from '../dist/consultation/consultation.service.js';
 import { LocalPaymentService } from '../dist/payment/payment.adapter.js';
 import { PaymentsService } from '../dist/payment/payment.service.js';
+import { CommerceService } from '../dist/commerce/commerce.service.js';
+import { LocalCheckoutShippingAdapter } from '../dist/commerce/shipping-quote.adapter.js';
 
 const appPath = resolve(process.cwd(), 'dist/main.js');
 
@@ -156,6 +158,13 @@ try {
   assert.ok(openApi.paths['/v1/me']?.get);
   assert.ok(openApi.paths['/v1/products']?.get);
   assert.ok(openApi.paths['/v1/products/{id}']?.get);
+  assert.ok(openApi.paths['/v1/me/cart']?.get);
+  assert.ok(openApi.paths['/v1/me/cart/items/{productId}']?.put);
+  assert.ok(openApi.paths['/v1/me/cart/items/{productId}']?.delete);
+  assert.ok(openApi.paths['/v1/checkout-quotes']?.post);
+  assert.ok(openApi.paths['/v1/orders']?.post);
+  assert.ok(openApi.paths['/v1/orders']?.get);
+  assert.ok(openApi.paths['/v1/orders/{id}']?.get);
   assert.equal(openApi.paths['/v1/internal/products'], undefined);
   assert.equal(openApi.paths['/v1/products']?.get?.responses?.['200']?.content?.['application/json']?.schema?.$ref, '#/components/schemas/ProductPageResponseDto');
   assert.equal(openApi.paths['/v1/products/{id}']?.get?.responses?.['200']?.content?.['application/json']?.schema?.$ref, '#/components/schemas/ProductResponseDto');
@@ -235,11 +244,14 @@ try {
     const actors = [];
     const consultationIds = [];
     const quoteIds = [];
+    const checkoutQuoteIds = [];
+    const orderIds = [];
     const addressIds = [];
     const productIds = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
     const localDb = new DatabaseService();
     const workflow = new ConsultationService(localDb, new PostgresConsultationActionAdapter());
-    const localPayment = new PaymentsService(localDb, new LocalPaymentService(), workflow);
+    const commerce = new CommerceService(localDb, new LocalCheckoutShippingAdapter());
+    const localPayment = new PaymentsService(localDb, new LocalPaymentService(), workflow, commerce);
     let consultationId;
     let unpaidConsultationId;
     let failedStorageServer;
@@ -340,11 +352,162 @@ try {
          VALUES ($1, $2, 'Farm Fiktif BE-07', ARRAY['sapi'], 'Asia/Jakarta')`,
         [farmId, farmer.user.id],
       );
+      const addressResponse = await sendJson(healthy.baseUrl, '/v1/me/addresses', farmer.accessToken, 'POST', {
+        label: 'Kandang Budi Fiktif', recipientName: 'Budi Fiktif', phone: '081234567899',
+        addressLine: 'Jalan Ternak Fiktif Nomor 11', city: 'Bogor', province: 'Jawa Barat', postalCode: '16111',
+      });
+      assert.equal(addressResponse.status, 201, await addressResponse.clone().text());
+      const checkoutAddress = await addressResponse.json();
+      addressIds.push(checkoutAddress.id);
+      const checkoutFarmLink = await sendJson(healthy.baseUrl, `/v1/me/farms/${farmId}`, farmer.accessToken, 'PATCH', {
+        expectedVersion: 1, name: 'Farm Fiktif BE-11', visitAddressId: checkoutAddress.id,
+      });
+      assert.equal(checkoutFarmLink.status, 200, await checkoutFarmLink.clone().text());
       await database.query(
         `INSERT INTO livestock (id, farmer_id, farm_id, display_code, name, species, sex)
          VALUES ($1, $2, $3, 'BE07-001', 'Ternak Fiktif BE-07', 'sapi', 'female')`,
         [animalId, farmer.user.id, farmId],
       );
+
+      assert.equal((await sendJson(healthy.baseUrl, '/v1/me/cart', vet.accessToken, 'GET')).status, 403);
+      assert.equal((await sendJson(healthy.baseUrl, '/v1/checkout-quotes', vet.accessToken, 'POST', { addressId: checkoutAddress.id })).status, 403);
+      assert.equal((await sendJson(healthy.baseUrl, '/v1/orders', vet.accessToken, 'POST', { quoteId: randomUUID() }, { 'idempotency-key': `be11-vet-${randomUUID()}` })).status, 403);
+      const emptyCartResponse = await sendJson(healthy.baseUrl, '/v1/me/cart', farmer.accessToken, 'GET');
+      assert.equal(emptyCartResponse.status, 200);
+      const emptyCart = await emptyCartResponse.json();
+      assert.equal(emptyCart.items.length, 0);
+      const emptyQuote = await sendJson(healthy.baseUrl, '/v1/checkout-quotes', farmer.accessToken, 'POST', { addressId: checkoutAddress.id });
+      assert.equal(emptyQuote.status, 422);
+      const zeroQuantity = await sendJson(healthy.baseUrl, `/v1/me/cart/items/${productIds[0]}`, farmer.accessToken, 'PUT', {
+        expectedVersion: emptyCart.version, quantity: 0,
+      });
+      assert.equal(zeroQuantity.status, 400);
+      const addFirstProduct = await sendJson(healthy.baseUrl, `/v1/me/cart/items/${productIds[0]}`, farmer.accessToken, 'PUT', {
+        expectedVersion: emptyCart.version, quantity: 2,
+      });
+      assert.equal(addFirstProduct.status, 200, await addFirstProduct.clone().text());
+      const cartAfterFirst = await addFirstProduct.json();
+      assert.equal(cartAfterFirst.items[0].quantity, 2);
+      assert.equal(cartAfterFirst.items[0].unitPriceIdr, 18500);
+      const addSecondProduct = await sendJson(healthy.baseUrl, `/v1/me/cart/items/${productIds[1]}`, farmer.accessToken, 'PUT', {
+        expectedVersion: cartAfterFirst.version, quantity: 1,
+      });
+      assert.equal(addSecondProduct.status, 200, await addSecondProduct.clone().text());
+      let cartForCheckout = await addSecondProduct.json();
+      assert.equal(cartForCheckout.subtotalIdr, 56500);
+      assert.equal(cartForCheckout.items.length, 2);
+      const cartSetReplay = await sendJson(healthy.baseUrl, `/v1/me/cart/items/${productIds[0]}`, farmer.accessToken, 'PUT', {
+        expectedVersion: emptyCart.version, quantity: 2,
+      });
+      assert.equal(cartSetReplay.status, 200);
+      assert.equal((await cartSetReplay.json()).version, cartForCheckout.version);
+
+      const makeCheckoutQuote = async () => {
+        const response = await sendJson(healthy.baseUrl, '/v1/checkout-quotes', farmer.accessToken, 'POST', { addressId: checkoutAddress.id });
+        assert.equal(response.status, 201, await response.clone().text());
+        const quote = await response.json();
+        checkoutQuoteIds.push(quote.id);
+        return quote;
+      };
+      const quoteAtOldPrice = await makeCheckoutQuote();
+      assert.equal(quoteAtOldPrice.subtotalIdr, 56500);
+      assert.equal(quoteAtOldPrice.shippingAmountIdr, 9000);
+      assert.equal(quoteAtOldPrice.totalIdr, 65500);
+      await database.query('UPDATE products SET unit_price_idr=20000 WHERE id=$1', [productIds[0]]);
+      const stalePriceOrder = await sendJson(healthy.baseUrl, '/v1/orders', farmer.accessToken, 'POST',
+        { quoteId: quoteAtOldPrice.id }, { 'idempotency-key': `be11-stale-price-${randomUUID()}` });
+      assert.equal(stalePriceOrder.status, 409);
+      cartForCheckout = await (await sendJson(healthy.baseUrl, '/v1/me/cart', farmer.accessToken, 'GET')).json();
+      assert.equal(cartForCheckout.items.length, 2);
+      const quoteAtNewPrice = await makeCheckoutQuote();
+      assert.equal(quoteAtNewPrice.subtotalIdr, 59500);
+      assert.equal(quoteAtNewPrice.totalIdr, 68500);
+
+      const updateAddress = async (expectedVersion, city, province) => sendJson(healthy.baseUrl,
+        `/v1/me/addresses/${checkoutAddress.id}`, farmer.accessToken, 'PATCH', {
+          expectedVersion, label: 'Kandang Budi Fiktif', recipientName: 'Budi Fiktif', phone: '081234567899',
+          addressLine: `Jalan Ternak Fiktif di ${city}`, city, province, postalCode: city === 'Sleman' ? '55511' : '16111',
+        });
+      const updatedAddressForStaleCheck = await updateAddress(1, 'Sleman', 'DI Yogyakarta');
+      assert.equal(updatedAddressForStaleCheck.status, 200);
+      const staleAddressOrder = await sendJson(healthy.baseUrl, '/v1/orders', farmer.accessToken, 'POST',
+        { quoteId: quoteAtNewPrice.id }, { 'idempotency-key': `be11-stale-address-${randomUUID()}` });
+      assert.equal(staleAddressOrder.status, 409);
+      const unsupportedAddress = await updateAddress(2, 'Jakarta', 'DKI Jakarta');
+      assert.equal(unsupportedAddress.status, 200);
+      const unsupportedShipping = await sendJson(healthy.baseUrl, '/v1/checkout-quotes', farmer.accessToken, 'POST', { addressId: checkoutAddress.id });
+      assert.equal(unsupportedShipping.status, 422);
+      const restoredAddress = await updateAddress(3, 'Sleman', 'DI Yogyakarta');
+      assert.equal(restoredAddress.status, 200);
+      const finalCheckoutQuote = await makeCheckoutQuote();
+      assert.equal(finalCheckoutQuote.addressSnapshot.city, 'Sleman');
+      assert.equal(finalCheckoutQuote.shippingAmountIdr, 12000);
+      assert.equal(finalCheckoutQuote.totalIdr, 71500);
+
+      const orderKey = `be11-order-${randomUUID()}`;
+      const createOrderRequests = await Promise.all([
+        sendJson(healthy.baseUrl, '/v1/orders', farmer.accessToken, 'POST', { quoteId: finalCheckoutQuote.id }, { 'idempotency-key': orderKey }),
+        sendJson(healthy.baseUrl, '/v1/orders', farmer.accessToken, 'POST', { quoteId: finalCheckoutQuote.id }, { 'idempotency-key': orderKey }),
+      ]);
+      assert.deepEqual(createOrderRequests.map((response) => response.status), [201, 201]);
+      const createOrderResults = await Promise.all(createOrderRequests.map((response) => response.json()));
+      const order = createOrderResults[0].order;
+      orderIds.push(order.id);
+      assert.equal(createOrderResults[0].operationId, createOrderResults[1].operationId);
+      assert.equal(createOrderResults.filter((result) => result.replayed).length, 1);
+      assert.equal(order.status, 'awaiting_payment');
+      assert.equal(order.paymentId, null);
+      assert.equal(order.subtotalIdr, 59500);
+      assert.equal(order.shippingAmountIdr, 12000);
+      assert.equal(order.totalIdr, 71500);
+      assert.equal(order.addressSnapshot.city, 'Sleman');
+      assert.equal(order.items.length, 2);
+      assert.deepEqual(order.items.map(({ productId, unitPriceIdr, quantity, lineTotalIdr }) => ({ productId, unitPriceIdr, quantity, lineTotalIdr }))
+        .sort((left, right) => left.productId.localeCompare(right.productId)), [
+        { productId: productIds[0], unitPriceIdr: 20000, quantity: 2, lineTotalIdr: 40000 },
+        { productId: productIds[1], unitPriceIdr: 19500, quantity: 1, lineTotalIdr: 19500 },
+      ].sort((left, right) => left.productId.localeCompare(right.productId)));
+      const idempotencyConflict = await sendJson(healthy.baseUrl, '/v1/orders', farmer.accessToken, 'POST',
+        { quoteId: randomUUID() }, { 'idempotency-key': orderKey });
+      assert.equal(idempotencyConflict.status, 409);
+      const emptyAfterOrder = await (await sendJson(healthy.baseUrl, '/v1/me/cart', farmer.accessToken, 'GET')).json();
+      assert.equal(emptyAfterOrder.items.length, 0);
+      const ownOrder = await sendJson(healthy.baseUrl, `/v1/orders/${order.id}`, farmer.accessToken, 'GET');
+      assert.equal(ownOrder.status, 200);
+      assert.equal((await ownOrder.json()).totalIdr, 71500);
+      assert.equal((await sendJson(healthy.baseUrl, '/v1/orders', farmer.accessToken, 'GET')).status, 200);
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/orders/${order.id}`, outsider.accessToken, 'GET')).status, 404);
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/orders/${order.id}`, vet.accessToken, 'GET')).status, 403);
+      const outsiderCart = await (await sendJson(healthy.baseUrl, '/v1/me/cart', outsider.accessToken, 'GET')).json();
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/me/cart/items/${productIds[0]}`, outsider.accessToken, 'PUT', {
+        expectedVersion: outsiderCart.version, quantity: 1,
+      })).status, 200);
+      const foreignAddressQuote = await sendJson(healthy.baseUrl, '/v1/checkout-quotes', outsider.accessToken, 'POST', { addressId: checkoutAddress.id });
+      assert.equal(foreignAddressQuote.status, 404);
+
+      const orderPaymentQuote = await sendJson(healthy.baseUrl, `/v1/payment-quotes/order/${order.id}`, farmer.accessToken, 'GET');
+      assert.equal(orderPaymentQuote.status, 200);
+      assert.equal((await orderPaymentQuote.json()).amountIdr, 71500);
+      const orderPaymentResponse = await sendJson(healthy.baseUrl, '/v1/payments', farmer.accessToken, 'POST',
+        { payableType: 'order', payableId: order.id, method: 'bank_transfer' }, { 'idempotency-key': `be11-order-payment-${randomUUID()}` });
+      assert.equal(orderPaymentResponse.status, 201, await orderPaymentResponse.clone().text());
+      const orderPayment = await orderPaymentResponse.json();
+      assert.equal(orderPayment.status, 'pending');
+      assert.equal(orderPayment.amountIdr, 71500);
+      const orderPaymentEventId = `be11-order-paid-${randomUUID()}`;
+      await localPayment.localCallback({
+        paymentId: orderPayment.id, attemptId: orderPayment.attempt.id,
+        reference: orderPayment.attempt.reference, amountIdr: '71500', eventId: orderPaymentEventId, outcome: 'succeeded',
+      });
+      await localPayment.localCallback({
+        paymentId: orderPayment.id, attemptId: orderPayment.attempt.id,
+        reference: orderPayment.attempt.reference, amountIdr: '71500', eventId: orderPaymentEventId, outcome: 'succeeded',
+      });
+      const paidOrder = await (await sendJson(healthy.baseUrl, `/v1/orders/${order.id}`, farmer.accessToken, 'GET')).json();
+      assert.equal(paidOrder.status, 'paid');
+      assert.equal(paidOrder.paymentStatus, 'succeeded');
+      assert.equal(paidOrder.addressSnapshot.city, 'Sleman');
+      assert.equal(paidOrder.items.find((item) => item.productId === productIds[0]).unitPriceIdr, 20000);
 
       const addQuote = async (startsAt, serviceType, complaint, addressId, key = `be05-quote-${randomUUID()}`) => {
         const body = { vetId: vet.user.id, animalId, serviceType, startsAt, complaint, ...(addressId ? { addressId } : {}) };
@@ -541,7 +704,7 @@ try {
         { 'idempotency-key': `be05-unlinked-${randomUUID()}` });
       assert.equal(unlinkedVisitQuote.status, 400);
       const linkedFarm = await sendJson(healthy.baseUrl, `/v1/me/farms/${farmId}`, farmer.accessToken, 'PATCH',
-        { name: 'Farm Fiktif BE-07', expectedVersion: 1, visitAddressId: visitAddress.id });
+        { name: 'Farm Fiktif BE-07', expectedVersion: 2, visitAddressId: visitAddress.id });
       assert.equal(linkedFarm.status, 200, await linkedFarm.clone().text());
       assert.equal((await linkedFarm.json()).visit_address_id, visitAddress.id);
       const visitQuote = await addQuote(visitStart, 'visit', 'Pemeriksaan ternak fiktif', visitAddress.id);
@@ -762,7 +925,7 @@ try {
       const sentRecommendationResult = await farmerRecommendation.json();
       assert.equal(sentRecommendationResult.items[0].title, 'BE-10 Sikat Kandang Seruni');
       assert.equal(sentRecommendationResult.items[0].productId, productIds[0]);
-      assert.equal((await sendJson(healthy.baseUrl, '/v1/orders', vet.accessToken, 'GET')).status, 404);
+      assert.equal((await sendJson(healthy.baseUrl, '/v1/orders', vet.accessToken, 'GET')).status, 403);
       const hiddenDraftTimeline = await sendJson(healthy.baseUrl, `/v1/livestock/${animalId}/health-events`, farmer.accessToken, 'GET');
       assert.equal(hiddenDraftTimeline.status, 200);
       assert.equal((await hiddenDraftTimeline.json()).length, 2);
@@ -908,14 +1071,23 @@ try {
       assert.equal(completeChat.status, 200, await completeChat.clone().text());
       assert.equal((await completeChat.json()).consultation.status, 'completed');
 
-      console.log('BE-03/04/05/06/07/08/10 smoke: owner/role scope; active catalog filters/cursor/detail and authoritative IDR; recommendation active-product link/snapshot; booking/slot race and payment; verified access, visit/completion, chat/media lulus.');
+      console.log('BE-03/04/05/06/07/08/10/11 smoke: owner/role scope; active catalog; cart quantity and price; stale checkout quote; local shipping adapter; atomic order/cart, snapshots and idempotent retry; order payment pending/succeeded; verified access, visit/completion, chat/media lulus.');
     } finally {
       if (failedStorageServer) await stopServer(failedStorageServer.child);
       // Smoke teardown is a fixture reset; it must remove immutable final-note rows
       // without weakening the production immutability trigger.
       await database.query("SET session_replication_role = 'replica'");
       const allConsultationIds = [...new Set([...consultationIds, consultationId, unpaidConsultationId].filter(Boolean))];
+      const allOrderIds = [...new Set(orderIds)];
       try {
+        await database.query('DELETE FROM order_items WHERE order_id = ANY($1::uuid[])', [allOrderIds]);
+        await database.query('DELETE FROM orders WHERE id = ANY($1::uuid[])', [allOrderIds]);
+        await database.query('DELETE FROM checkout_quotes WHERE id = ANY($1::uuid[])', [checkoutQuoteIds]);
+        await database.query('DELETE FROM cart_items WHERE cart_id IN (SELECT id FROM carts WHERE farmer_id = ANY($1::uuid[]))', [actors]);
+        await database.query('DELETE FROM carts WHERE farmer_id = ANY($1::uuid[])', [actors]);
+        await database.query("DELETE FROM payment_callback_events WHERE payment_id IN (SELECT id FROM payments WHERE payable_type='order' AND payable_id = ANY($1::uuid[]))", [allOrderIds]);
+        await database.query("DELETE FROM payment_attempts WHERE payment_id IN (SELECT id FROM payments WHERE payable_type='order' AND payable_id = ANY($1::uuid[]))", [allOrderIds]);
+        await database.query("DELETE FROM payments WHERE payable_type='order' AND payable_id = ANY($1::uuid[])", [allOrderIds]);
         await database.query('DELETE FROM recommendation_items WHERE recommendation_id IN (SELECT id FROM recommendations WHERE consultation_id = ANY($1::uuid[]))', [allConsultationIds]);
         await database.query('DELETE FROM recommendations WHERE consultation_id = ANY($1::uuid[])', [allConsultationIds]);
         await database.query('DELETE FROM message_attachments WHERE consultation_id = ANY($1::uuid[])', [allConsultationIds]);

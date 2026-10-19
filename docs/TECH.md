@@ -1,6 +1,6 @@
 # Teknologi dan bahan diskusi
 
-Status per 20 Oktober 2026: FE-00/02 selesai; penerimaan FE-01/04–19 masih berjalan dan FE-03 ditunda sesuai DEC-23; BE-00–08 dan BE-10 selesai setelah smoke katalog; BE-09 belum mulai. Mobile tetap memakai persona lokal tanpa autentikasi/backend jaringan. Backend NestJS + PostgreSQL memiliki route health/auth/profile-verification/livestock/patients/vet discovery & availability/booking/visit/completion/payment/chat/media/clinical/catalog dengan migrasi dan smoke lokal. Bukti backend ada di [Testing](TESTING.md). QA visual/interaksi Android FE-14 sebelumnya belum terverifikasi karena MIUI menolak tap ADB (`INJECT_EVENTS`).
+Status per 20 Oktober 2026: FE-00/02 selesai; penerimaan FE-01/04–19 masih berjalan dan FE-03 ditunda sesuai DEC-23; BE-00–08, BE-10, dan BE-11 selesai setelah pemeriksaan lokal BE-11; BE-09 belum mulai. Mobile tetap memakai persona lokal tanpa autentikasi/backend jaringan. Backend NestJS + PostgreSQL memiliki route health/auth/profile-verification/livestock/patients/vet discovery & availability/booking/visit/completion/payment/chat/media/clinical/catalog/cart/checkout/order dengan migrasi dan smoke lokal. Bukti backend ada di [Testing](TESTING.md). QA visual/interaksi Android FE-14 sebelumnya belum terverifikasi karena MIUI menolak tap ADB (`INJECT_EVENTS`).
 
 ## Keputusan mobile
 
@@ -126,7 +126,7 @@ Harness diagnostik FE-02 hanya tampil saat development dengan `EXPO_PUBLIC_FE02_
 
 Paket Expo yang benar-benar terpasang dan keterkaitannya dengan FE-01–04 dicatat di README. Form/test framework dan seluruh kandidat lain tetap usulan; tidak ada kewajiban menginstall semua kandidat state/form/test sekaligus.
 
-## Pilihan backend dan realisasi BE-00–08/10
+## Pilihan backend dan realisasi BE-00–08/10/11
 
 | Kandidat | Kesesuaian untuk VetLink | Tradeoff yang perlu dibahas |
 | --- | --- | --- |
@@ -155,6 +155,14 @@ Upload multipart menerima JPEG, PNG, WebP, dan MP4. Backend membaca signature by
 Use case membaca consultation dan payment yang sama: chat harus berjenis `chat`, payment `succeeded` sesuai fee snapshot, dan statusnya tersedia. Pengiriman dibatasi pada `scheduled`/`in_progress`; kedua pihak diblokir menulis ketika dokter terkait belum `verified`. Teks maksimal 4.000 karakter dan satu pesan maksimum lima lampiran committed. Adapter storage/chat menghasilkan outcome eksplisit yang dapat gagal; upload mengulang dengan key sama, sementara send mengulang `clientMessageId`/`messageId` pada record yang sama. `CHAT_DELIVERY_TEST_FAIL_FIRST_ATTEMPT=true` hanya valid pada `NODE_ENV=test` untuk fault injection smoke, bukan kontrol produk.
 
 `GET/POST /v1/consultations/{consultationId}/messages`, retry, metadata dan content attachment tercantum di [kontrak API](API_CONTRACT.md). Mobile belum diintegrasikan ke route ini dan belum mengirim atau membaca antar perangkat.
+
+## Realisasi backend BE-11: cart, checkout dan order
+
+Module Commerce menambah cart Peternak dengan version guard, harga produk aktif dari PostgreSQL, checkout quote yang menyimpan snapshots item/alamat/ongkir/total, serta order dan OrderItem snapshots. Alamat checkout wajib dimiliki Peternak dan terkait sebagai `visit_address_id` pada salah satu Farm-nya. Harga/alamat/ongkir dibaca ulang saat membuat order; quote stale mendapat 409 supaya Peternak dapat meninjau quote baru.
+
+Pembuatan order mengunci idempotency operation, quote, cart, produk dan alamat, lalu menulis order/item, mengonsumsi quote, mengosongkan cart dan menandai operation selesai dalam satu transaction PostgreSQL. Trigger mencegah perubahan snapshot order/item. Adapter ongkir lokal hanya mendukung Bogor/Depok Rp9.000 dan Sleman/Yogyakarta Rp12.000 sesuai fixture FE-18; wilayah lain gagal tertutup. Tidak ada provider kurir/keuangan nyata. BE-06 mengambil amount dari order total snapshot dan mengubah order menjadi `paid` hanya setelah hasil adapter sukses tersimpan.
+
+Route, payload, status quote/order, dan batas adapter ada di [kontrak API](API_CONTRACT.md). Pemeriksaan `npm run check`, migrasi, seed, dan smoke fixture yang benar-benar dijalankan tercatat di [bukti BE-11](TESTING.md#bukti-be-11-20-oktober-2026). Backend belum tersambung ke mobile; shipment timeline menunggu BE-12.
 
 ## Hal yang masih terbuka untuk backend
 

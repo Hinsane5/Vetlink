@@ -5,6 +5,7 @@ import type { AuthenticatedPrincipal } from '../auth/auth.types.js';
 import { adapterFailed } from '../communication/adapter-result.js';
 import { DatabaseService } from '../database/database.service.js';
 import { CONSULTATION_PAYMENT_SUCCEEDED, type ConsultationPaymentSucceededPort } from '../consultation/consultation-payment.port.js';
+import { ORDER_PAYMENT_SUCCEEDED, type OrderPaymentSucceededPort } from '../commerce/order-payment.port.js';
 import { PAYMENT_SERVICE, type PaymentOutcome, type PaymentService } from './payment.adapter.js';
 
 type PayableType = 'consultation' | 'order';
@@ -17,11 +18,20 @@ export class PaymentsService {
     private readonly db: DatabaseService,
     @Inject(PAYMENT_SERVICE) private readonly adapter: PaymentService,
     @Inject(CONSULTATION_PAYMENT_SUCCEEDED) private readonly consultationPayment: ConsultationPaymentSucceededPort,
+    @Inject(ORDER_PAYMENT_SUCCEEDED) private readonly orderPayment: OrderPaymentSucceededPort,
   ) {}
 
   async quote(p: AuthenticatedPrincipal, payableType: PayableType, payableId: string) {
     this.farmer(p);
-    if (payableType === 'order') throw this.payableMissing();
+    if (payableType === 'order') {
+      const q = await this.db.query<{ id: string; total_snapshot_idr: string; status: string }>(
+        'SELECT id,total_snapshot_idr::text,status FROM orders WHERE id=$1 AND farmer_id=$2', [payableId, p.userId]);
+      const row = q.rows[0];
+      if (!row || row.status !== 'awaiting_payment') throw this.payableMissing();
+      const amountIdr = Number(row.total_snapshot_idr);
+      if (!Number.isSafeInteger(amountIdr) || amountIdr <= 0) throw new UnprocessableEntityException({ code: 'RULE_VIOLATION', message: 'Tagihan pesanan tidak memiliki nominal rupiah yang valid.' });
+      return { payableType, payableId: row.id, amountIdr, currency: 'IDR' as const };
+    }
     const q = await this.db.query<{ id: string; fee_snapshot_idr: string; status: string }>(
       'SELECT id,fee_snapshot_idr,status FROM consultations WHERE id=$1 AND farmer_id=$2', [payableId, p.userId]);
     const row = q.rows[0];
@@ -36,9 +46,12 @@ export class PaymentsService {
     if (!key || key.length < 8 || key.length > 128) throw new UnprocessableEntityException({ code: 'VALIDATION_ERROR', message: 'Idempotency-Key harus sepanjang 8–128 karakter.' });
     const fingerprint = createHash('sha256').update(JSON.stringify({ payableType: input.payableType, payableId: input.payableId, method: input.method })).digest('hex');
     const prepared = await this.db.transaction(async (c) => {
-      if (input.payableType === 'order') throw this.payableMissing();
-      const payable = await c.query<{ fee_snapshot_idr: string; status: string }>(
-        'SELECT fee_snapshot_idr,status FROM consultations WHERE id=$1 AND farmer_id=$2 FOR UPDATE', [input.payableId, p.userId]);
+      const payable = input.payableType === 'order'
+        ? await c.query<{ fee_snapshot_idr: string; status: string }>(
+          `SELECT total_snapshot_idr::text AS fee_snapshot_idr,status FROM orders
+           WHERE id=$1 AND farmer_id=$2 FOR UPDATE`, [input.payableId, p.userId])
+        : await c.query<{ fee_snapshot_idr: string; status: string }>(
+          'SELECT fee_snapshot_idr::text AS fee_snapshot_idr,status FROM consultations WHERE id=$1 AND farmer_id=$2 FOR UPDATE', [input.payableId, p.userId]);
       if (!payable.rows[0]) throw this.payableMissing();
       const prior = await c.query<PaymentRow>(`SELECT p.*,a.id AS attempt_id,a.status AS attempt_status,a.adapter_reference AS attempt_reference,
         a.request_fingerprint AS attempt_fingerprint FROM payment_attempts a JOIN payments p ON p.id=a.payment_id
@@ -66,6 +79,14 @@ export class PaymentsService {
       const next = await c.query<{ next_number: number }>('SELECT COALESCE(max(attempt_number),0)+1 AS next_number FROM payment_attempts WHERE payment_id=$1', [payment.id]);
       const attempt = (await c.query<PaymentRow>(`INSERT INTO payment_attempts(payment_id,attempt_number,status,operation_key,request_fingerprint)
         VALUES($1,$2,'pending',$3,$4) RETURNING *`, [payment.id, next.rows[0].next_number, key, fingerprint])).rows[0];
+      if (input.payableType === 'order') {
+        const linked = await c.query(
+          `UPDATE orders SET payment_id=$3,updated_at=now(),version=version+1
+           WHERE id=$1 AND farmer_id=$2 AND status='awaiting_payment' AND (payment_id IS NULL OR payment_id=$3)`,
+          [input.payableId, p.userId, payment.id],
+        );
+        if (linked.rowCount !== 1) throw new ConflictException({ code: 'PAYMENT_STATE_CONFLICT', message: 'Pesanan tidak lagi menunggu pembayaran.' });
+      }
       return { row: { ...payment, attempt_id: attempt.id, attempt_status: attempt.status, attempt_reference: null }, shouldStart: true };
     });
     if (!prepared.shouldStart) return this.paymentView(prepared.row);
@@ -80,14 +101,16 @@ export class PaymentsService {
         await c.query('UPDATE payments SET status=$2,adapter_reference=$3,updated_at=now(),version=version+1 WHERE id=$1 AND status=$4',
           [row.id, result.status, reference, 'pending']);
         if (result.status === 'succeeded') {
-          await this.consultationPayment.handlePaymentSucceeded(c, {
+          const payment = {
             id: row.id,
             ownerId: p.userId,
             payableType: row.payable_type,
             payableId: row.payable_id,
             amountIdr: Number(row.amount_idr),
             callbackEventId: `adapter:${row.attempt_id}`,
-          });
+          };
+          if (row.payable_type === 'order') await this.orderPayment.handleOrderPaymentSucceeded(c, payment);
+          else await this.consultationPayment.handlePaymentSucceeded(c, payment);
         }
       });
     } catch { throw new ServiceUnavailableException({ code: 'SERVICE_UNAVAILABLE', message: 'Hasil layanan pembayaran belum tersimpan; periksa status sebelum mencoba lagi.' }); }
@@ -119,14 +142,16 @@ export class PaymentsService {
         await c.query('UPDATE payment_attempts SET status=$2 WHERE id=$1', [row.attempt_id, input.outcome]);
         await c.query('UPDATE payments SET status=$2,updated_at=now(),version=version+1 WHERE id=$1', [row.id, input.outcome]);
         if (input.outcome === 'succeeded') {
-          await this.consultationPayment.handlePaymentSucceeded(c, {
+          const payment = {
             id: row.id,
             ownerId: row.owner_id,
             payableType: row.payable_type,
             payableId: row.payable_id,
             amountIdr: Number(row.amount_idr),
             callbackEventId: input.eventId,
-          });
+          };
+          if (row.payable_type === 'order') await this.orderPayment.handleOrderPaymentSucceeded(c, payment);
+          else await this.consultationPayment.handlePaymentSucceeded(c, payment);
         }
       }
       return { ...this.paymentView(row), status: input.outcome, attempt: { ...this.paymentView(row).attempt, status: input.outcome } };
