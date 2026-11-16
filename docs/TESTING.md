@@ -836,7 +836,7 @@ Slice ini menambah port read-only `CatalogReadRepository` dan `HttpApiCatalogRep
 | --- | --- |
 | `npm ci --no-audit --no-fund` di `apps/mobile` | **Lulus** setelah laporan worker: 762 paket dipasang dari lockfile pada child worktree. |
 | `npm run check` di `apps/mobile` | Percobaan worker pertama terhenti karena `tsc` belum tersedia. Setelah `npm ci`, percobaan kedua menemukan adapter baru belum tercakup `tsconfig.domain-tests.json` (126/127 tes berjalan). Koordinator menambahkan kedua file adapter/port pada konfigurasi runner lalu mengulang: **Lulus**, typecheck, Expo lint, 142/142 tes (0 gagal), termasuk 3 tes katalog baru. |
-| Farm/address, livestock/patients, Vet directory/slots | Adapter belum dibuat. Saat slice frontend dijalankan, route BE-02/03/04 belum mendeklarasikan response DTO yang cukup untuk mapping dan cursor. Kontrak backend diperbaiki pada pekerjaan BE-16 read contract di bawah; adapter mobile untuk route tersebut belum dibuat. |
+| Farm/address, livestock/patients, Vet directory/slots | Pada checkpoint katalog ini adapter belum dibuat dan kontrak backend belum cukup untuk mapping/cursor. Kontrak DTO BE-16 kemudian dilengkapi; adapter mobile ditambahkan pada slice FE-25 read adapters yang dicatat setelah bukti BE-16 di bawah. |
 | Integrasi dan QA | Tidak ada perubahan backend, runtime SQLite, UI, Figma MCP, emulator, perangkat, provider, secret, deployment, atau transaksi nyata. FE-25 end-to-end dan QA dua perangkat tetap gate. |
 
 FE-25 tetap **Sedang dikerjakan**. Catatan route dan cursor tersedia pada [handover API](MOBILE_API_HANDOVER.md). `git diff --check` **Lulus** setelah perubahan dokumen dan kode.
@@ -850,3 +850,16 @@ Pemeriksaan dijalankan dari `apps/api` pada Node `24.10.0` / npm `11.6.0`; engin
 - `npm run api:smoke` — **Lulus** pada PostgreSQL terisolasi. Memeriksa DTO camelCase dan tipe timestamp/decimal, detail Farm/address dengan 404 untuk akun lain dan 403 untuk role Dokter, array lama, cursor ternak tanpa duplicate/skip dan terikat user+role, cursor direktori tanpa duplicate/skip dan terikat filter, tarif IDR integer aman, scope pasien Dokter, serta bentuk slot `startsAt`/`endsAt`. Pemeriksaan BE-03–15 pada smoke yang sama juga lulus.
 - `git diff --check` — **Lulus** setelah seluruh perubahan kode dan dokumen.
 - Mobile tetap memakai SQLite; tidak ada perubahan runtime mobile, wiring API, build/emulator, Figma MCP, provider produksi, deployment, atau transaksi finansial nyata pada pekerjaan ini.
+
+## FE-25 lanjutan — adapter baca Farm, livestock, dan Vet directory (16 November 2026)
+
+Ditambahkan `FarmReadRepository`, `LivestockReadRepository`, dan `VetDirectoryReadRepository` dengan adapter HTTP GET untuk array/detail Farm dan address milik sesi Peternak, halaman/detail livestock sesuai scope role server, serta halaman/detail dokter verified dan slots. Read models mengikuti DTO BE-16 dan menyimpan koordinat/berat decimal sebagai string; adapter tidak menggabungkan snapshot SQLite atau mengubah otoritas runtime. `createApiAdapters` mengekspos adapter tersebut, tetapi `App.tsx` tetap memakai SQLite dan belum mengirim request API.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm ci --no-audit --no-fund` di `apps/mobile` | **Lulus**, 762 paket dipasang dari lockfile. npm menampilkan peringatan deprecation untuk dependency `uuid@7.0.3` dan `eslint@9.39.5`. |
+| `npm run check` di `apps/mobile` | **Lulus**: typecheck, Expo lint, kompilasi `tsconfig.domain-tests.json`, dan 148/148 tes domain/repository (0 gagal). Enam tes read adapter memeriksa route/bearer/scope query, decimal string, UUID/timestamp, cursor/filter bounds, IDR aman, DTO detail, dan slot. |
+| `git diff --check` | **Lulus** setelah perubahan kode dan dokumentasi; tidak ada whitespace error. |
+| Runtime dan QA | Tidak ada wiring UI/SQLite, backend, Android build/emulator, Figma MCP, perangkat fisik, provider, secret, deployment, atau transaksi finansial nyata. Backend DTO/route BE-16 menjadi sumber kontrak; tes adapter memakai fixture HTTP fiktif lokal, bukan smoke API atau integrasi dua perangkat. |
+
+FE-25 tetap **Sedang dikerjakan**. Adapter hanya tersedia sebagai API port terpisah; perpindahan runtime menunggu repository API untuk flow terkait dan migrasi otoritas tulis yang terkoordinasi. QA Android/visual serta integrasi API end-to-end belum dilakukan.

@@ -7,7 +7,10 @@ import { DomainError } from '../.test-build/src/domain/errors.js';
 import { ApiClient, normalizeApiBaseUrl } from '../.test-build/src/data/remote/ApiClient.js';
 import { HttpServerAuthRepository } from '../.test-build/src/data/remote/ApiAuthRepository.js';
 import { HttpApiCatalogRepository } from '../.test-build/src/data/remote/HttpApiCatalogRepository.js';
+import { HttpApiFarmReadRepository } from '../.test-build/src/data/remote/HttpApiFarmReadRepository.js';
+import { HttpApiLivestockReadRepository } from '../.test-build/src/data/remote/HttpApiLivestockReadRepository.js';
 import { HttpApiPaymentRepository } from '../.test-build/src/data/remote/HttpApiPaymentRepository.js';
+import { HttpApiVetDirectoryReadRepository } from '../.test-build/src/data/remote/HttpApiVetDirectoryReadRepository.js';
 
 test('API client refreshes a rejected access token once and replays with server session', async () => {
   const sessions = new MemoryServerSessionStore(tokenSet('old-access-token', 'old-refresh-token'));
@@ -389,12 +392,249 @@ test('remote payment gate rejects vet role before making API requests', async ()
   assert.equal(calls, 0);
 });
 
+test('Farm and address reads use owner-scoped routes and preserve decimal coordinates', async () => {
+  const farmId = '11111111-1111-4111-8111-111111111111';
+  const addressId = '22222222-2222-4222-8222-222222222222';
+  const requests = [];
+  const farm = farmReadFixture(farmId);
+  const address = addressReadFixture(addressId);
+  const api = new ApiClient('http://localhost:3000', new MemoryServerSessionStore(tokenSet()), async (url, init) => {
+    requests.push({ url, init });
+    if (url.endsWith('/v1/me/farms')) return response(200, [farm]);
+    if (url.endsWith(`/v1/me/farms/${farmId}`)) return response(200, farm);
+    if (url.endsWith('/v1/me/addresses')) return response(200, [address]);
+    if (url.endsWith(`/v1/me/addresses/${addressId}`)) return response(200, address);
+    throw new Error(`Unexpected route: ${url}`);
+  });
+  const repository = new HttpApiFarmReadRepository(api);
+
+  const farms = await repository.listFarms();
+  const detail = await repository.getFarmById(farmId);
+  const addresses = await repository.listAddresses();
+  const addressDetail = await repository.getAddressById(addressId);
+
+  assert.equal(farms[0].id, farmId);
+  assert.deepEqual(farms[0].location, { district: 'Bogor' });
+  assert.equal(detail.visitAddressId, addressId);
+  assert.equal(addresses[0].latitude, '-6.123456');
+  assert.equal(addresses[0].longitude, '106.123456');
+  assert.equal(addressDetail.version, 2);
+  assert.deepEqual(requests.map((request) => new URL(request.url).pathname), [
+    '/v1/me/farms', `/v1/me/farms/${farmId}`, '/v1/me/addresses', `/v1/me/addresses/${addressId}`,
+  ]);
+  for (const request of requests) {
+    assert.equal(request.init.method, 'GET');
+    assert.equal(request.init.headers.Authorization, 'Bearer access-token-1');
+    assert.equal(new URL(request.url).searchParams.has('ownerId'), false);
+  }
+});
+
+test('Farm and address adapters reject invalid UUIDs, decimal strings, and timestamps', async () => {
+  let calls = 0;
+  const api = new ApiClient('http://localhost:3000', new MemoryServerSessionStore(tokenSet()), async () => {
+    calls += 1;
+    return response(200, []);
+  });
+  const repository = new HttpApiFarmReadRepository(api);
+  await assert.rejects(repository.getFarmById('local-farm-id'), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.getAddressById('local-address-id'), { code: 'VALIDATION_FAILED' });
+  assert.equal(calls, 0);
+
+  const malformedFarm = { ...farmReadFixture('33333333-3333-4333-8333-333333333333'), updatedAt: '2026-11-16T10:00:00' };
+  const malformedAddress = { ...addressReadFixture('44444444-4444-4444-8444-444444444444'), latitude: 6.25 };
+  const invalidApi = new ApiClient('http://localhost:3000', new MemoryServerSessionStore(tokenSet()), async (url) => {
+    return response(200, url.endsWith('/farms') ? [malformedFarm] : [malformedAddress]);
+  });
+  const invalidRepository = new HttpApiFarmReadRepository(invalidApi);
+  await assert.rejects(invalidRepository.listFarms(), { code: 'API_RESPONSE_INVALID' });
+  await assert.rejects(invalidRepository.listAddresses(), { code: 'API_RESPONSE_INVALID' });
+});
+
+test('livestock page and detail preserve opaque cursor and decimal weight strings', async () => {
+  const livestockId = '55555555-5555-4555-8555-555555555555';
+  const cursor = 'cursor value/+opaque==';
+  const first = livestockReadFixture(livestockId, '1250.10');
+  const second = livestockReadFixture('66666666-6666-4666-8666-666666666666', null);
+  const requests = [];
+  const api = new ApiClient('http://localhost:3000', new MemoryServerSessionStore(tokenSet()), async (url, init) => {
+    requests.push({ url, init });
+    const parsed = new URL(url);
+    if (parsed.pathname.endsWith('/page') && parsed.searchParams.has('cursor')) {
+      return response(200, { items: [second], nextCursor: null, hasMore: false });
+    }
+    if (parsed.pathname.endsWith('/page')) return response(200, { items: [first], nextCursor: cursor, hasMore: true });
+    return response(200, first);
+  });
+  const repository = new HttpApiLivestockReadRepository(api);
+
+  const page = await repository.listPage({ limit: 1 });
+  const next = await repository.listPage({ cursor: page.nextCursor, limit: 1 });
+  const detail = await repository.getById(livestockId);
+
+  assert.equal(page.items[0].weightKg, '1250.10');
+  assert.equal(next.items[0].weightKg, null);
+  assert.equal(next.nextCursor, null);
+  assert.equal(detail.farmId, first.farmId);
+  assert.equal(new URL(requests[1].url).searchParams.get('cursor'), cursor);
+  assert.equal(new URL(requests[1].url).searchParams.get('limit'), '1');
+  assert.equal(new URL(requests[0].url).searchParams.has('ownerId'), false);
+  assert.equal(requests.every((request) => request.init.method === 'GET'), true);
+});
+
+test('livestock adapter validates bounds and rejects malformed DTOs before mapping', async () => {
+  let calls = 0;
+  const api = new ApiClient('http://localhost:3000', new MemoryServerSessionStore(tokenSet()), async () => {
+    calls += 1;
+    return response(200, { items: [], nextCursor: null, hasMore: false });
+  });
+  const repository = new HttpApiLivestockReadRepository(api);
+  await assert.rejects(repository.listPage({ limit: 0 }), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.listPage({ limit: 101 }), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.listPage({ cursor: '' }), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.getById('not-a-uuid'), { code: 'VALIDATION_FAILED' });
+  assert.equal(calls, 0);
+
+  const malformed = livestockReadFixture('77777777-7777-4777-8777-777777777777', 250.25);
+  const malformedApi = new ApiClient('http://localhost:3000', new MemoryServerSessionStore(tokenSet()), async () => response(200, {
+    items: [malformed], nextCursor: null, hasMore: false,
+  }));
+  await assert.rejects(new HttpApiLivestockReadRepository(malformedApi).listPage(), { code: 'API_RESPONSE_INVALID' });
+});
+
+test('verified Vet directory reads map filters, detail, slots, and exact server paging', async () => {
+  const vetId = '88888888-8888-4888-8888-888888888888';
+  const cursor = 'directory:opaque/+ =';
+  const requests = [];
+  const summary = vetDirectoryFixture(vetId);
+  const detail = vetDetailFixture(vetId);
+  const slot = { startsAt: '2026-11-18T03:00:00.000Z', endsAt: '2026-11-18T03:30:00.000Z' };
+  const api = new ApiClient('http://localhost:3000', new MemoryServerSessionStore(tokenSet()), async (url, init) => {
+    requests.push({ url, init });
+    const parsed = new URL(url);
+    if (parsed.pathname.endsWith('/slots')) return response(200, [slot]);
+    if (parsed.pathname === `/v1/vets/${vetId}`) return response(200, detail);
+    if (parsed.searchParams.has('cursor')) return response(200, { items: [summary], nextCursor: null, hasMore: false });
+    return response(200, { items: [summary], nextCursor: cursor, hasMore: true });
+  });
+  const repository = new HttpApiVetDirectoryReadRepository(api);
+
+  const page = await repository.search({
+    name: '  Dokter Fiktif ', species: 'cattle', service: 'visit', location: ' Bogor ',
+    available: false, minFeeIdr: 30000, maxFeeIdr: 350000, limit: 1,
+  });
+  const next = await repository.search({ cursor: page.nextCursor, limit: 1 });
+  const vet = await repository.getById(vetId);
+  const slots = await repository.getSlots(vetId, { dateFrom: '2026-11-18', dateTo: '2026-11-19', service: 'chat' });
+
+  assert.equal(page.items[0].professionalName, 'Dokter Fiktif');
+  assert.equal(page.items[0].minFeeIdr, 30000);
+  assert.equal(page.nextCursor, cursor);
+  assert.equal(next.nextCursor, null);
+  assert.equal(vet.chatDurationMinutes, 30);
+  assert.equal(vet.rates.chat, 30000);
+  assert.deepEqual(slots, [slot]);
+  const directoryQuery = new URL(requests[0].url).searchParams;
+  assert.equal(directoryQuery.get('name'), 'Dokter Fiktif');
+  assert.equal(directoryQuery.get('species'), 'cattle');
+  assert.equal(directoryQuery.get('service'), 'visit');
+  assert.equal(directoryQuery.get('location'), 'Bogor');
+  assert.equal(directoryQuery.get('available'), 'false');
+  assert.equal(directoryQuery.get('minFee'), '30000');
+  assert.equal(directoryQuery.get('maxFee'), '350000');
+  assert.equal(directoryQuery.get('limit'), '1');
+  assert.equal(new URL(requests[1].url).searchParams.get('cursor'), cursor);
+  assert.equal(new URL(requests[3].url).searchParams.get('dateFrom'), '2026-11-18');
+  assert.equal(new URL(requests[3].url).searchParams.get('service'), 'chat');
+  assert.equal(requests.every((request) => request.init.method === 'GET'), true);
+});
+
+test('Vet directory and slot adapters reject query bounds and malformed IDR/ISO DTOs', async () => {
+  let calls = 0;
+  const api = new ApiClient('http://localhost:3000', new MemoryServerSessionStore(tokenSet()), async () => {
+    calls += 1;
+    return response(200, { items: [], nextCursor: null, hasMore: false });
+  });
+  const repository = new HttpApiVetDirectoryReadRepository(api);
+  await assert.rejects(repository.search({ name: 'x'.repeat(121) }), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.search({ minFeeIdr: 20, maxFeeIdr: 10 }), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.search({ minFeeIdr: Number.MAX_SAFE_INTEGER + 1 }), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.search({ limit: 101 }), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.search({ cursor: '' }), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.getById('vet-local-id'), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.getSlots('88888888-8888-4888-8888-888888888888', {
+    dateFrom: '2026-02-30', dateTo: '2026-03-01', service: 'chat',
+  }), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.getSlots('88888888-8888-4888-8888-888888888888', {
+    dateFrom: '2026-01-01', dateTo: '2026-02-02', service: 'visit',
+  }), { code: 'VALIDATION_FAILED' });
+  assert.equal(calls, 0);
+
+  const unsafeDirectory = {
+    ...vetDirectoryFixture('99999999-9999-4999-8999-999999999999'),
+    fees: { chat: Number.MAX_SAFE_INTEGER + 1, visit: 300000 },
+    minFeeIdr: 300000,
+    maxFeeIdr: Number.MAX_SAFE_INTEGER + 1,
+  };
+  const badPageApi = new ApiClient('http://localhost:3000', new MemoryServerSessionStore(tokenSet()), async () => response(200, {
+    items: [unsafeDirectory], nextCursor: null, hasMore: false,
+  }));
+  await assert.rejects(new HttpApiVetDirectoryReadRepository(badPageApi).search(), { code: 'API_RESPONSE_INVALID' });
+
+  const invalidSlotsApi = new ApiClient('http://localhost:3000', new MemoryServerSessionStore(tokenSet()), async () => response(200, [
+    { startsAt: '2026-11-18T03:00:00', endsAt: '2026-11-18T04:00:00.000Z' },
+  ]));
+  await assert.rejects(new HttpApiVetDirectoryReadRepository(invalidSlotsApi).getSlots('88888888-8888-4888-8888-888888888888', {
+    dateFrom: '2026-11-18', dateTo: '2026-11-18', service: 'chat',
+  }), { code: 'API_RESPONSE_INVALID' });
+});
+
 function catalogProductFixture(id, name, unitPriceIdr) {
   return {
     id, name, category: 'care', species: ['cattle'],
     description: 'Fixture katalog fiktif untuk kontrak read-only.',
     unitPriceIdr, imageAttachmentId: null, active: true,
   };
+}
+
+function farmReadFixture(id) {
+  return {
+    id, name: 'Peternakan Fiktif', species: ['cattle'], timezone: 'Asia/Jakarta',
+    location: { district: 'Bogor' }, visitAddressId: '22222222-2222-4222-8222-222222222222',
+    createdAt: '2026-11-16T08:00:00.000Z', updatedAt: '2026-11-16T09:00:00.000Z', version: 1,
+  };
+}
+
+function addressReadFixture(id) {
+  return {
+    id, label: 'Kandang Utama', recipientName: 'Peternak Fiktif', phone: '+628123456789',
+    addressLine: 'Jalan Fiktif Nomor 1', city: 'Bogor', province: 'Jawa Barat', postalCode: '16111',
+    latitude: '-6.123456', longitude: '106.123456',
+    createdAt: '2026-11-16T08:00:00.000Z', updatedAt: '2026-11-16T09:00:00.000Z', version: 2,
+  };
+}
+
+function livestockReadFixture(id, weightKg) {
+  return {
+    id, farmerId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', farmId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    displayCode: 'SAPI-001', name: 'Sapi Fiktif', species: 'cattle', breed: 'Persilangan fiktif', sex: 'female',
+    birthDate: '2024-03-01', estimatedAgeMonths: 32, weightKg,
+    createdAt: '2026-11-16T08:00:00.000Z', updatedAt: '2026-11-16T09:00:00.000Z', version: 1,
+  };
+}
+
+function vetDirectoryFixture(id) {
+  return {
+    id, professionalName: 'Dokter Fiktif', experienceYears: 8, specialties: ['Layanan fiktif'], species: ['cattle'],
+    practiceLocation: 'Bogor', serviceAreas: ['Bogor'], acceptingNewRequests: true, services: ['chat', 'visit'],
+    timezone: 'Asia/Jakarta', weekdayRules: [{ weekday: 3, start: '09:00', end: '12:00' }],
+    fees: { chat: 30000, visit: 300000 }, minFeeIdr: 30000, maxFeeIdr: 300000,
+    ratingAverage: 4.75, ratingCount: 4,
+  };
+}
+
+function vetDetailFixture(id) {
+  const { fees, minFeeIdr, maxFeeIdr, ...summary } = vetDirectoryFixture(id);
+  return { ...summary, chatDurationMinutes: 30, visitDurationMinutes: 90, rates: fees };
 }
 
 function tokenSet(accessToken = 'access-token-1', refreshToken = 'refresh-token-1') {
