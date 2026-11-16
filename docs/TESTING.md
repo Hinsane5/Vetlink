@@ -1,6 +1,6 @@
 # Strategi pengujian VetLink
 
-Status QA per 16 November 2026: frontend masih memakai data lokal persisten tanpa integrasi API dan FE-03 autentikasi tetap ditunda. BE-00–12 dan BE-15 kini memiliki route executable; BE-09 lulus migrasi, seed, dan smoke domain pada PostgreSQL 17 lokal terisolasi. BE-13/14 belum mulai, BE-16/17 menunggu. APK Android preview sudah dibangun dan dipasang lewat USB pada 20 Oktober, tetapi QA interaksi/visual pada perangkat, ukuran kecil, serta font besar belum terbukti. Tidak ada pemanggilan Figma MCP baru.
+Status QA per 16 November 2026: frontend masih memakai data lokal persisten tanpa integrasi API dan FE-03 autentikasi tetap ditunda. BE-00–13 dan BE-15 kini memiliki route executable; BE-09 dan BE-13 lulus migrasi, seed, dan smoke domain pada PostgreSQL 17 lokal terisolasi. BE-14 belum mulai, BE-16/17 menunggu. APK Android preview sudah dibangun dan dipasang lewat USB pada 20 Oktober, tetapi QA interaksi/visual pada perangkat, ukuran kecil, serta font besar belum terbukti. Tidak ada pemanggilan Figma MCP baru.
 
 ## APK preview Android lokal (20 Oktober 2026)
 
@@ -74,6 +74,16 @@ Pemeriksaan backend dijalankan dari `apps/api` pada Node `24.10.0` / npm `11.6.0
 - `npm run api:smoke` — **Lulus**. Smoke memeriksa OpenAPI route owner-only; order unpaid memiliki shipment `null`; callback pembayaran internal yang `succeeded` memulai adapter lokal setelah transaksi tersimpan; `processing → shipped → delivered` berurutan; event ID/payload sama diabaikan sementara event ID dengan payload berbeda ditolak; adapter `pending`/`failed` tidak memajukan atau mengklaim delivered; owner lain mendapat 404, Dokter mendapat 403; serta update langsung status order/shipment ditolak trigger PostgreSQL. Teardown menghapus seluruh event, shipment dan order fixture.
 - Dua percobaan smoke awal berhenti pada server terakhir untuk pemeriksaan health 503 sebelum melewati batas startup 15 detik. Smoke terakhir lulus setelah helper tersebut memakai port baru untuk retry startup; pemeriksaan live/ready dan error 503 ikut lulus.
 - Tidak ada script `npm test` atau lint terpisah pada manifest. Tidak ada provider kurir/produksi, callback HTTP publik, transaksi finansial, deployment, atau integrasi API mobile.
+
+## Bukti BE-13 (16 November 2026)
+
+Pemeriksaan dijalankan dari `apps/api` pada Node `24.10.0` / npm `11.6.0`; `.nvmrc` meminta Node `24.15.0`. `npm ci --no-audit --no-fund` memasang 253 paket dengan peringatan engine. PostgreSQL 17.4 dijalankan sebagai cluster sementara terisolasi pada loopback port `55463`; migrasi, seed, dan smoke memakai DB `vetlink`. Docker daemon tidak tersedia, dan kredensial contoh tidak cocok dengan PostgreSQL yang sudah mendengarkan pada port 5432, sehingga run backend memakai cluster sementara tanpa mengubah DB tersebut.
+
+- `npm run check` — **Lulus**: `tsc --noEmit` dan `nest build`.
+- `npm run db:migrate` — **Lulus** setelah perbaikan FK komposit yang mensyaratkan unique constraint dengan tuple pasangan consultation/farmer/vet yang sama persis; 17 migrasi diterapkan.
+- `npm run db:seed` — **Lulus**; fixture fiktif tersedia dan seed mempertahankan row existing.
+- `npm run api:smoke` — **Lulus** setelah koreksi filter nama fixture di assertion direktori. Smoke memeriksa route OpenAPI, penolakan review sebelum completion, owner/role scope, stars 1–5, normalisasi text, dua retry paralel mengembalikan record sama, payload berbeda 409, daftar review dengan cursor, serta agregat profil/directory yang cocok dengan dua review (`ratingAverage=4.5`, `ratingCount=2`). Suite smoke lama BE-03/04/05/06/07/08/09/10/11/12/15 juga lulus dan membersihkan fixture.
+- Tidak ada script `npm test` atau lint terpisah pada manifest. Tidak ada provider eksternal, transaksi finansial nyata, deployment, atau uji mobile/API integration.
 
 ## Bukti BE-15 (20 Oktober 2026)
 

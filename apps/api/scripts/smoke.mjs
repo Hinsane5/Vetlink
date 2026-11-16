@@ -206,6 +206,8 @@ try {
   assert.ok(openApi.paths['/v1/consultations/{consultationId}/schedule-proposals/{proposalId}/respond']?.post);
   assert.ok(openApi.paths['/v1/consultations/{consultationId}/visit/depart']?.post);
   assert.ok(openApi.paths['/v1/consultations/{consultationId}/complete']?.post);
+  assert.ok(openApi.paths['/v1/consultations/{consultationId}/review']?.post);
+  assert.ok(openApi.paths['/v1/vets/{id}/reviews']?.get);
   assert.ok(openApi.paths['/v1/consultations/{consultationId}/follow-ups']?.get);
   assert.ok(openApi.paths['/v1/consultations/{consultationId}/follow-ups']?.post);
   assert.ok(openApi.paths['/v1/follow-ups/{followUpId}']?.patch);
@@ -825,6 +827,10 @@ try {
       assert.equal(visitBooking.response.status, 201);
       const visitConsultationId = (await visitBooking.response.json()).consultation.id;
       consultationIds.push(visitConsultationId);
+      const prematureReview = await sendJson(healthy.baseUrl, `/v1/consultations/${visitConsultationId}/review`, farmer.accessToken, 'POST', {
+        stars: 5, text: 'Ulasan sebelum layanan selesai.',
+      });
+      assert.equal(prematureReview.status, 422);
       // This fictional commission snapshot exercises exact integer arithmetic; it is not a commercial rate decision.
       await database.query('UPDATE consultations SET commission_snapshot_idr=17501 WHERE id=$1', [visitConsultationId]);
       await markPaid(visitConsultationId, 400000);
@@ -882,6 +888,30 @@ try {
       assert.equal(completedVisit.status, 'completed');
       assert.equal(completedVisit.visitStage, 'completed');
       assert.equal(completedVisit.completionAt != null, true);
+      const invalidLowReview = await sendJson(healthy.baseUrl, `/v1/consultations/${visitConsultationId}/review`, farmer.accessToken, 'POST', { stars: 0 });
+      assert.equal(invalidLowReview.status, 400);
+      const invalidHighReview = await sendJson(healthy.baseUrl, `/v1/consultations/${visitConsultationId}/review`, farmer.accessToken, 'POST', { stars: 6 });
+      assert.equal(invalidHighReview.status, 400);
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/consultations/${visitConsultationId}/review`, outsider.accessToken, 'POST', { stars: 5 })).status, 404);
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/consultations/${visitConsultationId}/review`, vet.accessToken, 'POST', { stars: 5 })).status, 403);
+      const reviewInput = { stars: 5, text: '  Penanganan ternak fiktif terasa jelas.  ' };
+      const parallelReviewResponses = await Promise.all([
+        sendJson(healthy.baseUrl, `/v1/consultations/${visitConsultationId}/review`, farmer.accessToken, 'POST', reviewInput),
+        sendJson(healthy.baseUrl, `/v1/consultations/${visitConsultationId}/review`, farmer.accessToken, 'POST', reviewInput),
+      ]);
+      assert.deepEqual(parallelReviewResponses.map((response) => response.status), [201, 201]);
+      const parallelReviews = await Promise.all(parallelReviewResponses.map((response) => response.json()));
+      assert.equal(parallelReviews[0].id, parallelReviews[1].id);
+      assert.equal(parallelReviews[0].text, 'Penanganan ternak fiktif terasa jelas.');
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/consultations/${visitConsultationId}/review`, farmer.accessToken, 'POST', { stars: 4 })).status, 409);
+      const firstReviewList = await sendJson(healthy.baseUrl, `/v1/vets/${vet.user.id}/reviews`, farmer.accessToken, 'GET');
+      assert.equal(firstReviewList.status, 200);
+      assert.equal((await firstReviewList.json()).items.length, 1);
+      const firstVetProfile = await sendJson(healthy.baseUrl, `/v1/vets/${vet.user.id}`, farmer.accessToken, 'GET');
+      assert.equal(firstVetProfile.status, 200);
+      const firstVetSummary = await firstVetProfile.json();
+      assert.equal(firstVetSummary.ratingAverage, 5);
+      assert.equal(firstVetSummary.ratingCount, 1);
       const completedEarningRow = await database.query(
         'SELECT id FROM earning_transactions WHERE consultation_id=$1', [visitConsultationId]);
       assert.equal(completedEarningRow.rowCount, 1);
@@ -1480,8 +1510,27 @@ try {
         { expectedVersion: chatVersion, confirmation: true }, { 'idempotency-key': `be05-complete-chat-${randomUUID()}` });
       assert.equal(completeChat.status, 200, await completeChat.clone().text());
       assert.equal((await completeChat.json()).consultation.status, 'completed');
+      const secondReviewResponse = await sendJson(healthy.baseUrl, `/v1/consultations/${consultationId}/review`, farmer.accessToken, 'POST', { stars: 4 });
+      assert.equal(secondReviewResponse.status, 201, await secondReviewResponse.clone().text());
+      const firstReviewPage = await (await sendJson(healthy.baseUrl, `/v1/vets/${vet.user.id}/reviews?limit=1`, farmer.accessToken, 'GET')).json();
+      assert.equal(firstReviewPage.items.length, 1);
+      assert.equal(firstReviewPage.hasMore, true);
+      const secondReviewPage = await (await sendJson(healthy.baseUrl,
+        `/v1/vets/${vet.user.id}/reviews?limit=1&cursor=${encodeURIComponent(firstReviewPage.nextCursor)}`, vet.accessToken, 'GET')).json();
+      assert.equal(secondReviewPage.items.length, 1);
+      assert.equal(secondReviewPage.hasMore, false);
+      const allRatings = [...firstReviewPage.items, ...secondReviewPage.items].map((review) => review.stars);
+      assert.equal(allRatings.length, 2);
+      assert.equal(allRatings.reduce((sum, rating) => sum + rating, 0) / allRatings.length, 4.5);
+      const finalVetProfile = await (await sendJson(healthy.baseUrl, `/v1/vets/${vet.user.id}`, farmer.accessToken, 'GET')).json();
+      assert.equal(finalVetProfile.ratingAverage, 4.5);
+      assert.equal(finalVetProfile.ratingCount, 2);
+      const vetDirectory = await (await sendJson(healthy.baseUrl, '/v1/vets', farmer.accessToken, 'GET')).json();
+      const directoryVet = vetDirectory.find((item) => item.id === vet.user.id);
+      assert.equal(directoryVet.ratingAverage, 4.5);
+      assert.equal(directoryVet.ratingCount, 2);
 
-      console.log('BE-03/04/05/06/07/08/09/10/11/12/15 smoke: owner/role scope; follow-up slot reservation, report ownership, reminder delivery/care completion, one HealthEvent and notification actor/recipient; catalog, commerce/shipment, earnings/withdrawals, chat/media lulus.');
+      console.log('BE-03/04/05/06/07/08/09/10/11/12/13/15 smoke: owner/role scope; completed-consultation review eligibility, unique replay/conflict, review pagination/profile aggregates; follow-up slot reservation, report ownership, reminder delivery/care completion, one HealthEvent and notification actor/recipient; catalog, commerce/shipment, earnings/withdrawals, chat/media lulus.');
     } finally {
       if (failedStorageServer) await stopServer(failedStorageServer.child);
       // Smoke teardown is a fixture reset; it must remove immutable final-note rows
@@ -1525,6 +1574,7 @@ try {
         await database.query('DELETE FROM payments WHERE payable_type=\'consultation\' AND payable_id = ANY($1::uuid[])', [allConsultationIds]);
         await database.query('DELETE FROM consultation_actions WHERE consultation_id = ANY($1::uuid[])', [allConsultationIds]);
         await database.query('DELETE FROM consultation_schedule_proposals WHERE consultation_id = ANY($1::uuid[])', [allConsultationIds]);
+        await database.query('DELETE FROM consultation_reviews WHERE consultation_id = ANY($1::uuid[])', [allConsultationIds]);
         await database.query('DELETE FROM consultation_visits WHERE consultation_id = ANY($1::uuid[])', [allConsultationIds]);
         await database.query('DELETE FROM idempotency_operations WHERE actor_id = ANY($1::uuid[])', [actors]);
         await database.query('DELETE FROM consultations WHERE id = ANY($1::uuid[])', [allConsultationIds]);

@@ -7,6 +7,13 @@ import type { BlockedTimeDto, BlockedTimePatchDto, DirectoryQueryDto, ScheduleQu
 
 const ACTIVE = "('awaiting_payment','requested','scheduled','reschedule_pending','in_progress')";
 const VISIBLE_APPOINTMENTS = "('requested','scheduled','reschedule_pending','in_progress')";
+const REVIEW_AGGREGATE_JOIN = `LEFT JOIN LATERAL (
+  SELECT COUNT(r.id)::int AS rating_count,
+         COALESCE(ROUND(AVG(r.stars)::numeric, 2), 0)::float8 AS rating_average
+  FROM consultation_reviews r
+  JOIN consultations c ON c.id=r.consultation_id AND c.farmer_id=r.farmer_id AND c.vet_id=r.vet_id
+  WHERE r.vet_id=v.user_id AND c.status='completed'
+) rating ON true`;
 type Db = Pick<DatabaseService, 'query'|'transaction'>;
 
 @Injectable()
@@ -20,7 +27,8 @@ export class VetService {
         d.practice_location AS "practiceLocation", d.service_areas AS "serviceAreas",
         a.accepting_new_requests AS "acceptingNewRequests", a.services, a.timezone,
         a.weekday_rules AS "weekdayRules",
-        rates.fees, rates.min_fee AS "minFeeIdr", rates.max_fee AS "maxFeeIdr"
+        rates.fees, rates.min_fee AS "minFeeIdr", rates.max_fee AS "maxFeeIdr",
+        rating.rating_average AS "ratingAverage", rating.rating_count AS "ratingCount"
       FROM vet_profiles v JOIN users u ON u.id=v.user_id
       JOIN vet_directory_profiles d ON d.vet_id=v.user_id
       JOIN vet_availabilities a ON a.vet_id=v.user_id
@@ -32,6 +40,7 @@ export class VetService {
                 AND ($3::text IS NULL OR service_type::text=$3)
               ORDER BY service_type,effective_at DESC) x
       ) rates
+      ${REVIEW_AGGREGATE_JOIN}
       WHERE v.verification_status='verified'
         AND rates.min_fee IS NOT NULL
         AND ($1::text IS NULL OR (COALESCE(v.professional_name,u.full_name) ILIKE '%'||$1||'%'))
@@ -52,11 +61,13 @@ export class VetService {
       d.experience_years AS "experienceYears",d.specialties,d.species,d.practice_location AS "practiceLocation",d.service_areas AS "serviceAreas",
       a.accepting_new_requests AS "acceptingNewRequests",a.services,a.timezone,a.weekday_rules AS "weekdayRules",
       a.chat_duration_minutes AS "chatDurationMinutes",a.visit_duration_minutes AS "visitDurationMinutes",
+      rating.rating_average AS "ratingAverage",rating.rating_count AS "ratingCount",
       COALESCE(rates.fees,'{}'::jsonb) AS rates
       FROM vet_profiles v JOIN users u ON u.id=v.user_id
       JOIN vet_directory_profiles d ON d.vet_id=v.user_id JOIN vet_availabilities a ON a.vet_id=v.user_id
       LEFT JOIN LATERAL (SELECT jsonb_object_agg(service_type,fee_idr) fees FROM
         (SELECT DISTINCT ON(service_type) service_type,fee_idr FROM vet_service_rates WHERE vet_id=v.user_id AND effective_at<=now() AND service_type::text=ANY(a.services) ORDER BY service_type,effective_at DESC) x) rates ON true
+      ${REVIEW_AGGREGATE_JOIN}
       WHERE v.user_id=$1 AND v.verification_status='verified' AND rates.fees IS NOT NULL`, [id]);
     if (!r.rows[0]) throw new NotFoundException({code:'RESOURCE_NOT_FOUND',message:'Dokter tidak ditemukan.'});
     return r.rows[0];
