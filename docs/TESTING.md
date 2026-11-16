@@ -785,3 +785,21 @@ Pemeriksaan dijalankan dari `apps/api` pada Node `24.10.0` / npm `11.6.0`; `.nvm
 - `npm run api:smoke` — **Lulus** pada PostgreSQL setelah migrate/seed. Seluruh pemeriksaan BE-03–15 lama lulus, termasuk flow A–D, verified guard, owner/assignment denial dan arbitrary ID, status/slot/version guard, note final dan completion, totals/ledger. Tambahan BE-16 membuktikan satu Peternak memiliki dua Farm yang terbaca oleh dua sesi terpisah, dan akun lain mendapat 404 saat mencoba mengubah Farm tersebut. Smoke membuat dua sesi Peternak dan dua sesi Dokter dengan ID sesi terpisah; dua submit payment Peternak paralel dengan key/payload sama menghasilkan satu Payment/Attempt, dan dua submit pencairan Dokter paralel dengan key/payload sama menghasilkan satu Withdrawal serta satu `reserve_withdrawal`. Smoke juga menguji retry payload berbeda, pembayaran callback dedupe, race pencairan dengan key berbeda yang tidak overspend, serta pembacaan data yang sama dari sesi Peternak kedua.
 - Percobaan awal migrasi berhenti karena database `vetlink` belum dibuat di cluster temporer; cluster dihentikan. Run final menggunakan DB baru yang dibuat eksplisit dan lulus penuh. Ini tidak mengubah service pada port 5432.
 - `npm run api:contract` dan API smoke menguji backend; mobile belum terhubung. Sesi API kedua tidak setara dengan QA UI pada dua perangkat fisik. Emulator, perangkat, screenshot/visual, dan integrasi API React Native **tidak dijalankan**. Payment adapter aktif tetap `pending`; payout lokal hanya mengakui pengajuan `submitted`, bukan transfer dana. Tidak ada provider produksi atau transaksi finansial nyata.
+
+## Pemeriksaan FE-25 — adapter API tahap pertama (16 November 2026)
+
+Implementasi FE-25 menambahkan transport API mobile, adapter sesi BE-01, secure session/token store, remote payment gateway, dan journal idempotency key. Runtime aplikasi tetap memakai SQLite; adapter API belum dipasang pada flow UI. Tidak ada endpoint/backend yang diubah.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm ci --no-audit --no-fund` di `apps/mobile` | **Lulus**, 762 paket dipasang. |
+| `npm run check` di `apps/mobile` | **Lulus**: typecheck, Expo lint tanpa error, dan 136 tes domain/repository (0 gagal). Sepuluh tes API adapter memeriksa secure bearer/refresh, pemetaan error, validasi base URL, login/restore server, membership role, quote IDR, role payment, kegagalan jaringan, serta key/payload yang tetap sama sesudah instance baru dibuat. |
+| `npm ci --no-audit --no-fund` di `apps/api` | **Lulus**, 253 paket dipasang. Node runtime `24.10.0` di bawah manifest `.nvmrc`/engine `24.15.0`, sehingga npm memberi peringatan engine; dependensi tetap terpasang. |
+| `npm run build` di `apps/api` | **Lulus**. Build diperlukan agar suite kontrak dapat menyalakan API lokal. |
+| `npm run api:contract` di `apps/api` | **Lulus**, 4/4: OpenAPI/ref, route workflow, schema/request key, dan error envelope. Tidak memakai PostgreSQL. |
+| `git diff --check` | **Lulus** setelah perubahan kode/dokumen. |
+| Kontrak dua sesi backend | Hasil smoke BE-16 yang sudah dicatat di atas membuktikan sesi server terpisah dan deduplikasi payment dengan key/payload sama; smoke tidak diulang dalam task FE-25 ini. Bukti sesi API tersebut **bukan** uji UI pada dua perangkat fisik. |
+| Batas kontrak | Tidak ada endpoint active-role switch atau GET status/payment-attempt. Koordinasi Orca mencatat keduanya sebagai follow-up backend dan gate integrasi penuh. Journal lokal menjaga key pada perangkat yang sama, tetapi setelah install ulang/perangkat kedua client belum dapat mengetahui attempt berikutnya setelah server menyimpan status `failed`. |
+| QA dan integrasi | Tidak menjalankan Android build/emulator atau QA dua perangkat fisik sesuai arahan. Tidak ada UI yang berubah; referensi lokal Figma mapping/inventory ditinjau, Figma MCP tidak dipanggil, dan QA visual Android tetap **Belum diuji**. Flow UI tetap lokal; belum ada klaim integrasi API end-to-end atau provider/transaksi nyata. |
+
+FE-25 tetap **Sedang dikerjakan**. Jaringan tidak diulang otomatis; kegagalan transport mengembalikan status belum diketahui dan tidak membuat hasil sukses lokal. Adapter pembayaran API hanya memakai quote dan status yang dikembalikan server.
