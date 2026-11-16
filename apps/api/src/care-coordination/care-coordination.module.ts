@@ -4,9 +4,10 @@ import { APP_CONFIG, loadAppConfig } from '../config/app-config.js';
 import { CareCoordinationController } from './care-coordination.controller.js';
 import { CareCoordinationService } from './care-coordination.service.js';
 import { LocalReminderDeliveryAdapter, REMINDER_DELIVERY_ADAPTER } from './reminder-delivery.js';
+import { NotificationsModule } from '../notifications/notifications.module.js';
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, NotificationsModule],
   controllers: [CareCoordinationController],
   providers: [
     CareCoordinationService,

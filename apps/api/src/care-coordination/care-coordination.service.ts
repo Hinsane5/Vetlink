@@ -21,6 +21,7 @@ import type {
   UpdateReminderDto,
 } from './care-coordination.dto.js';
 import { REMINDER_DELIVERY_ADAPTER, type ReminderDeliveryAdapter } from './reminder-delivery.js';
+import { NotificationsService, type NotificationCategory, type NotificationContextType } from '../notifications/notifications.service.js';
 
 type Context = Record<string, unknown> & {
   id: string;
@@ -186,6 +187,7 @@ export class CareCoordinationService {
   constructor(
     private readonly database: DatabaseService,
     @Inject(REMINDER_DELIVERY_ADAPTER) private readonly delivery: ReminderDeliveryAdapter,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async listFollowUps(principal: AuthenticatedPrincipal, consultationId: string) {
@@ -242,7 +244,8 @@ export class CareCoordinationService {
       );
       const followUp = inserted.rows[0];
       await this.storeNotification(client, {
-        actorId: principal.userId, recipientId: context.farmer_id, type: 'follow_up_scheduled', contextId: followUp.id,
+        actorId: principal.userId, recipientId: context.farmer_id, type: 'follow_up_scheduled', category: 'reminders',
+        contextType: 'follow_up', contextId: followUp.id, aggregateVersion: followUp.version,
         eventId: `follow-up-scheduled:${followUp.id}`, title: 'Tindak lanjut dijadwalkan',
         body: 'Dokter menjadwalkan pemeriksaan ulang untuk ternak Anda.',
       });
@@ -276,7 +279,8 @@ export class CareCoordinationService {
         const actorIsVet = principal.userId === row.vet_id;
         await this.storeNotification(client, {
           actorId: principal.userId, recipientId: actorIsVet ? row.farmer_id : row.vet_id,
-          type: 'follow_up_cancelled', contextId: row.id, eventId: `follow-up-cancelled:${row.id}`,
+          type: 'follow_up_cancelled', category: 'reminders', contextType: 'follow_up', contextId: row.id,
+          aggregateVersion: updated.version, eventId: `follow-up-cancelled:${row.id}`,
           title: 'Tindak lanjut dibatalkan', body: 'Jadwal pemeriksaan ulang telah dibatalkan.',
         });
       }
@@ -346,7 +350,8 @@ export class CareCoordinationService {
       }
       const responseDto = reportDto({ ...report, attachment_ids: attachmentIds });
       await this.storeNotification(client, {
-        actorId: principal.userId, recipientId: followUp.vet_id, type: 'progress_report_submitted', contextId: report.id,
+        actorId: principal.userId, recipientId: followUp.vet_id, type: 'progress_report_submitted', category: 'reminders',
+        contextType: 'progress_report', contextId: report.id, aggregateVersion: 1,
         eventId: `progress-report-submitted:${report.id}`, title: 'Laporan perkembangan baru',
         body: 'Peternak mengirim laporan perkembangan ternak.',
       });
@@ -418,10 +423,10 @@ export class CareCoordinationService {
       const refreshed = await client.query<ReminderRow>('SELECT * FROM reminders WHERE id=$1', [reminderId]);
       reminder = refreshed.rows[0];
       await this.storeNotification(client, {
-        actorId: principal.userId, recipientId: farmerId, type: 'reminder_created', contextId: reminder.id,
+        actorId: principal.userId, recipientId: farmerId, type: 'reminder_created', category: 'reminders',
+        contextType: 'reminder', contextId: reminder.id, aggregateVersion: reminder.version,
         eventId: `reminder-created:${reminder.id}`, title: 'Pengingat perawatan baru',
         body: 'Pengingat perawatan ternak telah dijadwalkan.',
-        deliveryStatus: outcome.status === 'succeeded' ? 'sent' : outcome.status,
       });
       const response = { ...reminderDto(reminder), deliveryOutcome: outcome, operationId: randomUUID(), replayed: false };
       await this.saveOperation(client, principal.userId, scope, key, fingerprint, 'reminder', reminder.id, response);
@@ -448,10 +453,6 @@ export class CareCoordinationService {
       const outcome = await this.deliver({ reminderId, recipientId: reminder.farmer_id, dueAt: iso(reminder.due_at)!, attempt });
       await this.storeReminderDelivery(client, reminder, principal.userId, sha256({ scope: 'retry', key }), outcome, attempt);
       const current = (await client.query<ReminderRow>('SELECT * FROM reminders WHERE id=$1', [reminderId])).rows[0];
-      await client.query(
-        `UPDATE notifications SET delivery_status=$3
-         WHERE recipient_id=$1 AND event_id=$2`, [reminder.farmer_id, `reminder-created:${reminder.id}`, outcome.status === 'succeeded' ? 'sent' : outcome.status],
-      );
       const response = { ...reminderDto(current), deliveryOutcome: outcome, operationId: randomUUID(), replayed: false };
       await this.saveOperation(client, principal.userId, scope, key, fingerprint, 'reminder', reminderId, response);
       return response;
@@ -496,7 +497,8 @@ export class CareCoordinationService {
       )).rows[0] ?? (await client.query<ReminderRow>('SELECT * FROM reminders WHERE id=$1', [reminderId])).rows[0];
       if (current.consultation_id && current.vet_id) {
         await this.storeNotification(client, {
-          actorId: principal.userId, recipientId: current.vet_id, type: 'care_completed', contextId: current.id,
+          actorId: principal.userId, recipientId: current.vet_id, type: 'care_completed', category: 'reminders',
+          contextType: 'reminder', contextId: current.id, aggregateVersion: current.version,
           eventId: `care-completed:${current.id}`, title: 'Perawatan ditandai dilakukan',
           body: 'Peternak mengonfirmasi bahwa perawatan ternak telah dilakukan.',
         });
@@ -641,22 +643,11 @@ export class CareCoordinationService {
   }
 
   private async storeNotification(client: PoolClient, input: {
-    actorId: string; recipientId: string; type: string; contextId: string; eventId: string;
-    title: string; body: string; deliveryStatus?: 'pending' | 'sent' | 'failed';
+    actorId: string; recipientId: string; type: string; category: NotificationCategory;
+    contextType: NotificationContextType; contextId: string; aggregateVersion: number; eventId: string;
+    title: string; body: string;
   }) {
-    const inserted = await client.query(
-      `INSERT INTO notifications(actor_id,recipient_id,type,context_id,event_id,title,body,delivery_status)
-       VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(recipient_id,event_id) DO NOTHING RETURNING id`,
-      [input.actorId, input.recipientId, input.type, input.contextId, input.eventId, input.title, input.body, input.deliveryStatus ?? 'pending'],
-    );
-    if (inserted.rowCount) return;
-    const existing = await client.query<{ actor_id: string; type: string; context_id: string }>(
-      'SELECT actor_id,type,context_id FROM notifications WHERE recipient_id=$1 AND event_id=$2', [input.recipientId, input.eventId],
-    );
-    const row = existing.rows[0];
-    if (!row || row.actor_id !== input.actorId || row.type !== input.type || row.context_id !== input.contextId) {
-      conflict('Event notifikasi sudah digunakan oleh record lain.', 'IDEMPOTENCY_CONFLICT');
-    }
+    await this.notifications.recordEvent(client, input);
   }
 
   private async lockVet(client: PoolClient, vetId: string) {

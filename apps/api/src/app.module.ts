@@ -15,9 +15,10 @@ import { CommerceModule } from './commerce/commerce.module.js';
 import { EarningsModule } from './earnings/earnings.module.js';
 import { CareCoordinationModule } from './care-coordination/care-coordination.module.js';
 import { ReviewsModule } from './reviews/reviews.module.js';
+import { NotificationsModule } from './notifications/notifications.module.js';
 
 @Module({
-  imports: [DatabaseModule, HealthModule, AuthModule, CommunicationModule, ProfileModule, LivestockModule, VetModule, ConsultationModule, PaymentModule, CatalogModule, CommerceModule, ClinicalModule, EarningsModule, CareCoordinationModule, ReviewsModule],
+  imports: [DatabaseModule, HealthModule, AuthModule, CommunicationModule, ProfileModule, LivestockModule, VetModule, ConsultationModule, PaymentModule, CatalogModule, CommerceModule, ClinicalModule, EarningsModule, CareCoordinationModule, ReviewsModule, NotificationsModule],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
