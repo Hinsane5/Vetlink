@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
+import 'reflect-metadata';
 import { after, before, test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
+import { ConsultationService } from '../dist/consultation/consultation.service.js';
 
 const methods = ['get', 'post', 'put', 'patch', 'delete'];
 const unauthenticatedOperations = new Set([
@@ -62,6 +64,17 @@ function resolveReference(document, reference) {
     const key = segment.replaceAll('~1', '/').replaceAll('~0', '~');
     return value?.[key];
   }, document);
+}
+
+function schemaProperties(document, schemaOrReference) {
+  const schema = typeof schemaOrReference === 'string'
+    ? resolveReference(document, schemaOrReference)
+    : schemaOrReference;
+  const inherited = (schema.allOf ?? []).reduce((properties, part) => ({
+    ...properties,
+    ...schemaProperties(document, part),
+  }), {});
+  return { ...inherited, ...(schema.properties ?? {}) };
 }
 
 before(async () => {
@@ -291,6 +304,138 @@ test('BE-16 read DTOs describe Farm, address, livestock, directory and slots', (
   }
   assert.ok(paths['/v1/vets/page'].get.parameters.some((parameter) => parameter.name === 'name'));
   assert.ok(paths['/v1/vets/page'].get.parameters.some((parameter) => parameter.name === 'service'));
+});
+
+test('BE-05 consultation success responses describe the service projections', () => {
+  const paths = openApi.paths;
+  const schemas = openApi.components.schemas;
+  const responseSchema = (method, path, status, expectedRef) => {
+    const response = paths[path]?.[method]?.responses?.[status];
+    assert.ok(response, `Missing ${status} response for ${method.toUpperCase()} ${path}`);
+    const actual = response.content?.['application/json']?.schema;
+    assert.ok(actual, `Missing JSON response schema for ${method.toUpperCase()} ${path}`);
+    assert.equal(actual.$ref, expectedRef, `${method.toUpperCase()} ${path} response schema`);
+    return schemaProperties(openApi, expectedRef);
+  };
+
+  const quote = responseSchema('post', '/v1/consultation-quotes', '201', '#/components/schemas/ConsultationQuoteResponseDto');
+  const created = responseSchema('post', '/v1/consultations', '201', '#/components/schemas/ConsultationActionResponseDto');
+  const listResponse = paths['/v1/consultations'].get.responses['200'].content['application/json'].schema;
+  assert.equal(listResponse.type, 'array');
+  assert.equal(listResponse.items.$ref, '#/components/schemas/ConsultationListItemResponseDto');
+  const listItem = schemaProperties(openApi, listResponse.items.$ref);
+  const detail = responseSchema('get', '/v1/consultations/{consultationId}', '200', '#/components/schemas/ConsultationDetailResponseDto');
+  const visit = responseSchema('get', '/v1/consultations/{consultationId}/visit', '200', '#/components/schemas/ConsultationVisitResponseDto');
+
+  for (const field of ['id', 'quoteId', 'farmerId', 'vetId', 'animalId', 'serviceType', 'complaint', 'startsAt', 'endsAt', 'feeIdr', 'commissionIdr', 'amountIdr', 'currency', 'visitAddressSnapshot', 'consumed']) {
+    assert.ok(quote[field], `ConsultationQuoteResponseDto is missing ${field}`);
+  }
+  for (const field of ['feeIdr', 'commissionIdr', 'amountIdr']) {
+    assert.equal(quote[field].type, 'integer');
+    assert.equal(quote[field].maximum, Number.MAX_SAFE_INTEGER);
+  }
+  assert.equal(quote.currency.enum[0], 'IDR');
+  assert.equal(quote.visitAddressSnapshot.nullable, true);
+  assert.equal(quote.visitAddressSnapshot.allOf?.[0]?.$ref ?? quote.visitAddressSnapshot.$ref, '#/components/schemas/ConsultationVisitAddressSnapshotResponseDto');
+
+  const listFields = ['id', 'displayCode', 'farmerId', 'vetId', 'animalId', 'animalCode', 'animalName', 'species', 'serviceType', 'complaint', 'status', 'startsAt', 'endsAt', 'feeIdr', 'commissionIdr', 'feeAmountIdr', 'commissionAmountIdr', 'refundStatus', 'completedAt', 'rejectionReason', 'version', 'visitStage', 'paymentStatus'];
+  for (const field of listFields) assert.ok(listItem[field], `ConsultationListItemResponseDto is missing ${field}`);
+  assert.equal(listItem.feeIdr.type, 'string', 'The existing PostgreSQL bigint projection remains unchanged.');
+  assert.equal(listItem.feeAmountIdr.type, 'integer');
+  assert.equal(listItem.feeAmountIdr.maximum, Number.MAX_SAFE_INTEGER);
+  assert.equal(listItem.commissionIdr.type, 'string');
+  assert.equal(listItem.commissionAmountIdr.type, 'integer');
+  assert.equal(listItem.completedAt.nullable, true);
+  assert.equal(listItem.visitAddressSnapshot, undefined);
+  assert.equal(listItem.completionAt, undefined);
+
+  const detailFields = ['id', 'displayCode', 'farmerId', 'vetId', 'animalId', 'animalCode', 'animalName', 'species', 'serviceType', 'complaint', 'status', 'startsAt', 'endsAt', 'feeIdr', 'commissionIdr', 'feeAmountIdr', 'commissionAmountIdr', 'visitAddressSnapshot', 'completionAt', 'rejectionReason', 'refundStatus', 'reschedulePreviousStatus', 'version', 'visitStage', 'departureAt', 'arrivalAt', 'examinationStartedAt', 'visitCompletedAt', 'visitVersion', 'paymentStatus', 'proposals', 'actions'];
+  for (const field of detailFields) assert.ok(detail[field], `ConsultationDetailResponseDto is missing ${field}`);
+  assert.equal(detail.completionAt.nullable, true);
+  assert.equal(detail.visitCompletedAt.nullable, true);
+  assert.equal(detail.feeIdr.type, 'string');
+  assert.equal(detail.feeAmountIdr.type, 'integer');
+  assert.equal(detail.feeAmountIdr.maximum, Number.MAX_SAFE_INTEGER);
+  assert.equal(detail.commissionIdr.type, 'string');
+  assert.equal(detail.commissionAmountIdr.type, 'integer');
+  assert.equal(detail.proposals.items.$ref, '#/components/schemas/ConsultationScheduleProposalResponseDto');
+  assert.equal(detail.actions.items.$ref, '#/components/schemas/ConsultationActionAuditResponseDto');
+
+  assert.deepEqual(visit.stage.enum, ['scheduled', 'en_route', 'arrived', 'examining', 'completed']);
+  assert.equal(visit.updatedAt.format, 'date-time');
+  assert.equal(visit.completedAt.nullable, true);
+
+  const actionFields = Object.keys(created);
+  assert.ok(actionFields.includes('operationId'));
+  assert.ok(actionFields.includes('replayed'));
+  assert.ok(actionFields.includes('consultation'));
+  assert.equal(created.status, undefined, 'Action results do not invent a success/status field.');
+  assert.equal(created.success, undefined, 'Action results do not invent a speculative success flag.');
+  assert.equal(created.consultation.$ref, '#/components/schemas/ConsultationResponseDto');
+
+  for (const [path, schemaName] of [
+    ['/v1/consultations/{consultationId}/accept', 'ConsultationActionResponseDto'],
+    ['/v1/consultations/{consultationId}/reject', 'ConsultationActionResponseDto'],
+    ['/v1/consultations/{consultationId}/schedule-proposals', 'ConsultationScheduleProposalActionResponseDto'],
+    ['/v1/consultations/{consultationId}/schedule-proposals/{proposalId}/respond', 'ConsultationScheduleProposalDecisionResponseDto'],
+    ['/v1/consultations/{consultationId}/start', 'ConsultationActionResponseDto'],
+    ['/v1/consultations/{consultationId}/visit/depart', 'ConsultationVisitActionResponseDto'],
+    ['/v1/consultations/{consultationId}/visit/arrive', 'ConsultationVisitActionResponseDto'],
+    ['/v1/consultations/{consultationId}/visit/start-examination', 'ConsultationVisitActionResponseDto'],
+    ['/v1/consultations/{consultationId}/complete', 'ConsultationActionResponseDto'],
+  ]) {
+    const action = paths[path].post.responses['200'].content['application/json'].schema;
+    assert.equal(action.$ref, `#/components/schemas/${schemaName}`, `POST ${path} response`);
+    const properties = schemaProperties(openApi, action.$ref);
+    for (const field of ['operationId', 'replayed', 'consultation']) assert.ok(properties[field], `${schemaName} is missing ${field}`);
+    assert.equal(properties.success, undefined);
+  }
+  assert.ok(schemaProperties(openApi, '#/components/schemas/ConsultationScheduleProposalActionResponseDto').proposalId);
+  assert.ok(schemaProperties(openApi, '#/components/schemas/ConsultationScheduleProposalDecisionResponseDto').decision);
+  const visitAction = schemaProperties(openApi, '#/components/schemas/ConsultationVisitActionResponseDto');
+  assert.ok(visitAction.visit);
+  assert.equal(schemaProperties(openApi, '#/components/schemas/ConsultationVisitActionStateResponseDto').updatedAt, undefined);
+
+  const statusFilter = paths['/v1/consultations'].get.parameters.find((parameter) => parameter.name === 'status');
+  assert.deepEqual(statusFilter.schema.enum, ['awaiting_payment', 'requested', 'scheduled', 'reschedule_pending', 'in_progress', 'completed', 'rejected', 'cancelled']);
+});
+
+test('BE-05 service list/detail keep bigint fields and expose safe integer IDR aliases', async () => {
+  const listProjection = { id: '00000000-0000-4000-8000-000000000001', feeIdr: '95000', commissionIdr: '0' };
+  const detailProjection = { id: listProjection.id, version: 1, feeIdr: '95000', commissionIdr: '0' };
+  const database = {
+    async query(sql) {
+      if (sql.includes('AS "completedAt"')) return { rows: [listProjection] };
+      if (sql.includes('AS "completionAt"')) return { rows: [detailProjection] };
+      if (sql.includes('FROM consultation_schedule_proposals')) return { rows: [] };
+      if (sql.includes('FROM consultation_actions')) return { rows: [] };
+      throw new Error(`Unexpected consultation projection query: ${sql}`);
+    },
+  };
+  const service = new ConsultationService(database, {}, {});
+  const principal = { userId: '00000000-0000-4000-8000-000000000002', activeRole: 'farmer' };
+
+  const list = await service.list(principal, {});
+  assert.equal(list[0].feeIdr, '95000');
+  assert.equal(list[0].commissionIdr, '0');
+  assert.equal(list[0].feeAmountIdr, 95000);
+  assert.equal(list[0].commissionAmountIdr, 0);
+
+  const detail = await service.get(principal, listProjection.id);
+  assert.equal(detail.feeIdr, '95000');
+  assert.equal(detail.commissionIdr, '0');
+  assert.equal(detail.feeAmountIdr, 95000);
+  assert.equal(detail.commissionAmountIdr, 0);
+
+  const unsafeDatabase = {
+    async query() { return { rows: [{ ...listProjection, feeIdr: '9007199254740992' }] }; },
+  };
+  const unsafeService = new ConsultationService(unsafeDatabase, {}, {});
+  await assert.rejects(unsafeService.list(principal, {}), (error) => {
+    assert.equal(error.getStatus(), 400);
+    assert.equal(error.getResponse().fieldErrors.feeIdr[0], 'Nominal harus berupa integer rupiah yang aman.');
+    return true;
+  });
 });
 
 test('unauthenticated API access returns the shared error envelope', async () => {

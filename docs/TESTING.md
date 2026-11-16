@@ -851,6 +851,20 @@ Pemeriksaan dijalankan dari `apps/api` pada Node `24.10.0` / npm `11.6.0`; engin
 - `git diff --check` — **Lulus** setelah seluruh perubahan kode dan dokumen.
 - Mobile tetap memakai SQLite; tidak ada perubahan runtime mobile, wiring API, build/emulator, Figma MCP, provider produksi, deployment, atau transaksi finansial nyata pada pekerjaan ini.
 
+## Kontrak respons BE-05 FE-25 — 17 November 2026
+
+Perubahan menambahkan response DTO OpenAPI untuk quote, create/action, list, detail, dan Visit BE-05 sesuai query/proyeksi service. `api:contract` juga memeriksa field dan route response, serta memanggil proyeksi list/detail service dengan row bigint tiruan untuk memastikan tipe string lama tetap ada, alias integer IDR aman ditambah, dan nominal di luar safe integer ditolak. Perubahan akses owner/assignment, verifikasi Dokter, urutan Visit, completion, dan idempotensi tidak dilakukan.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm ci --no-audit --no-fund` di `apps/api` | **Lulus**, 253 paket terpasang. Node `24.10.0` berada di bawah engine `.nvmrc`/manifest `24.15.0`; npm mencatat peringatan engine. |
+| `npm run check` di `apps/api` | **Lulus**: `tsc --noEmit` dan `nest build`. |
+| `npm run api:contract` di `apps/api` | **Lulus**, 7/7. Mencakup response schema quote/create/list/detail/visit/action, alias safe integer IDR, batas overflow service projection, referensi OpenAPI, dan header idempotensi yang sudah ada. Tidak membutuhkan PostgreSQL. |
+| PostgreSQL lokal / `npm run api:smoke` | **Tidak dijalankan**: server `127.0.0.1:5432` merespons `pg_isready`, tetapi autentikasi memakai nilai lokal terbuka dari `.env.example` gagal; `55432` tidak aktif. Tidak ada database test terisolasi yang dapat diverifikasi tanpa memakai kredensial/database lain. Migrasi, seed, dan smoke tidak dijalankan. |
+| Pemeriksaan invariant layanan | Guard domain yang sudah ada untuk owner/assignment, verified vet, pembayaran, version/idempotency, urutan Visit, dan completion tidak diubah. Pemeriksaan kontrak ini tidak menjalankan ulang smoke PostgreSQL BE-05; bukti runtime terdahulu tetap tercatat pada [BE-05](#bukti-be-05-19-oktober-2026). |
+
+Perubahan nilai bersifat additive: `feeIdr`/`commissionIdr` tetap berupa string bigint pada proyeksi list/detail/action, sedangkan `feeAmountIdr`/`commissionAmountIdr` menjadi JSON integer safe. Quote tetap mengembalikan `feeIdr`, `commissionIdr`, dan `amountIdr` sebagai integer safe. Runtime mobile belum memakai API dan tetap SQLite.
+
 ## FE-25 lanjutan — adapter baca Farm, livestock, dan Vet directory (16 November 2026)
 
 Ditambahkan `FarmReadRepository`, `LivestockReadRepository`, dan `VetDirectoryReadRepository` dengan adapter HTTP GET untuk array/detail Farm dan address milik sesi Peternak, halaman/detail livestock sesuai scope role server, serta halaman/detail dokter verified dan slots. Read models mengikuti DTO BE-16 dan menyimpan koordinat/berat decimal sebagai string; adapter tidak menggabungkan snapshot SQLite atau mengubah otoritas runtime. `createApiAdapters` mengekspos adapter tersebut, tetapi `App.tsx` tetap memakai SQLite dan belum mengirim request API.

@@ -74,7 +74,13 @@ type QuoteRow = {
   consumed_at: Date | null;
 };
 type ActionRow = { id: string; request_fingerprint: string; action_type: string };
-type ViewRow = Record<string, unknown> & { id: string; version: number };
+type ViewRow = Record<string, unknown> & {
+  id: string;
+  version: number;
+  feeIdr: string | number;
+  commissionIdr: string | number;
+};
+type ConsultationProjectionRow = ViewRow & { feeAmountIdr: number; commissionAmountIdr: number };
 
 const activeStatuses = `('awaiting_payment','requested','scheduled','reschedule_pending','in_progress')`;
 const err = (code: string, message: string) => ({ code, message });
@@ -91,6 +97,14 @@ function safeIdr(value: string | number, field = 'feeIdr'): number {
   const result = typeof value === 'number' ? value : Number(value);
   if (!Number.isSafeInteger(result) || result < 0) validation(field, 'Nominal harus berupa integer rupiah yang aman.');
   return result;
+}
+
+function withSafeIdrAmounts<Row extends { feeIdr: string | number; commissionIdr: string | number }>(row: Row) {
+  return {
+    ...row,
+    feeAmountIdr: safeIdr(row.feeIdr, 'feeIdr'),
+    commissionAmountIdr: safeIdr(row.commissionIdr, 'commissionIdr'),
+  };
 }
 
 @Injectable()
@@ -248,7 +262,7 @@ export class ConsultationService implements ConsultationPaymentSucceededPort {
   async list(principal: AuthenticatedPrincipal, query: ConsultationListQueryDto) {
     const ownerColumn = principal.activeRole === 'vet' ? 'c.vet_id' : 'c.farmer_id';
     const hiddenAwaitingPayment = principal.activeRole === 'vet' ? "AND c.status <> 'awaiting_payment'" : '';
-    const result = await this.database.query(
+    const result = await this.database.query<Record<string, unknown> & { feeIdr: string | number; commissionIdr: string | number }>(
       `SELECT c.id,c.display_code AS "displayCode",c.farmer_id AS "farmerId",c.vet_id AS "vetId",
          c.animal_id AS "animalId",l.display_code AS "animalCode",l.name AS "animalName",l.species,
          c.service_type AS "serviceType",c.complaint,c.status,c.starts_at AS "startsAt",c.ends_at AS "endsAt",
@@ -262,7 +276,7 @@ export class ConsultationService implements ConsultationPaymentSucceededPort {
        ORDER BY c.starts_at DESC,c.id`,
       [principal.userId, query.status ?? null],
     );
-    return result.rows;
+    return result.rows.map(withSafeIdrAmounts);
   }
 
   async get(principal: AuthenticatedPrincipal, consultationId: string) {
@@ -706,7 +720,7 @@ export class ConsultationService implements ConsultationPaymentSucceededPort {
     return result.rows[0];
   }
 
-  private async detailRow(client: Pick<PoolClient, 'query'> | DatabaseService, principal: AuthenticatedPrincipal, consultationId: string): Promise<ViewRow> {
+  private async detailRow(client: Pick<PoolClient, 'query'> | DatabaseService, principal: AuthenticatedPrincipal, consultationId: string): Promise<ConsultationProjectionRow> {
     const query = client.query.bind(client) as DatabaseService['query'];
     const ownerColumn = principal.activeRole === 'vet' ? 'c.vet_id' : 'c.farmer_id';
     const result = await query<ViewRow>(
@@ -725,7 +739,7 @@ export class ConsultationService implements ConsultationPaymentSucceededPort {
       [consultationId, principal.userId, principal.activeRole === 'vet'],
     );
     if (!result.rows[0]) throw this.notFound();
-    return result.rows[0];
+    return withSafeIdrAmounts(result.rows[0]);
   }
 
   private async visitRow(client: PoolClient, consultationId: string) {
