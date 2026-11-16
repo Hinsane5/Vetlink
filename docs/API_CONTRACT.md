@@ -1,16 +1,16 @@
 # Kontrak integrasi backend v1
 
-Status per 20 Oktober 2026: OpenAPI executable memuat route BE-00–12 dan BE-15: health/auth, profil/verifikasi, ternak/pasien/riwayat, vet discovery/availability, booking/request/proposal/visit/completion, payment quote/create, chat/media, note/recommendation, follow-up, reminder/care completion, laporan perkembangan, katalog aktif, cart, checkout quote, order, shipment timeline owner-scoped, pendapatan Dokter, tujuan pencairan fiktif, dan reservasi ledger pencairan. Runtime acceptance BE-09 menunggu database lokal; BE-13/14 dan BE-16/17 tetap menunggu tiket masing-masing. Aplikasi mobile belum memakai backend jaringan.
+Status per 16 November 2026: OpenAPI executable memuat route BE-00–13 dan BE-15: health/auth, profil/verifikasi, ternak/pasien/riwayat, vet discovery/availability/reviews dan rating agregat, booking/request/proposal/visit/completion, payment quote/create, chat/media, note/recommendation, follow-up, reminder/care completion, laporan perkembangan, katalog aktif, cart, checkout quote, order, shipment timeline owner-scoped, pendapatan Dokter, tujuan pencairan fiktif, dan reservasi ledger pencairan. Runtime acceptance BE-09 dan BE-13 lulus dengan PostgreSQL lokal; BE-14 dan BE-16/17 tetap menunggu tiket masing-masing. Aplikasi mobile belum memakai backend jaringan.
 
 ## Konvensi
 
 Prefix `/v1`, JSON, ID stabil, timestamp ISO-8601 UTC, integer IDR, paginasi cursor untuk daftar. Auth memakai bearer credential opaque; token tidak menjadi query parameter. Error berbentuk `{code, message, fieldErrors?, requestId}` tanpa isi rahasia/stack trace. Client menerjemahkan pesan teknis ke bahasa Indonesia.
 
-Mutasi concurrency-sensitive menerima `expectedVersion`. Mutasi pembayaran, order, pencairan, finalisasi dan completion menerima `Idempotency-Key`; key sama/payload sama mengembalikan hasil sebelumnya, payload berbeda ditolak. Upload media juga mewajibkan `Idempotency-Key`; pesan memakai `clientMessageId` yang unik per actor/konsultasi. Status HTTP standar: 400 validation, 401 session, 403 role/access, 404 resource tersembunyi, 409 status/version/slot conflict, 413 payload terlalu besar, 422 rule, 429 rate limit, 503 dependency unavailable, dan 500 internal error.
+Mutasi concurrency-sensitive menerima `expectedVersion`. Mutasi pembayaran, order, pencairan, finalisasi dan completion menerima `Idempotency-Key`; key sama/payload sama mengembalikan hasil sebelumnya, payload berbeda ditolak. Review memakai unique consultation dan payload sama sebagai deduplikasi, tanpa key tambahan. Upload media juga mewajibkan `Idempotency-Key`; pesan memakai `clientMessageId` yang unik per actor/konsultasi. Status HTTP standar: 400 validation, 401 session, 403 role/access, 404 resource tersembunyi, 409 status/version/slot conflict, 413 payload terlalu besar, 422 rule, 429 rate limit, 503 dependency unavailable, dan 500 internal error.
 
 Gunakan action endpoint untuk transisi yang membutuhkan syarat; jangan menyediakan PATCH umum yang membolehkan client mengatur `verified`, `completed`, `paid`, `balance`, atau `finalizedAt`.
 
-## OpenAPI executable BE-00–08, BE-10–12, dan BE-15
+## OpenAPI executable BE-00–13 dan BE-15
 
 NestJS melayani Swagger UI di `/docs` dan JSON di `/openapi.json`. Endpoint runtime yang tersedia:
 
@@ -42,6 +42,8 @@ NestJS melayani Swagger UI di `/docs` dan JSON di `/openapi.json`. Endpoint runt
 | `GET /v1/consultations/{consultationId}/messages` | `cursor` opsional; `limit` 1–100, default 20 | 200 pesan lama-ke-baru per halaman, `nextCursor`, `hasMore` | 400/401/403/404/422 |
 | `POST /v1/consultations/{consultationId}/messages` | `clientMessageId`, `text?`, `attachmentIds?` | 201 record pesan dan `deliveryStatus` | 400/401/403/404/409/422/503 |
 | `POST /v1/consultations/{consultationId}/messages/{messageId}/retry` | ID pesan pengirim | 200 record yang sama dan attempt terbaru | 401/403/404/422/503 |
+| `POST /v1/consultations/{consultationId}/review` | `{stars, text?}`; stars integer 1–5 dan text maksimal 1.000 karakter | 201 record Review tersimpan; retry payload sama mengembalikan record yang sama | 400/401/403/404/409/422/503 `ApiErrorResponseDto` |
+| `GET /v1/vets/{id}/reviews` | `cursor?`, `limit?` 1–100 (default 20) | 200 `{items,nextCursor,hasMore}`; hanya ulasan relasi valid dari konsultasi selesai | 400/401/403/404/503 `ApiErrorResponseDto` |
 
 ## Profil dan verifikasi BE-02
 
@@ -127,6 +129,12 @@ Semua route memerlukan bearer session, active role membership, dan identitas act
 
 BE-07 memakai adapter filesystem privat lokal di luar static web root dan adapter polling PostgreSQL sebagai transport awal; tidak memerlukan realtime atau provider media/chat eksternal. Upload menerima `image/jpeg`, `image/png`, `image/webp`, dan `video/mp4`; MIME multipart harus cocok dengan signature byte. Guardrail default development adalah 10 MiB per gambar dan 50 MiB per video, dapat diubah lewat `MEDIA_IMAGE_MAX_BYTES` dan `MEDIA_VIDEO_MAX_BYTES` (masing-masing dibatasi sampai 100 MiB oleh parser transport). Guardrail ini bukan kebijakan produksi dan tidak menutup DEC-17. File tidak dikirim sebagai base64 JSON. Gagal storage/delivery menghasilkan status adapter `failed`; upload dapat diulang dengan `Idempotency-Key` yang sama, pesan dengan clientMessageId/messageId yang sama.
 
+## Ulasan BE-13
+
+Semua route memakai bearer dan active role membership. `POST /v1/consultations/{consultationId}/review` hanya menerima `{stars, text?}` dari Peternak pemilik setelah konsultasi berstatus `completed`; stars adalah integer 1–5 dan text opsional maksimal 1.000 karakter, dipangkas di tepi dan disimpan `null` bila kosong. Satu row Review immutable berlaku per Consultation. Request paralel/retry dengan isi ternormalisasi sama mengembalikan row yang sama; isi berbeda mengembalikan 409. Konsultasi milik akun lain disembunyikan sebagai 404.
+
+`GET /v1/vets/{id}/reviews` hanya menampilkan Review dengan FK Consultation/Peternak/Dokter yang cocok dan status Consultation masih `completed`; daftar memakai cursor stabil serta limit 1–100. Directory dan detail Dokter mengembalikan `ratingAverage` yang dibulatkan dua desimal dan `ratingCount`, dihitung dari row Review valid yang sama; tidak ada tabel saldo atau nilai rating yang dapat diedit client.
+
 ## Kelompok endpoint
 
 | Modul | Endpoint usulan | Otorisasi / hasil |
@@ -136,7 +144,7 @@ BE-07 memakai adapter filesystem privat lokal di luar static web root dan adapte
 | Verifikasi | POST `/me/vet/verification-submissions`; GET `/me/vet/verification` | Dokter submit/revisi; hasil review hanya trusted reviewer |
 | Ternak | GET/POST `/livestock`; GET/PATCH `/livestock/{id}` | Peternak own CRUD; dokter read sesuai assignment |
 | Kesehatan | GET `/livestock/{id}/health-events`; POST `/livestock/{id}/care-events`; GET `/patients` | Dokter daftar scoped; Peternak tidak menulis clinical note |
-| Dokter | GET `/vets`, `/vets/{id}`, `/vets/{id}/slots`, `/vets/{id}/reviews` | Filter name/species/service/location/available/minFee/maxFee; only verified profiles with configured availability and rates are discoverable |
+| Dokter | GET `/vets`, `/vets/{id}`, `/vets/{id}/slots`, `/vets/{id}/reviews` | Filter name/species/service/location/available/minFee/maxFee; only verified profiles with configured availability and rates are discoverable; directory/detail membawa `ratingAverage` dua desimal dan `ratingCount` dari ulasan valid |
 | Ketersediaan | GET/PUT `/me/vet/availability`; CRUD `/me/vet/blocked-times`; GET `/me/vet/schedule` | Owner dokter; preserve accepted appointments; half-open interval conflict checks |
 | Booking | POST `/consultation-quotes`, `/consultations`; GET `/consultations`, `/consultations/{id}` | Peternak owner, doctor assigned; fee dari server |
 | Request | POST `/consultations/{id}/accept`, `/reject`, `/schedule-proposals` | Dokter assigned verified untuk accept; reject reason wajib |
@@ -154,7 +162,7 @@ BE-07 memakai adapter filesystem privat lokal di luar static web root dan adapte
 | Cart/checkout | GET `/me/cart`; PUT/DELETE `/me/cart/items/{productId}`; POST `/checkout-quotes`, `/orders` | Peternak saja; quantities, address, quote checked |
 | Bayar | POST `/payments`; GET `/payments`, `/payments/{id}` | Owner payable; result provider atau adapter, bukan client claimed paid |
 | Orders | GET `/orders`, `/orders/{id}`, `/orders/{id}/shipment` | Owner Peternak |
-| Ulasan | POST `/consultations/{id}/review` | Owner, consultation completed, satu review per consultation |
+| Ulasan | POST `/consultations/{id}/review`; GET `/vets/{id}/reviews` | Hanya Peternak pemilik setelah konsultasi `completed`; stars integer 1–5; satu Review immutable per konsultasi; retry isi sama mengembalikan record, isi berbeda 409 |
 | Pendapatan | GET `/me/vet/earnings?period=&from=&to=&cursor=&limit=`, `/me/vet/transactions/{id}` | Dokter own ledger projections; integer IDR, saldo semua periode dan transaksi per periode |
 | Tujuan pencairan | GET `/me/vet/payout-destinations` | Dokter sendiri; hanya tujuan aktif dengan rekening fiktif termasking |
 | Pencairan | GET/POST `/me/vet/withdrawals`; GET `.../{id}` | POST `{amount,destinationId}` + `Idempotency-Key`; positive ≤ available; reserve atomic; tidak menerima rekening mentah atau status paid dari client |
@@ -264,4 +272,4 @@ Payload event minimal: eventId, aggregateId, actorId, occurredAt, version. Efek 
 
 Jalankan suite yang sama terhadap repository lokal dan API: scope ownership, verified guard, slot conflicts, final-note immutability, complete guard, sequence visit, computed totals, earning once, withdrawal reservation/retry, notification recipient. Perbedaan teknis error harus dinormalisasi ke domain error yang sama.
 
-OpenAPI executable BE-00–08, BE-10–12, dan BE-15 memuat healthcheck, auth, profil/verifikasi, livestock/patient, vet discovery/availability/slots/blocked-times/schedule, booking/request/proposal/visit/completion, payment quote/create, chat/media, note/recommendation, katalog produk aktif, cart, checkout quote, order/snapshots, shipment timeline, earnings, payout destinations, dan withdrawals owner-scoped. BE-09, BE-13/14, BE-16/17, serta provider produksi tetap menunggu scope masing-masing. Kontrak BE-15 disampaikan melalui Orca untuk koordinasi.
+OpenAPI executable BE-00–13 dan BE-15 memuat healthcheck, auth, profil/verifikasi, livestock/patient, vet discovery/availability/slots/reviews/blocked-times/schedule, booking/request/proposal/visit/completion/review, payment quote/create, chat/media, note/recommendation, katalog produk aktif, cart, checkout quote, order/snapshots, shipment timeline, earnings, payout destinations, dan withdrawals owner-scoped. BE-14, BE-16/17, serta provider produksi tetap menunggu scope masing-masing. Kontrak BE-13 diselaraskan melalui Orca: `stars` dan `text?`, replay isi sama, konflik isi berbeda, serta `ratingAverage`/`ratingCount`. Kontrak BE-15 disampaikan melalui Orca untuk koordinasi.
