@@ -1,5 +1,12 @@
 # Handoff workflow Orca VetLink
 
+## Checkpoint 16 November 2026
+
+- `main` menggabungkan BE-09 pada `6fe54d2`; Task `task_1f55b8a55dda` pada Run `run_d18f19c5df52` ditandai selesai oleh koordinator setelah worktree dispatch lama `ctx_fcf5bca2c161` ditemukan dalam keadaan `abandoned/failed/retained`. Tidak ada worker duplikat yang diluncurkan atau perubahan worktree yang dibuang. Worktree BE-09 kini bersih pada commit `15f1a06`.
+- BE-09 lulus `npm run check`, 16 migrasi, seed, dan `npm run api:smoke` penuh pada PostgreSQL 17 lokal terisolasi. Detail dan kegagalan awal yang diperbaiki tercatat di [Testing](TESTING.md#bukti-be-09-16-november-2026). BE-13 aktif sebagai satu-satunya worker backend: Task `task_e783529b0f95`, Dispatch `ctx_368a395a7115`, terminal `term_54ebc51b-90a9-474b-99ea-61b7bd9b1df5`, worktree `/Users/howardgoh/orca/workspaces/Vetlink/vetlink-be13`, Codex `gpt-6-luna` effort max. BE-14 dan BE-16 tetap mengikuti dependensi.
+- APK preview sudah dipasang melalui USB dan diterbitkan pada GitHub Release 20 Oktober. Pada 16 November, ADB berhasil diotorisasi setelah symlink `~/.android` yang menunjuk ke drive hilang diarahkan sementara ke kunci lokal. Layar **Pilih Peran** dan foreground `MainActivity` terbukti pada HP fisik. Pengguna melaporkan Beranda Peternak terbuka dua kali, tetapi screenshot dan hierarki UI ADB sesudahnya tetap menampilkan **Pilih Peran**; beranda belum terverifikasi. MIUI menolak injeksi tap ADB, sehingga QA interaksi dan gate FE-21/22/23/24/26 tetap terbuka. Sesudah sesi, symlink `~/.android` dikembalikan ke target asal dan kunci ADB sementara dihapus. Tidak ada emulator.
+- Instruksi pengguna terbaru meminta penggunaan token hemat. Utamakan pekerjaan koordinator dan pemeriksaan lokal yang diperlukan; jangan membuka worker tambahan tanpa kebutuhan. Catatan di bawah adalah snapshot historis 20 Oktober, bukan status terbaru.
+
 Catatan ini diperbarui pada **20 Oktober 2026, sekitar 06.34 WIB** agar pekerjaan dapat dilanjutkan setelah pergantian akun GPT. Ini snapshot, bukan pengganti status Orca/Git terkini. **Jangan membuat Run atau worker baru sebelum memeriksa state yang hidup.** Jangan menyimpan token, password, atau secret di dokumen ini.
 
 ## Identitas dan aturan tetap
