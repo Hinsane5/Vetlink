@@ -1,6 +1,6 @@
 # Strategi pengujian VetLink
 
-Status QA per 16 November 2026: frontend masih memakai data lokal persisten tanpa integrasi API dan FE-03 autentikasi tetap ditunda. BE-00–13 dan BE-15 kini memiliki route executable; BE-09 dan BE-13 lulus migrasi, seed, dan smoke domain pada PostgreSQL 17 lokal terisolasi. BE-14 belum mulai, BE-16/17 menunggu. APK Android preview sudah dibangun dan dipasang lewat USB pada 20 Oktober, tetapi QA interaksi/visual pada perangkat, ukuran kecil, serta font besar belum terbukti. Tidak ada pemanggilan Figma MCP baru.
+Status QA per 16 November 2026: frontend masih memakai data lokal persisten tanpa integrasi API dan FE-03 autentikasi tetap ditunda. BE-00–15 kini memiliki route executable; BE-09, BE-13, BE-14, dan BE-15 lulus migrasi, seed, dan smoke domain pada PostgreSQL 17 lokal terisolasi. BE-16/17 menunggu. APK Android preview sudah dibangun dan dipasang lewat USB pada 20 Oktober, tetapi QA interaksi/visual pada perangkat, ukuran kecil, serta font besar belum terbukti. Tidak ada pemanggilan Figma MCP baru.
 
 ## APK preview Android lokal (20 Oktober 2026)
 
@@ -85,6 +85,16 @@ Pemeriksaan dijalankan dari `apps/api` pada Node `24.10.0` / npm `11.6.0`; `.nvm
 - `npm run db:seed` — **Lulus**; fixture fiktif tersedia dan seed mempertahankan row existing.
 - `npm run api:smoke` — **Lulus** setelah koreksi filter nama fixture di assertion direktori. Smoke memeriksa route OpenAPI, penolakan review sebelum completion, owner/role scope, stars 1–5, normalisasi text, dua retry paralel mengembalikan record sama, payload berbeda 409, daftar review dengan cursor, serta agregat profil/directory yang cocok dengan dua review (`ratingAverage=4.5`, `ratingCount=2`). Suite smoke lama BE-03/04/05/06/07/08/09/10/11/12/15 juga lulus dan membersihkan fixture.
 - Tidak ada script `npm test` atau lint terpisah pada manifest. Tidak ada provider eksternal, transaksi finansial nyata, deployment, atau uji mobile/API integration.
+
+## Bukti BE-14 (16 November 2026)
+
+Pemeriksaan dijalankan dari `apps/api` dengan Node `24.10.0` / npm `11.6.0`; `.nvmrc` meminta Node `24.15.0`, sehingga `npm ci --no-audit --no-fund` lulus dengan peringatan engine. PostgreSQL 17.4 dijalankan sebagai cluster sementara yang terisolasi pada loopback port `55432`; cluster dihentikan setelah pemeriksaan. Tidak ada data produksi atau external provider.
+
+- `npm run check` — **Lulus**: `tsc --noEmit` dan `nest build` setelah implementasi.
+- `npm run db:migrate` — **Lulus** pada database baru; 18 migrasi diterapkan, termasuk `20261116_000018_notifications_outbox.sql`.
+- `npm run db:seed` — **Lulus**; fixture fiktif berhasil dimuat.
+- `npm run api:smoke` — **Lulus** pada database setelah migrasi/seed. Memeriksa OpenAPI route inbox/read/preferences; event domain, inbox dan outbox terbentuk atomik; event ID/payload yang sama mengembalikan hasil yang ada tanpa row ganda; hasil adapter `failed` lalu retry `succeeded` memakai notification/event yang sama dan hanya hasil tersimpan yang membuat state `sent`; kategori opt-out menghasilkan `suppressed` tetapi record tetap di inbox; pembacaan read idempoten; recipient, role, ownership/assignment konteks diuji; pihak yang tidak terkait mendapat 404 dan link konteks invalid tidak mengubah state baca. Smoke lama BE-03–13/15 juga lulus.
+- Sesudah smoke, tabel `domain_events`, `notifications`, `notification_outbox`, `notification_delivery_attempts`, dan `notification_preferences` seluruhnya kosong karena fixture test dibersihkan. Tidak ada script `npm test` atau lint terpisah di manifest. Tidak ada provider notifikasi produksi, secret, deployment, layanan finansial nyata, atau perubahan UI/mobile.
 
 ## Bukti BE-15 (20 Oktober 2026)
 

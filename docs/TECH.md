@@ -1,6 +1,6 @@
 # Teknologi dan bahan diskusi
 
-Status per 16 November 2026: FE-00/02 selesai; penerimaan FE-01/04–19 masih berjalan dan FE-03 ditunda sesuai DEC-23; BE-00–13 dan BE-15 selesai setelah pemeriksaan lokal BE-13; BE-09 selesai. Mobile tetap memakai persona lokal tanpa autentikasi/backend jaringan. Backend NestJS + PostgreSQL memiliki route health/auth/profile-verification/livestock/patients/vet discovery/availability/reviews/rating aggregation/booking/visit/completion/payment/chat/media/clinical/catalog/cart/checkout/order/shipment timeline dengan migrasi dan smoke lokal. Bukti backend ada di [Testing](TESTING.md). QA visual/interaksi Android FE-14 sebelumnya belum terverifikasi karena MIUI menolak tap ADB (`INJECT_EVENTS`).
+Status per 16 November 2026: FE-00/02 selesai; penerimaan FE-01/04–19 masih berjalan dan FE-03 ditunda sesuai DEC-23; BE-00–15 selesai setelah pemeriksaan lokal BE-14; BE-09/13/14/15 lulus migrasi, seed, dan smoke domain. Mobile tetap memakai persona lokal tanpa autentikasi/backend jaringan. Backend NestJS + PostgreSQL memiliki route health/auth/profile-verification/livestock/patients/vet discovery/availability/reviews/rating aggregation/booking/visit/completion/payment/chat/media/clinical/follow-up/reminder/inbox/preferences/catalog/cart/checkout/order/shipment timeline/earnings/withdrawals dengan migrasi dan smoke lokal. Bukti backend ada di [Testing](TESTING.md). QA visual/interaksi Android FE-14 sebelumnya belum terverifikasi karena MIUI menolak tap ADB (`INJECT_EVENTS`).
 
 ## Keputusan mobile
 
@@ -126,7 +126,7 @@ Harness diagnostik FE-02 hanya tampil saat development dengan `EXPO_PUBLIC_FE02_
 
 Paket Expo yang benar-benar terpasang dan keterkaitannya dengan FE-01–04 dicatat di README. Form/test framework dan seluruh kandidat lain tetap usulan; tidak ada kewajiban menginstall semua kandidat state/form/test sekaligus.
 
-## Pilihan backend dan realisasi BE-00–13/15
+## Pilihan backend dan realisasi BE-00–15
 
 | Kandidat | Kesesuaian untuk VetLink | Tradeoff yang perlu dibahas |
 | --- | --- | --- |
@@ -136,7 +136,7 @@ Paket Expo yang benar-benar terpasang dan keterkaitannya dengan FE-01–04 dicat
 
 **Dipilih pengguna 13 Oktober 2026: NestJS + PostgreSQL** untuk backend modular monolith BE-00–16. Baseline stack memilih Node.js 24.15.0, NestJS 12.1.3, Nest CLI 12.0.8, TypeScript 6.0.3, driver `pg` 8.23.1, dan PostgreSQL 17.4. PostgreSQL 18.x dicatat sebagai upgrade gate sebelum integrasi berikutnya. Nest memakai ESM; project memakai NodeNext. Database diakses lewat port infrastructure dan SQL eksplisit, belum memilih ORM. Migrasi berjalan eksplisit dengan advisory lock, checksum, dan transaksi; seed fiktif hanya insert conflict-do-nothing. BE-01 memilih password auth internal `scrypt`, hash token opaque di PostgreSQL, dan role guard; email reset gagal tertutup tanpa adapter/provider terpilih. BE-01 check lokal berjalan pada Node 24.10 karena Node 24.15 tidak tersedia di shell, lihat [Testing](TESTING.md). Hosting dan izin deploy tetap belum dipilih. Lihat [panduan backend](../apps/api/README.md), [NestJS](https://docs.nestjs.com/), dan [kebijakan versi PostgreSQL](https://www.postgresql.org/support/versioning/).
 
-Port HTTP aktual memakai adapter Express NestJS; module Health dan Auth menyediakan healthcheck, auth, bearer `/me`, serta role membership guard. Module Profile menangani profil/verifikasi, Livestock menangani ternak/timeline pasien, Vet menangani directory/availability/rates/slots dan agregat rating, Reviews menangani eligibility/uniqueness ulasan, Consultation menangani booking/visit/completion, Payment menyediakan payment adapter, Clinical menangani note/recommendation, Communication menyediakan chat/media BE-07, dan Catalog menangani daftar/detail produk aktif serta pemeriksaan tautan produk rekomendasi. Domain lain mengikuti boundary use case/repository pada API masing-masing. Shared error response dan status domain ada di OpenAPI. Provider credential eksternal, reset delivery, media produksi, realtime, queue, hosting dan provider produksi tetap belum dipilih. Modular monolith dipakai untuk awal; microservices belum dibutuhkan oleh scope ini.
+Port HTTP aktual memakai adapter Express NestJS; module Health dan Auth menyediakan healthcheck, auth, bearer `/me`, serta role membership guard. Module Profile menangani profil/verifikasi, Livestock menangani ternak/timeline pasien, Vet menangani directory/availability/rates/slots dan agregat rating, Reviews menangani eligibility/uniqueness ulasan, Consultation menangani booking/visit/completion, Payment menyediakan payment adapter, Clinical menangani note/recommendation, Communication menyediakan chat/media BE-07, Catalog menangani daftar/detail produk aktif serta pemeriksaan tautan produk rekomendasi, dan Notifications menangani event/outbox/inbox/preferences. Domain lain mengikuti boundary use case/repository pada API masing-masing. Shared error response dan status domain ada di OpenAPI. Provider credential eksternal, reset delivery, media produksi, realtime, external queue/provider notifikasi, hosting dan provider produksi tetap belum dipilih. BE-14 menggunakan PostgreSQL outbox lokal; modular monolith dipakai untuk awal dan microservices belum dibutuhkan oleh scope ini.
 
 ## Realisasi backend BE-05: booking, visit, dan completion
 
@@ -173,6 +173,14 @@ Commerce mengelola Shipment/ShipmentEvent melalui adapter lokal fiktif yang dija
 ## Realisasi backend BE-13: review konsultasi
 
 Reviews module membatasi penulisan ke Peternak pemilik setelah konsultasi selesai. Row Consultation dikunci selama deduplikasi sehingga request paralel satu konsultasi menghasilkan satu Review; stars 1–5 divalidasi pada request dan database, `text` dipangkas serta dibatasi 1.000 karakter. Record tidak memiliki route edit/hapus dan dilindungi trigger append-only. Daftar ulasan memakai cursor stabil; agregat directory/profil dihitung dari record Review yang relasi owner/Dokter valid dan status Consultation `completed`.
+
+## Realisasi backend BE-14: event, inbox, preferensi, delivery
+
+Care Coordination mencatat domain event, notifikasi recipient-scoped, dan outbox dalam transaksi yang sama dengan follow-up/reminder/report. Constraint unik event key dan pasangan recipient/event mencegah retry membuat duplikasi; payload yang bertentangan untuk event key yang sama mendapat 409. Event tersimpan append-only dengan aggregate/version serta actor dan waktu server.
+
+Notifications module menyediakan inbox urut terbaru, state baca idempoten, dan preferensi per akun dengan kategori FE-22. Link konteks diperiksa ulang terhadap `farmer_id`/`vet_id` resource saat GET inbox dan POST read; detail tak terkait disembunyikan sebagai 404. Preferensi dikecek pada saat dispatch; opt-out menandai delivery `suppressed` namun inbox tetap dipertahankan.
+
+Dispatcher PostgreSQL memakai row lock `SKIP LOCKED`; adapter lokal menerima event ID stabil, dan attempt/outcome disimpan sebelum status berubah. `sent` hanya mengikuti outcome adapter `succeeded`; `pending` dan `failed` tidak ditampilkan sebagai terkirim. Adapter gagal retryable diulang maksimal tiga kali pada queue event yang sama, dan tidak menghubungi provider eksternal.
 
 ## Hal yang masih terbuka untuk backend
 

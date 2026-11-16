@@ -1,6 +1,6 @@
 # Kontrak integrasi backend v1
 
-Status per 16 November 2026: OpenAPI executable memuat route BE-00–13 dan BE-15: health/auth, profil/verifikasi, ternak/pasien/riwayat, vet discovery/availability/reviews dan rating agregat, booking/request/proposal/visit/completion, payment quote/create, chat/media, note/recommendation, follow-up, reminder/care completion, laporan perkembangan, katalog aktif, cart, checkout quote, order, shipment timeline owner-scoped, pendapatan Dokter, tujuan pencairan fiktif, dan reservasi ledger pencairan. Runtime acceptance BE-09 dan BE-13 lulus dengan PostgreSQL lokal; BE-14 dan BE-16/17 tetap menunggu tiket masing-masing. Aplikasi mobile belum memakai backend jaringan.
+Status per 16 November 2026: OpenAPI executable memuat route BE-00–15: health/auth, profil/verifikasi, ternak/pasien/riwayat, vet discovery/availability/reviews dan rating agregat, booking/request/proposal/visit/completion, payment quote/create, chat/media, note/recommendation, follow-up, reminder/care completion, laporan perkembangan, inbox/read/preferences dan notification delivery, katalog aktif, cart, checkout quote, order, shipment timeline owner-scoped, pendapatan Dokter, tujuan pencairan fiktif, dan reservasi ledger pencairan. Runtime acceptance BE-09/13/14/15 lulus dengan PostgreSQL lokal. BE-16/17 tetap menunggu; aplikasi mobile belum memakai backend jaringan.
 
 ## Konvensi
 
@@ -10,7 +10,7 @@ Mutasi concurrency-sensitive menerima `expectedVersion`. Mutasi pembayaran, orde
 
 Gunakan action endpoint untuk transisi yang membutuhkan syarat; jangan menyediakan PATCH umum yang membolehkan client mengatur `verified`, `completed`, `paid`, `balance`, atau `finalizedAt`.
 
-## OpenAPI executable BE-00–13 dan BE-15
+## OpenAPI executable BE-00–15
 
 NestJS melayani Swagger UI di `/docs` dan JSON di `/openapi.json`. Endpoint runtime yang tersedia:
 
@@ -166,7 +166,7 @@ Semua route memakai bearer dan active role membership. `POST /v1/consultations/{
 | Pendapatan | GET `/me/vet/earnings?period=&from=&to=&cursor=&limit=`, `/me/vet/transactions/{id}` | Dokter own ledger projections; integer IDR, saldo semua periode dan transaksi per periode |
 | Tujuan pencairan | GET `/me/vet/payout-destinations` | Dokter sendiri; hanya tujuan aktif dengan rekening fiktif termasking |
 | Pencairan | GET/POST `/me/vet/withdrawals`; GET `.../{id}` | POST `{amount,destinationId}` + `Idempotency-Key`; positive ≤ available; reserve atomic; tidak menerima rekening mentah atau status paid dari client |
-| Notifikasi | GET `/me/notifications`; POST `.../{id}/read`; GET/PATCH `/me/preferences` | Inbox/preferences menunggu BE-14; BE-09 mencatat event actor/recipient dengan unique recipient/event |
+| Notifikasi | GET `/me/notifications`; POST `/me/notifications/{id}/read`; GET/PATCH `/me/preferences` | Inbox penerima saja; link konteks diperiksa dengan active role; read idempoten; preferensi tidak menghapus/memfilter inbox |
 
 Tooling admin review, pengelolaan katalog, dan provider callbacks tetap merupakan operasi internal, bukan fitur mobile dokter atau toko dokter. Seed katalog hanya menambahkan fixture tanpa menimpa record. Integrasi callbacks nyata diblokir sampai provider/security contract tersedia.
 
@@ -200,7 +200,17 @@ BE-09 mengaktifkan route follow-up, laporan perkembangan, reminder, retry delive
 
 `POST /reminders` menerima `kind=care|follow_up`, `dueAt` future, `instructions`, dan relasi opsional ke ternak/konsultasi/follow-up. Peternak hanya membuat untuk ternak miliknya; Dokter harus verified dan terkait konsultasi yang telah dibayar dan memiliki catatan final. `deliveryStatus` terpisah dari `careStatus`; hasil adapter lokal (termasuk pending/failed) dan attempt tersimpan sebelum respons. `PATCH /reminders/{id}` menerima `action=retry_delivery`; pengiriman sent tidak dikirim ulang, attempt terserialisasi per reminder, dan key yang sama mengulang hasil tersimpan. Adapter lokal tidak memanggil provider. `POST /reminders/{id}/complete` hanya Peternak pemilik untuk `kind=care`, memerlukan `confirmation=true`, menyimpan status care `done` dan satu HealthEvent dengan `provenance=reminder` serta source key unik; status delivery tidak berubah. Retry dengan key sama mengulang respons tanpa HealthEvent kedua.
 
-Peternak terkait mengirim `POST /follow-ups/{id}/progress-reports` dengan teks dan maksimal lima attachment yang sudah committed, dimiliki Peternak, dan terkait konsultasi. Dokter hanya membaca laporan atas follow-up layanan yang ditugaskan; read pertama mengisi `viewedAt`. Notification event BE-09 mencatat `actorId` dan `recipientId` eksplisit serta unik per pasangan recipient/event. Inbox, read-state API, preferensi, dan delivery notification umum menunggu BE-14.
+Peternak terkait mengirim `POST /follow-ups/{id}/progress-reports` dengan teks dan maksimal lima attachment yang sudah committed, dimiliki Peternak, dan terkait konsultasi. Dokter hanya membaca laporan atas follow-up layanan yang ditugaskan; read pertama mengisi `viewedAt`. Notification event BE-09 mencatat `actorId` dan `recipientId` eksplisit; BE-14 menautkan event domain, notification, dan outbox pada transaksi yang sama.
+
+### BE-14 event, inbox, preferensi, dan delivery
+
+`GET /me/notifications` memuat seluruh record inbox penerima aktif dalam urutan terbaru, beserta `unreadCount`. Setiap item memuat `type`, kategori FE-22 (`consultations`, `reminders`, `commerce`), `contextType`, `contextId`, `readAt`, dan `deliveryStatus`. Preferensi tidak menyaring/menghapus inbox; `contextId` disembunyikan bila resource tujuan sudah tidak dapat diakses oleh peran aktif.
+
+`POST /me/notifications/{id}/read` memakai ID notification penerima aktif. Setiap permintaan memeriksa ulang link sebelum menulis read state: `follow_up` hanya tersedia bagi Peternak pemilik atau Dokter assigned, `progress_report` hanya untuk peserta konsultasi, dan `reminder` hanya untuk Peternak pemilik atau Dokter yang tertaut ke layanan. ID notification lain atau konteks yang tidak dapat diakses memberikan 404 tanpa mengubah `readAt`. Jika valid, read pertama mengisi timestamp dan retry mengembalikan timestamp yang sama. Respons mengembalikan `contextType`/`contextId` yang telah lolos otorisasi agar client membaca ulang resource terkini melalui route owner-scoped terkait.
+
+`GET /me/preferences` membuat preferensi default akun bila belum tersedia: global aktif dan ketiga kategori aktif. `PATCH /me/preferences` menerima perubahan parsial `{enabled?, notifications?: {consultations?, reminders?, commerce?}}`; field yang tidak dikirim dipertahankan. Assignment nilai yang sama aman diulang dan tidak menambah versi. Preferensi dicek saat outbox diproses; kategori/global yang mati membuat delivery `suppressed`, sementara notification tetap di inbox. Perubahan setelah delivery selesai tidak membatalkan pesan yang sudah terkirim.
+
+`domain_events` append-only menyimpan `event_key`, jenis event, aggregate, actor, waktu server, versi aggregate, dan payload. Satu `event_key` tidak boleh digunakan untuk payload berbeda. `notifications` dan `notification_outbox` masing-masing memiliki constraint unik `(recipient_id,event_id)`; retry tindakan sumber dengan event/payload sama tidak membuat row baru. Dispatcher memproses queue dengan row lock `SKIP LOCKED`, menyimpan outcome dan operation ID adapter pada `notification_delivery_attempts`, lalu mengubah status notification/outbox. Hanya hasil adapter `succeeded` yang tersimpan menghasilkan `sent`; `pending`, `failed`, dan `suppressed` tidak diklaim terkirim. Kegagalan retryable diulang paling banyak tiga kali memakai notification/event ID yang sama dengan jeda lima detik. Adapter aktif lokal, tanpa provider, credential, atau pengiriman eksternal.
 
 ### BE-10 executable contract
 
@@ -272,4 +282,4 @@ Payload event minimal: eventId, aggregateId, actorId, occurredAt, version. Efek 
 
 Jalankan suite yang sama terhadap repository lokal dan API: scope ownership, verified guard, slot conflicts, final-note immutability, complete guard, sequence visit, computed totals, earning once, withdrawal reservation/retry, notification recipient. Perbedaan teknis error harus dinormalisasi ke domain error yang sama.
 
-OpenAPI executable BE-00–13 dan BE-15 memuat healthcheck, auth, profil/verifikasi, livestock/patient, vet discovery/availability/slots/reviews/blocked-times/schedule, booking/request/proposal/visit/completion/review, payment quote/create, chat/media, note/recommendation, katalog produk aktif, cart, checkout quote, order/snapshots, shipment timeline, earnings, payout destinations, dan withdrawals owner-scoped. BE-14, BE-16/17, serta provider produksi tetap menunggu scope masing-masing. Kontrak BE-13 diselaraskan melalui Orca: `stars` dan `text?`, replay isi sama, konflik isi berbeda, serta `ratingAverage`/`ratingCount`. Kontrak BE-15 disampaikan melalui Orca untuk koordinasi.
+OpenAPI executable BE-00–15 memuat healthcheck, auth, profil/verifikasi, livestock/patient, vet discovery/availability/slots/reviews/blocked-times/schedule, booking/request/proposal/visit/completion/review, payment quote/create, chat/media, note/recommendation, follow-up/reminder/reports, inbox/read/preferences notifikasi, katalog produk aktif, cart, checkout quote, order/snapshots, shipment timeline, earnings, payout destinations, dan withdrawals owner-scoped. BE-16/17 dan provider produksi tetap menunggu scope masing-masing. Kontrak BE-13 diselaraskan melalui Orca: `stars` dan `text?`, replay isi sama, konflik isi berbeda, serta `ratingAverage`/`ratingCount`. Kontrak BE-15 disampaikan melalui Orca untuk koordinasi.

@@ -137,6 +137,7 @@ const healthy = await startServer(await availablePort(), {
   MEDIA_VIDEO_MAX_BYTES: String(50 * 1024 * 1024),
   CHAT_DELIVERY_TEST_FAIL_FIRST_ATTEMPT: 'true',
   REMINDER_DELIVERY_TEST_FAIL_FIRST_ATTEMPT: 'true',
+  NOTIFICATION_DELIVERY_TEST_FAIL_FIRST_ATTEMPT: 'true',
 });
 try {
   const liveResponse = await fetch(`${healthy.baseUrl}/v1/health/live`);
@@ -217,6 +218,10 @@ try {
   assert.ok(openApi.paths['/v1/reminders']?.post);
   assert.ok(openApi.paths['/v1/reminders/{reminderId}']?.patch);
   assert.ok(openApi.paths['/v1/reminders/{reminderId}/complete']?.post);
+  assert.ok(openApi.paths['/v1/me/notifications']?.get);
+  assert.ok(openApi.paths['/v1/me/notifications/{id}/read']?.post);
+  assert.ok(openApi.paths['/v1/me/preferences']?.get);
+  assert.ok(openApi.paths['/v1/me/preferences']?.patch);
   assert.ok(openApi.paths['/v1/attachments/uploads']?.post);
   assert.ok(openApi.paths['/v1/attachments/{id}/commit']?.post);
   assert.ok(openApi.paths['/v1/attachments/{id}/content']?.get);
@@ -1262,6 +1267,45 @@ try {
       assert.ok(vetReports.items.find((item) => item.id === report.id).viewedAt);
       assert.equal((await database.query('SELECT status FROM follow_ups WHERE id=$1', [followUp.id])).rows[0].status, 'scheduled');
 
+      const waitForNotification = async (token, eventId, expectedStatus) => {
+        const deadline = Date.now() + 8_000;
+        let found;
+        while (Date.now() < deadline) {
+          const response = await sendJson(healthy.baseUrl, '/v1/me/notifications', token, 'GET');
+          assert.equal(response.status, 200);
+          const inbox = await response.json();
+          found = inbox.items.find((item) => item.eventId === eventId);
+          if (found?.deliveryStatus === expectedStatus) return found;
+          await delay(100);
+        }
+        assert.fail(`Notifikasi ${eventId} tidak mencapai status ${expectedStatus}; status terakhir ${found?.deliveryStatus ?? 'hilang'}`);
+      };
+
+      const followUpNotificationEvent = `follow-up-scheduled:${followUp.id}`;
+      const reportNotificationEvent = `progress-report-submitted:${report.id}`;
+      const failedNotification = await waitForNotification(farmer.accessToken, followUpNotificationEvent, 'failed');
+      const deliveredNotification = await waitForNotification(vet.accessToken, reportNotificationEvent, 'sent');
+
+      const defaultPreferencesResponse = await sendJson(healthy.baseUrl, '/v1/me/preferences', farmer.accessToken, 'GET');
+      assert.equal(defaultPreferencesResponse.status, 200);
+      const defaultPreferences = await defaultPreferencesResponse.json();
+      assert.deepEqual(defaultPreferences.notifications, { consultations: true, reminders: true, commerce: true });
+      const retriedNotification = await waitForNotification(farmer.accessToken, followUpNotificationEvent, 'sent');
+      assert.equal(retriedNotification.id, failedNotification.id);
+      const disabledReminderPreferencesResponse = await sendJson(healthy.baseUrl, '/v1/me/preferences', farmer.accessToken, 'PATCH', {
+        notifications: { reminders: false },
+      });
+      assert.equal(disabledReminderPreferencesResponse.status, 200,
+        `${await disabledReminderPreferencesResponse.clone().text()}\n${healthy.output()}`);
+      const disabledReminderPreferences = await disabledReminderPreferencesResponse.json();
+      assert.deepEqual(disabledReminderPreferences.notifications, { consultations: true, reminders: false, commerce: true });
+      assert.equal(disabledReminderPreferences.version, defaultPreferences.version + 1);
+      const preferenceReplay = await sendJson(healthy.baseUrl, '/v1/me/preferences', farmer.accessToken, 'PATCH', {
+        notifications: { reminders: false },
+      });
+      assert.equal(preferenceReplay.status, 200);
+      assert.equal((await preferenceReplay.json()).version, disabledReminderPreferences.version);
+
       const reminderDueAt = new Date(Date.now() + 3 * 24 * 60 * 60_000).toISOString();
       const reminderBody = {
         consultationId, followUpId: followUp.id, kind: 'care', dueAt: reminderDueAt,
@@ -1327,6 +1371,73 @@ try {
         const notification = await database.query('SELECT actor_id,recipient_id,type FROM notifications WHERE event_id=$1', [eventId]);
         assert.deepEqual(notification.rows[0], { actor_id: actorId, recipient_id: recipientId, type });
       }
+
+      const retryEventId = `progress-report-submitted:${report.id}`;
+      assert.equal((await database.query('SELECT count(*)::int AS count FROM domain_events WHERE event_key=$1', [retryEventId])).rows[0].count, 1);
+      assert.equal((await database.query('SELECT count(*)::int AS count FROM notifications WHERE recipient_id=$1 AND event_id=$2', [vet.user.id, retryEventId])).rows[0].count, 1);
+      assert.equal((await database.query('SELECT count(*)::int AS count FROM notification_outbox WHERE recipient_id=$1 AND event_id=$2', [vet.user.id, retryEventId])).rows[0].count, 1);
+
+      const reminderNotificationEvent = `reminder-created:${reminder.id}`;
+      const suppressedNotification = await waitForNotification(farmer.accessToken, reminderNotificationEvent, 'suppressed');
+      assert.equal(failedNotification.contextId, followUp.id);
+      assert.equal(deliveredNotification.contextId, report.id);
+      assert.equal(suppressedNotification.contextId, reminder.id);
+      assert.equal(suppressedNotification.category, 'reminders');
+      assert.equal((await database.query(
+        `SELECT outcome FROM notification_delivery_attempts WHERE notification_id=$1 ORDER BY attempt DESC LIMIT 1`,
+        [deliveredNotification.id],
+      )).rows[0].outcome, 'succeeded');
+      assert.equal((await database.query(
+        `SELECT outcome FROM notification_delivery_attempts WHERE notification_id=$1 ORDER BY attempt DESC LIMIT 1`,
+        [retriedNotification.id],
+      )).rows[0].outcome, 'succeeded');
+      assert.deepEqual((await database.query(
+        'SELECT outcome FROM notification_delivery_attempts WHERE notification_id=$1 ORDER BY attempt',
+        [retriedNotification.id],
+      )).rows.map((row) => row.outcome), ['failed', 'succeeded']);
+      assert.equal((await database.query(
+        `SELECT count(*)::int AS count FROM notification_delivery_attempts WHERE notification_id=$1`,
+        [suppressedNotification.id],
+      )).rows[0].count, 0);
+
+      const farmerInbox = await (await sendJson(healthy.baseUrl, '/v1/me/notifications', farmer.accessToken, 'GET')).json();
+      assert.ok(farmerInbox.items.some((item) => item.id === suppressedNotification.id));
+      assert.equal(farmerInbox.unreadCount, farmerInbox.items.filter((item) => !item.readAt).length);
+      const readNotificationResponse = await sendJson(healthy.baseUrl, `/v1/me/notifications/${failedNotification.id}/read`, farmer.accessToken, 'POST');
+      assert.equal(readNotificationResponse.status, 200, await readNotificationResponse.clone().text());
+      const readNotification = await readNotificationResponse.json();
+      assert.equal(readNotification.contextId, followUp.id);
+      assert.equal(readNotification.contextType, 'follow_up');
+      const readReplay = await sendJson(healthy.baseUrl, `/v1/me/notifications/${failedNotification.id}/read`, farmer.accessToken, 'POST');
+      assert.equal(readReplay.status, 200);
+      assert.equal((await readReplay.json()).notification.readAt, readNotification.notification.readAt);
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/me/notifications/${failedNotification.id}/read`, outsider.accessToken, 'POST')).status, 404);
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/me/notifications/${failedNotification.id}/read`, vet.accessToken, 'POST')).status, 404);
+
+      const hiddenLinkNotificationId = randomUUID();
+      const hiddenLinkEventId = `be14-hidden-link-${randomUUID()}`;
+      const hiddenLinkContextId = randomUUID();
+      const hiddenLinkDomainEventId = randomUUID();
+      await database.query(
+        `INSERT INTO domain_events(id,event_key,event_type,aggregate_type,aggregate_id,actor_id,occurred_at,aggregate_version,payload)
+         VALUES($1,$2,'reminder_created','reminder',$3,$4,now(),1,$5::jsonb)`,
+        [hiddenLinkDomainEventId, hiddenLinkEventId, hiddenLinkContextId, vet.user.id,
+          JSON.stringify({ contextId: hiddenLinkContextId, title: 'Tautan uji privat', body: 'Fixture akses tautan fiktif.', category: 'reminders' })],
+      );
+      await database.query(
+        `INSERT INTO notifications(id,actor_id,recipient_id,type,category,context_type,context_id,event_id,domain_event_id,title,body)
+         VALUES($1,$2,$3,'reminder_created','reminders','reminder',$4,$5,$6,'Tautan uji privat','Fixture akses tautan fiktif.')`,
+        [hiddenLinkNotificationId, vet.user.id, farmer.user.id, hiddenLinkContextId, hiddenLinkEventId, hiddenLinkDomainEventId],
+      );
+      await database.query(
+        `INSERT INTO notification_outbox(notification_id,recipient_id,event_id,delivery_status)
+         VALUES($1,$2,$3,'suppressed')`,
+        [hiddenLinkNotificationId, farmer.user.id, hiddenLinkEventId],
+      );
+      const hiddenLinkRead = await sendJson(healthy.baseUrl, `/v1/me/notifications/${hiddenLinkNotificationId}/read`, farmer.accessToken, 'POST');
+      assert.equal(hiddenLinkRead.status, 404);
+      assert.equal((await database.query('SELECT read_at FROM notifications WHERE id=$1', [hiddenLinkNotificationId])).rows[0].read_at, null);
+
       const cancelFollowUp = await sendJson(healthy.baseUrl, `/v1/follow-ups/${followUp.id}`, farmer.accessToken, 'PATCH',
         { action: 'cancel', expectedVersion: followUp.version }, { 'idempotency-key': `be09-cancel-${randomUUID()}` });
       assert.equal(cancelFollowUp.status, 200, await cancelFollowUp.clone().text());
@@ -1530,7 +1641,7 @@ try {
       assert.equal(directoryVet.ratingAverage, 4.5);
       assert.equal(directoryVet.ratingCount, 2);
 
-      console.log('BE-03/04/05/06/07/08/09/10/11/12/13/15 smoke: owner/role scope; completed-consultation review eligibility, unique replay/conflict, review pagination/profile aggregates; follow-up slot reservation, report ownership, reminder delivery/care completion, one HealthEvent and notification actor/recipient; catalog, commerce/shipment, earnings/withdrawals, chat/media lulus.');
+      console.log('BE-03/04/05/06/07/08/09/10/11/12/13/14/15 smoke: owner/role scope; completed-consultation reviews; follow-up slot reservation, report ownership, reminder delivery/care completion, one HealthEvent; BE-14 event/outbox deduplication, notification delivery outcomes, preference suppression, inbox persistence, idempotent read and linked-resource access; catalog, commerce/shipment, earnings/withdrawals, chat/media lulus.');
     } finally {
       if (failedStorageServer) await stopServer(failedStorageServer.child);
       // Smoke teardown is a fixture reset; it must remove immutable final-note rows
@@ -1561,7 +1672,11 @@ try {
         await database.query('DELETE FROM care_coordination_operations WHERE actor_id = ANY($1::uuid[])', [actors]);
         await database.query('DELETE FROM reminder_delivery_attempts WHERE reminder_id IN (SELECT id FROM reminders WHERE farmer_id = ANY($1::uuid[]))', [actors]);
         await database.query('DELETE FROM progress_reports WHERE consultation_id = ANY($1::uuid[])', [allConsultationIds]);
+        await database.query('DELETE FROM notification_delivery_attempts WHERE notification_id IN (SELECT id FROM notifications WHERE actor_id = ANY($1::uuid[]) OR recipient_id = ANY($1::uuid[]))', [actors]);
+        await database.query('DELETE FROM notification_outbox WHERE recipient_id = ANY($1::uuid[]) OR notification_id IN (SELECT id FROM notifications WHERE actor_id = ANY($1::uuid[]))', [actors]);
         await database.query('DELETE FROM notifications WHERE actor_id = ANY($1::uuid[]) OR recipient_id = ANY($1::uuid[])', [actors]);
+        await database.query('DELETE FROM domain_events WHERE actor_id = ANY($1::uuid[])', [actors]);
+        await database.query('DELETE FROM notification_preferences WHERE user_id = ANY($1::uuid[])', [actors]);
         await database.query('DELETE FROM reminders WHERE farmer_id = ANY($1::uuid[])', [actors]);
         await database.query('DELETE FROM follow_ups WHERE consultation_id = ANY($1::uuid[])', [allConsultationIds]);
         await database.query('DELETE FROM message_attachments WHERE consultation_id = ANY($1::uuid[])', [allConsultationIds]);

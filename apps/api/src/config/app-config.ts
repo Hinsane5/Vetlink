@@ -14,6 +14,7 @@ export interface AppConfig {
   media: MediaConfig;
   chatDeliveryFailFirstAttemptForTest: boolean;
   reminderDeliveryFailFirstAttemptForTest: boolean;
+  notificationDeliveryFailFirstAttemptForTest: boolean;
 }
 
 export const APP_CONFIG = Symbol('APP_CONFIG');
@@ -90,6 +91,14 @@ export function loadAppConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     throw new Error('REMINDER_DELIVERY_TEST_FAIL_FIRST_ATTEMPT is available only when NODE_ENV=test');
   }
 
+  const notificationFailFirstAttempt = (env.NOTIFICATION_DELIVERY_TEST_FAIL_FIRST_ATTEMPT ?? 'false').trim().toLowerCase();
+  if (notificationFailFirstAttempt !== 'true' && notificationFailFirstAttempt !== 'false') {
+    throw new Error('NOTIFICATION_DELIVERY_TEST_FAIL_FIRST_ATTEMPT must be true or false');
+  }
+  if (notificationFailFirstAttempt === 'true' && nodeEnv !== 'test') {
+    throw new Error('NOTIFICATION_DELIVERY_TEST_FAIL_FIRST_ATTEMPT is available only when NODE_ENV=test');
+  }
+
   return {
     nodeEnv,
     port: integer(env, 'PORT', 3000),
@@ -104,5 +113,6 @@ export function loadAppConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     media: loadMediaConfig(env),
     chatDeliveryFailFirstAttemptForTest: failFirstAttempt === 'true',
     reminderDeliveryFailFirstAttemptForTest: reminderFailFirstAttempt === 'true',
+    notificationDeliveryFailFirstAttemptForTest: notificationFailFirstAttempt === 'true',
   };
 }
