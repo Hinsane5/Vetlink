@@ -80,7 +80,7 @@ Lucide dimuat sebelum shell dirender bersama Inter agar glyph ikon tersedia saat
 | Session expiry | Sesi lokal kedaluwarsa setelah 30 hari dan diverifikasi kembali saat bootstrap |
 | Pemeriksaan | Empat tes AuthService lulus; build Android lulus dan layar Mulai terbuka. Uji tap/form di HP menunggu akses input MIUI; screenshot Figma FE-03 tertahan oleh batas MCP |
 
-Kode autentikasi FE-03 tidak dipakai pada alur aktif. Verifier SHA-256 bersalt pada adapter lokal historis bukan KDF password produksi; backend BE-01 terpisah memakai `scrypt` dan limiter auth per proses. Mobile belum terhubung ke backend, verifikasi email/reset delivery provider belum dipilih, dan fixture sengaja tidak dapat diklaim lewat reset karena tidak memiliki credential.
+Kode autentikasi FE-03 tidak dipakai pada alur aktif. Verifier SHA-256 bersalt pada adapter lokal historis bukan KDF password produksi; backend BE-01 terpisah memakai `scrypt` dan limiter auth per proses. Runtime mobile masih lokal. FE-25 menambahkan adapter server auth dan transport/payment API terisolasi, tetapi belum ada flow UI yang menggunakannya. Verifikasi email/reset delivery provider belum dipilih, dan fixture sengaja tidak dapat diklaim lewat reset karena tidak memiliki credential.
 
 ## Realisasi awal FE-04: profil, farm, alamat, dan verifikasi
 
@@ -122,7 +122,7 @@ Harness diagnostik FE-02 hanya tampil saat development dengan `EXPO_PUBLIC_FE02_
 | Media | Expo image/document picker dan file-system diterapkan FE-04 | Foto/dokumen privat lokal; belum ada upload maupun sinkronisasi |
 | Icon/font | Lucide dan Inter sudah dipakai FE-01 | Ganti glyph campuran Figma secara konsisten dan catat selisih |
 | Testing | Node `node:test` untuk domain/usecase; Jest/jest-expo + React Native Testing Library kandidat UI; Maestro kandidat E2E Android | Tes domain/usecase FE-02–05 aktif; framework UI/E2E dipilih ketika slice tersebut membutuhkannya |
-| API nanti | REST JSON, OpenAPI, adapter client | Kontrak independen framework; TanStack Query hanya bila integrasi API memerlukannya |
+| Adapter API FE-25 tahap pertama | REST JSON/OpenAPI; `ApiClient`, repository auth/payment, SecureStore untuk token dan idempotency key | Sudah diuji terhadap mock adapter dan suite kontrak lokal; belum terpasang pada runtime UI. API mode tetap memerlukan seluruh adapter domain serta endpoint server untuk pergantian peran dan baca status Payment/Attempt sebelum integrasi penuh |
 
 Paket Expo yang benar-benar terpasang dan keterkaitannya dengan FE-01–04 dicatat di README. Form/test framework dan seluruh kandidat lain tetap usulan; tidak ada kewajiban menginstall semua kandidat state/form/test sekaligus.
 

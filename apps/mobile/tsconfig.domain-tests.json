@@ -24,12 +24,18 @@
     "src/application/CatalogService.ts",
     "src/application/CommerceService.ts",
     "src/application/PaymentService.ts",
+    "src/application/ApiPaymentGateway.ts",
+    "src/application/ApiPaymentOperationJournal.ts",
+    "src/application/ServerAuthService.ts",
     "src/data/local/sqlite/seed.ts",
     "src/data/local/sqlite/migrations.ts",
     "src/application/vetPatientAccess.ts",
     "src/application/ports/EventStore.ts",
     "src/application/ports/EarningsRepository.ts",
     "src/application/ports/AuthRepository.ts",
+    "src/application/ports/ApiPaymentRepository.ts",
+    "src/application/ports/ApiPaymentOperationStore.ts",
+    "src/application/ports/ServerAuthRepository.ts",
     "src/application/ports/CommerceRepository.ts",
     "src/application/ports/ProfileRepository.ts",
     "src/application/ports/ShippingQuoteProvider.ts",
@@ -53,6 +59,9 @@
     "src/data/local/sqlite/SqliteCommerceRepository.ts",
     "src/data/local/commerce/LocalShippingQuoteAdapter.ts",
     "src/data/local/commerce/LocalShipmentStatusAdapter.ts",
-    "src/application/ports/ShipmentStatusProvider.ts"
+    "src/application/ports/ShipmentStatusProvider.ts",
+    "src/data/remote/ApiClient.ts",
+    "src/data/remote/ApiAuthRepository.ts",
+    "src/data/remote/HttpApiPaymentRepository.ts"
   ]
 }

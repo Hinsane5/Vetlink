@@ -1,0 +1,244 @@
+import { DomainError } from '../../domain/errors';
+import type { ServerSessionStore, ServerTokenSet } from '../../application/ports/ServerAuthRepository';
+
+export type ApiMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+
+export interface ApiResponse {
+  ok: boolean;
+  status: number;
+  json(): Promise<unknown>;
+}
+
+export type ApiFetch = (url: string, init: {
+  method: ApiMethod;
+  headers: Record<string, string>;
+  body?: string;
+}) => Promise<ApiResponse>;
+
+export interface ApiRequestOptions {
+  method?: ApiMethod;
+  body?: unknown;
+  authenticated?: boolean;
+  idempotencyKey?: string;
+}
+
+/**
+ * Small JSON transport for the versioned VetLink API. It refreshes a rejected
+ * access token once, never retries network failures, and never logs credentials.
+ */
+export class ApiClient {
+  private refreshInFlight: Promise<void> | null = null;
+  private readonly baseUrl: string;
+
+  constructor(
+    baseUrl: string,
+    private readonly sessions: ServerSessionStore,
+    private readonly fetcher: ApiFetch = defaultFetch,
+  ) {
+    this.baseUrl = normalizeApiBaseUrl(baseUrl);
+  }
+
+  request<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
+    return this.requestOnce<T>(path, options, false);
+  }
+
+  private async requestOnce<T>(path: string, options: ApiRequestOptions, retriedAfterRefresh: boolean): Promise<T> {
+    assertVersionedPath(path);
+    const method = options.method ?? 'GET';
+    if (method === 'POST' && path === '/v1/payments' && !options.idempotencyKey) {
+      throw new DomainError('VALIDATION_FAILED', 'Pembayaran memerlukan Idempotency-Key.');
+    }
+    const authenticated = options.authenticated !== false;
+    const session = authenticated ? await this.readSession() : null;
+    if (authenticated && !session?.accessToken) {
+      throw new DomainError('SESSION_INVALID', 'Sesi server tidak tersedia. Masuk kembali untuk melanjutkan.');
+    }
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (options.body !== undefined) headers['Content-Type'] = 'application/json';
+    if (session?.accessToken) headers.Authorization = `Bearer ${session.accessToken}`;
+    if (options.idempotencyKey !== undefined) {
+      if (options.idempotencyKey.length < 8 || options.idempotencyKey.length > 128) {
+        throw new DomainError('VALIDATION_FAILED', 'Kunci operasi harus sepanjang 8–128 karakter.');
+      }
+      headers['Idempotency-Key'] = options.idempotencyKey;
+    }
+
+    const response = await this.send(path, {
+      method,
+      headers,
+      ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
+    });
+    if (response.status === 401 && authenticated) {
+      if (retriedAfterRefresh || !session) {
+        await this.clearSession();
+        throw new DomainError('SESSION_INVALID', 'Sesi server berakhir. Masuk kembali untuk melanjutkan.');
+      }
+      await this.refreshSession(session);
+      return this.requestOnce<T>(path, options, true);
+    }
+    return parseResponse<T>(response);
+  }
+
+  private async refreshSession(previous: ServerTokenSet): Promise<void> {
+    if (!this.refreshInFlight) {
+      const refresh = this.performRefresh(previous);
+      this.refreshInFlight = refresh.finally(() => { this.refreshInFlight = null; });
+    }
+    await this.refreshInFlight;
+  }
+
+  private async performRefresh(previous: ServerTokenSet): Promise<void> {
+    const current = await this.readSession();
+    if (!current) throw new DomainError('SESSION_INVALID', 'Sesi server tidak tersedia. Masuk kembali untuk melanjutkan.');
+    if (current.accessToken !== previous.accessToken) return;
+
+    let response: ApiResponse;
+    try {
+      response = await this.send('/v1/auth/refresh', {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken: current.refreshToken }),
+      });
+    } catch (error) {
+      // A network failure does not prove the refresh credential is invalid.
+      throw error;
+    }
+
+    let payload: unknown;
+    try {
+      payload = await parseResponse<unknown>(response);
+    } catch (error) {
+      if (error instanceof DomainError && error.code === 'SESSION_INVALID') await this.clearSession();
+      throw error;
+    }
+    const refreshed = tokenSetFrom(payload);
+    await this.saveSession(refreshed);
+  }
+
+  private async send(path: string, init: { method: ApiMethod; headers: Record<string, string>; body?: string }): Promise<ApiResponse> {
+    try {
+      return await this.fetcher(`${this.baseUrl}${path}`, init);
+    } catch {
+      // Do not retry a possibly committed mutation here. The caller can retry
+      // with the same Idempotency-Key and payload after checking server status.
+      throw new DomainError('SERVICE_UNAVAILABLE', 'Koneksi ke layanan belum tersedia. Periksa status sebelum mencoba lagi.');
+    }
+  }
+
+  private async readSession(): Promise<ServerTokenSet | null> {
+    try {
+      return await this.sessions.read();
+    } catch {
+      throw new DomainError('SESSION_STORAGE_FAILED', 'Sesi aman di perangkat tidak dapat dibaca.');
+    }
+  }
+
+  private async saveSession(session: ServerTokenSet): Promise<void> {
+    try {
+      await this.sessions.save(session);
+    } catch {
+      throw new DomainError('SESSION_STORAGE_FAILED', 'Sesi server tidak dapat disimpan dengan aman.');
+    }
+  }
+
+  private async clearSession(): Promise<void> {
+    try {
+      await this.sessions.clear();
+    } catch {
+      throw new DomainError('SESSION_STORAGE_FAILED', 'Sesi server yang berakhir tidak dapat dihapus dari perangkat.');
+    }
+  }
+}
+
+export function normalizeApiBaseUrl(value: string): string {
+  let url: URL;
+  try {
+    url = new URL(value.trim());
+  } catch {
+    throw new DomainError('VALIDATION_FAILED', 'Alamat API development belum valid.');
+  }
+  if (url.username || url.password || url.search || url.hash || !['http:', 'https:'].includes(url.protocol)) {
+    throw new DomainError('VALIDATION_FAILED', 'Alamat API harus berupa HTTP(S) tanpa credential atau parameter.');
+  }
+  if (url.protocol === 'http:' && !isPrivateDevelopmentHost(url.hostname)) {
+    throw new DomainError('VALIDATION_FAILED', 'HTTP hanya boleh digunakan pada host development lokal atau jaringan privat.');
+  }
+  const basePath = url.pathname.replace(/\/+$/, '');
+  return `${url.origin}${basePath}`;
+}
+
+function isPrivateDevelopmentHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return host === 'localhost'
+    || host === '127.0.0.1'
+    || host === '[::1]'
+    || /^10\./.test(host)
+    || /^192\.168\./.test(host)
+    || /^172\.(1[6-9]|2\d|3[01])\./.test(host);
+}
+
+function assertVersionedPath(path: string): void {
+  if (!path.startsWith('/v1/') || path.startsWith('//') || path.includes('://')) {
+    throw new DomainError('VALIDATION_FAILED', 'Route API harus memakai prefix /v1.');
+  }
+}
+
+function tokenSetFrom(value: unknown): ServerTokenSet {
+  if (!isRecord(value)
+    || typeof value.accessToken !== 'string' || value.accessToken.length < 40
+    || typeof value.refreshToken !== 'string' || value.refreshToken.length < 40
+    || typeof value.sessionId !== 'string'
+    || (value.activeRole !== 'farmer' && value.activeRole !== 'vet')
+    || typeof value.accessExpiresAt !== 'string'
+    || typeof value.sessionExpiresAt !== 'string') {
+    throw new DomainError('API_RESPONSE_INVALID', 'Respons sesi server tidak sesuai kontrak.');
+  }
+  return {
+    accessToken: value.accessToken,
+    refreshToken: value.refreshToken,
+    sessionId: value.sessionId,
+    activeRole: value.activeRole,
+    accessExpiresAt: value.accessExpiresAt,
+    expiresAt: value.sessionExpiresAt,
+  };
+}
+
+async function parseResponse<T>(response: ApiResponse): Promise<T> {
+  if (response.status === 204) return undefined as T;
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    if (!response.ok) throw apiError(response.status, null);
+    throw new DomainError('API_RESPONSE_INVALID', 'Respons layanan tidak dapat dibaca.');
+  }
+  if (!response.ok) throw apiError(response.status, payload);
+  return payload as T;
+}
+
+function apiError(status: number, value: unknown): DomainError {
+  const code = isRecord(value) && typeof value.code === 'string' ? value.code : '';
+  const suppliedMessage = isRecord(value) && typeof value.message === 'string' ? value.message.trim() : '';
+  const message = suppliedMessage.length > 0 && suppliedMessage.length <= 300
+    ? suppliedMessage
+    : 'Permintaan belum dapat diproses. Periksa status lalu coba lagi.';
+  if (status === 401 || code === 'SESSION_INVALID') return new DomainError('SESSION_INVALID', message);
+  if (status === 403 || code === 'FORBIDDEN') return new DomainError('FORBIDDEN', message);
+  if (status === 404 || code === 'NOT_FOUND') return new DomainError('NOT_FOUND', message);
+  if (code === 'IDEMPOTENCY_CONFLICT') return new DomainError('IDEMPOTENCY_CONFLICT', message);
+  if (status === 409) return new DomainError('VERSION_CONFLICT', message);
+  if (status === 422) return new DomainError('INVALID_STATE', message);
+  if (status === 429 || status >= 500) return new DomainError('SERVICE_UNAVAILABLE', message);
+  return new DomainError('VALIDATION_FAILED', message);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+const defaultFetch: ApiFetch = async (url, init) => {
+  const response = await fetch(url, init);
+  return { ok: response.ok, status: response.status, json: () => response.json() };
+};
+
+export { tokenSetFrom };
