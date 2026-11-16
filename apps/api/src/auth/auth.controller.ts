@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Headers,
   HttpCode,
   HttpStatus,
   Post,
@@ -8,9 +9,11 @@ import {
 } from '@nestjs/common';
 import {
   ApiAcceptedResponse,
+  ApiBearerAuth,
   ApiBadRequestResponse,
   ApiConflictResponse,
   ApiCreatedResponse,
+  ApiForbiddenResponse,
   ApiInternalServerErrorResponse,
   ApiNoContentResponse,
   ApiOkResponse,
@@ -28,7 +31,11 @@ import {
   PasswordResetRequestDto,
   RefreshTokenRequestDto,
   RegisterRequestDto,
+  SwitchActiveRoleRequestDto,
 } from './auth.dto.js';
+import { AuthenticatedUser } from './auth.decorators.js';
+import { AccessTokenGuard } from './auth.guards.js';
+import type { AuthenticatedPrincipal } from './auth.types.js';
 import { AuthService } from './auth.service.js';
 
 @ApiTags('Auth')
@@ -57,6 +64,24 @@ export class AuthController {
   @ApiInternalServerErrorResponse({ type: ApiErrorResponseDto })
   login(@Body() body: LoginRequestDto): Promise<AuthSessionResponseDto> {
     return this.auth.login(body);
+  }
+
+  @Post('active-role')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AccessTokenGuard)
+  @ApiBearerAuth('bearer')
+  @ApiOkResponse({ type: AuthSessionResponseDto, description: 'Role membership diverifikasi; token sesi yang sama diterbitkan ulang dengan active role baru.' })
+  @ApiBadRequestResponse({ type: ApiErrorResponseDto })
+  @ApiUnauthorizedResponse({ type: ApiErrorResponseDto })
+  @ApiForbiddenResponse({ type: ApiErrorResponseDto, description: 'Akun tidak memiliki membership untuk role tujuan.' })
+  @ApiTooManyRequestsResponse({ type: ApiErrorResponseDto })
+  @ApiInternalServerErrorResponse({ type: ApiErrorResponseDto })
+  switchActiveRole(
+    @AuthenticatedUser() principal: AuthenticatedPrincipal,
+    @Headers('authorization') authorization: string,
+    @Body() body: SwitchActiveRoleRequestDto,
+  ): Promise<AuthSessionResponseDto> {
+    return this.auth.switchActiveRole(principal, authorization, body.activeRole);
   }
 
   @Post('logout')

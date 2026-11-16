@@ -182,6 +182,12 @@ Notifications module menyediakan inbox urut terbaru, state baca idempoten, dan p
 
 Dispatcher PostgreSQL memakai row lock `SKIP LOCKED`; adapter lokal menerima event ID stabil, dan attempt/outcome disimpan sebelum status berubah. `sent` hanya mengikuti outcome adapter `succeeded`; `pending` dan `failed` tidak ditampilkan sebagai terkirim. Adapter gagal retryable diulang maksimal tiga kali pada queue event yang sama, dan tidak menghubungi provider eksternal.
 
+## Realisasi backend BE-16: sesi role dan recovery payment
+
+`POST /v1/auth/active-role` menerima bearer sesi aktif dan role tujuan. AuthService mengunci sesi PostgreSQL, memeriksa membership akun di transaksi yang sama, memasukkan refresh token lama ke riwayat konsumsi, mengganti `active_role` dan hash token, lalu mengembalikan access/refresh token baru dengan session ID serta expiry absolut yang sama. Penolakan membership tidak merotasi token; role baru tetap tunduk pada owner/assignment guards dan tidak membuka pasien terkait akun lain.
+
+Payment dapat dicari untuk payable milik Peternak melalui `GET /v1/payments?payableType=&payableId=`, dibaca berdasarkan ID dengan `GET /v1/payments/{id}`, dan Attempts dibaca melalui `GET /v1/payments/{id}/attempts`. Setiap query mengambil owner dari sesi aktif; status Payment, Attempt terbaru, dan histori berasal dari row PostgreSQL. Recovery membaca status lebih dulu, mempertahankan Payment/payable saat retry gagal, dan memakai Idempotency-Key baru; adapter payment tetap lokal dan belum menghubungi provider.
+
 ## Hal yang masih terbuka untuk backend
 
 1. Siapa peninjau dokumen dokter; apakah perlu tooling admin terpisah?

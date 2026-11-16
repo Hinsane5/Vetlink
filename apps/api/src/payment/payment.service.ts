@@ -8,10 +8,25 @@ import { CONSULTATION_PAYMENT_SUCCEEDED, type ConsultationPaymentSucceededPort }
 import { ORDER_PAYMENT_SUCCEEDED, type OrderPaymentSucceededPort } from '../commerce/order-payment.port.js';
 import { ORDER_SHIPMENT_START, type OrderShipmentStartPort } from '../commerce/order-shipment.port.js';
 import { PAYMENT_SERVICE, type PaymentOutcome, type PaymentService } from './payment.adapter.js';
+import type { PaymentAttemptListResponseDto, PaymentAttemptResponseDto, PaymentStatusResponseDto } from './payment.dto.js';
 
 type PayableType = 'consultation' | 'order';
 type PaymentInput = { payableType: PayableType; payableId: string; method: 'bank_transfer' | 'e_wallet' };
 type PaymentRow = Record<string, any>;
+
+interface PaymentReadRow {
+  id: string;
+  payable_type: PayableType;
+  payable_id: string;
+  method: 'bank_transfer' | 'e_wallet';
+  amount_idr: string;
+  status: PaymentStatusResponseDto['status'];
+  attempt_id: string | null;
+  attempt_number: number | null;
+  attempt_status: PaymentAttemptResponseDto['status'] | null;
+  attempt_reference: string | null;
+  attempted_at: Date | null;
+}
 
 @Injectable()
 export class PaymentsService {
@@ -41,6 +56,25 @@ export class PaymentsService {
     const amountIdr = Number(row.fee_snapshot_idr);
     if (!Number.isSafeInteger(amountIdr) || amountIdr <= 0) throw new UnprocessableEntityException({ code: 'RULE_VIOLATION', message: 'Tagihan tidak memiliki nominal rupiah yang valid.' });
     return { payableType, payableId: row.id, amountIdr, currency: 'IDR' as const };
+  }
+
+  async getForPayable(
+    p: AuthenticatedPrincipal,
+    payableType: PayableType,
+    payableId: string,
+  ): Promise<PaymentStatusResponseDto> {
+    this.farmer(p);
+    return this.readPaymentStatus(p.userId, 'p.payable_type = $2 AND p.payable_id = $3', [payableType, payableId]);
+  }
+
+  async getById(p: AuthenticatedPrincipal, paymentId: string): Promise<PaymentStatusResponseDto> {
+    this.farmer(p);
+    return this.readPaymentStatus(p.userId, 'p.id = $2', [paymentId]);
+  }
+
+  async getAttempts(p: AuthenticatedPrincipal, paymentId: string): Promise<PaymentAttemptListResponseDto> {
+    const payment = await this.getById(p, paymentId);
+    return { items: payment.attempts };
   }
 
   async create(p: AuthenticatedPrincipal, key: string, input: PaymentInput) {
@@ -185,9 +219,62 @@ export class PaymentsService {
     return result.rows[0];
   }
   private paymentView(row: PaymentRow) {
-    return { id: row.id, payableType: row.payable_type, payableId: row.payable_id, amountIdr: Number(row.amount_idr), currency: 'IDR',
+    return { id: row.id, payableType: row.payable_type, payableId: row.payable_id, amountIdr: Number(row.amount_idr), currency: 'IDR' as const, method: row.method,
       status: row.status, attempt: { id: row.attempt_id ?? null, status: row.attempt_status ?? row.status, reference: row.attempt_reference ?? null } };
   }
+
+  private async readPaymentStatus(
+    userId: string,
+    filter: string,
+    parameters: string[],
+  ): Promise<PaymentStatusResponseDto> {
+    const result = await this.db.query<PaymentReadRow>(
+      `SELECT p.id, p.payable_type, p.payable_id, p.method, p.amount_idr::text,
+              p.status, a.id AS attempt_id, a.attempt_number, a.status AS attempt_status,
+              a.adapter_reference AS attempt_reference, a.attempted_at
+       FROM payments p
+       LEFT JOIN payment_attempts a ON a.payment_id = p.id
+       WHERE p.owner_id = $1 AND ${filter}
+       ORDER BY a.attempt_number ASC`,
+      [userId, ...parameters],
+    );
+    const rows = result.rows;
+    const payment = rows[0];
+    if (!payment) throw this.payableMissing();
+
+    const amountIdr = Number(payment.amount_idr);
+    if (!Number.isSafeInteger(amountIdr) || amountIdr < 0) {
+      throw new ServiceUnavailableException({ code: 'SERVICE_UNAVAILABLE', message: 'Nominal pembayaran tersimpan tidak dapat dibaca sebagai integer rupiah.' });
+    }
+
+    const attempts = rows.flatMap((row): PaymentAttemptResponseDto[] => {
+      if (row.attempt_id === null || row.attempt_number === null || row.attempt_status === null || row.attempted_at === null) return [];
+      if (!Number.isSafeInteger(Number(row.attempt_number)) || Number(row.attempt_number) < 1) {
+        throw new ServiceUnavailableException({ code: 'SERVICE_UNAVAILABLE', message: 'Riwayat Attempt tersimpan tidak valid.' });
+      }
+      return [{
+        id: row.attempt_id,
+        attemptNumber: Number(row.attempt_number),
+        status: row.attempt_status,
+        reference: row.attempt_reference,
+        attemptedAt: row.attempted_at.toISOString(),
+      }];
+    });
+    const latest = attempts.at(-1);
+
+    return {
+      id: payment.id,
+      payableType: payment.payable_type,
+      payableId: payment.payable_id,
+      amountIdr,
+      currency: 'IDR',
+      method: payment.method,
+      status: payment.status,
+      attempt: latest ? { id: latest.id, status: latest.status, reference: latest.reference } : null,
+      attempts,
+    };
+  }
+
   private payableMissing() { return new NotFoundException({ code: 'NOT_FOUND', message: 'Kewajiban pembayaran tidak ditemukan.' }); }
   private farmer(p: AuthenticatedPrincipal) { if (p.activeRole !== 'farmer') throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Hanya Peternak dapat membayar.' }); }
 }

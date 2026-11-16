@@ -157,6 +157,7 @@ test('OpenAPI is structurally valid and every local reference resolves', () => {
 test('mobile workflow routes and data contracts are present', () => {
   const requiredOperations = [
     ['get', '/v1/me'],
+    ['post', '/v1/auth/active-role'],
     ['get', '/v1/me/farms'],
     ['post', '/v1/me/farms'],
     ['get', '/v1/livestock'],
@@ -167,6 +168,9 @@ test('mobile workflow routes and data contracts are present', () => {
     ['post', '/v1/consultations/{consultationId}/visit/depart'],
     ['post', '/v1/consultations/{consultationId}/complete'],
     ['post', '/v1/payments'],
+    ['get', '/v1/payments'],
+    ['get', '/v1/payments/{id}'],
+    ['get', '/v1/payments/{id}/attempts'],
     ['post', '/v1/consultations/{consultationId}/note/finalize'],
     ['post', '/v1/consultations/{consultationId}/recommendation/send'],
     ['get', '/v1/me/vet/earnings'],
@@ -187,6 +191,26 @@ test('mobile workflow routes and data contracts are present', () => {
   assert.deepEqual(paymentSchema.properties.payableType.enum, ['consultation', 'order']);
   assert.deepEqual(paymentSchema.properties.method.enum, ['bank_transfer', 'e_wallet']);
   assert.equal(paymentSchema.properties.amountIdr, undefined, 'The client cannot supply a payment amount.');
+
+  const switchRoleRequest = openApi.components.schemas.SwitchActiveRoleRequestDto;
+  assert.deepEqual(switchRoleRequest.required, ['activeRole']);
+  assert.deepEqual(switchRoleRequest.properties.activeRole.enum, ['farmer', 'vet']);
+  const switchRoleOperation = openApi.paths['/v1/auth/active-role'].post;
+  assert.equal(switchRoleOperation.requestBody.content['application/json'].schema.$ref, '#/components/schemas/SwitchActiveRoleRequestDto');
+  assert.equal(switchRoleOperation.responses['200'].content['application/json'].schema.$ref, '#/components/schemas/AuthSessionResponseDto');
+
+  const paymentLookup = openApi.paths['/v1/payments'].get;
+  const paymentLookupParameters = paymentLookup.parameters.filter((parameter) => parameter.in === 'query');
+  assert.deepEqual(paymentLookupParameters.map((parameter) => parameter.name).sort(), ['payableId', 'payableType']);
+  assert.ok(paymentLookupParameters.every((parameter) => parameter.required));
+  assert.equal(paymentLookup.responses['200'].content['application/json'].schema.$ref, '#/components/schemas/PaymentStatusResponseDto');
+  assert.equal(openApi.paths['/v1/payments/{id}'].get.responses['200'].content['application/json'].schema.$ref, '#/components/schemas/PaymentStatusResponseDto');
+  assert.equal(openApi.paths['/v1/payments/{id}/attempts'].get.responses['200'].content['application/json'].schema.$ref, '#/components/schemas/PaymentAttemptListResponseDto');
+  const paymentStatus = openApi.components.schemas.PaymentStatusResponseDto;
+  assert.equal(paymentStatus.properties.amountIdr.type, 'integer');
+  assert.equal(paymentStatus.properties.currency.enum[0], 'IDR');
+  assert.deepEqual(paymentStatus.properties.attempts.items.$ref, '#/components/schemas/PaymentAttemptResponseDto');
+  assert.deepEqual(openApi.components.schemas.PaymentAttemptResponseDto.properties.status.enum, ['pending', 'succeeded', 'failed', 'expired']);
 
   const withdrawalInput = openApi.components.schemas.CreateWithdrawalDto;
   assert.equal(withdrawalInput.properties.amount.type, 'integer');

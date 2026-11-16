@@ -179,10 +179,14 @@ try {
   assert.ok(openApi.paths['/v1/health/ready']);
   assert.ok(openApi.paths['/v1/auth/register']?.post);
   assert.ok(openApi.paths['/v1/auth/login']?.post);
+  assert.ok(openApi.paths['/v1/auth/active-role']?.post);
   assert.ok(openApi.paths['/v1/auth/logout']?.post);
   assert.ok(openApi.paths['/v1/auth/refresh']?.post);
   assert.ok(openApi.paths['/v1/auth/password-reset']?.post);
   assert.ok(openApi.paths['/v1/auth/password-reset/confirm']?.post);
+  assert.ok(openApi.paths['/v1/payments']?.get);
+  assert.ok(openApi.paths['/v1/payments/{id}']?.get);
+  assert.ok(openApi.paths['/v1/payments/{id}/attempts']?.get);
   assert.ok(openApi.paths['/v1/me']?.get);
   assert.ok(openApi.paths['/v1/products']?.get);
   assert.ok(openApi.paths['/v1/products/{id}']?.get);
@@ -250,6 +254,12 @@ try {
   assert.equal(unauthenticated.code, 'UNAUTHENTICATED');
   assert.ok(unauthenticated.requestId);
   assert.equal('stack' in unauthenticated, false);
+  const unauthenticatedRoleSwitch = await fetch(`${healthy.baseUrl}/v1/auth/active-role`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ activeRole: 'farmer' }),
+  });
+  assert.equal(unauthenticatedRoleSwitch.status, 401);
 
   const smokePassword = 'smoke-only-password-not-secret';
   const loginResponses = [];
@@ -841,15 +851,36 @@ try {
       assert.equal(unverifiedAccept.status, 403);
       assert.equal((await database.query('SELECT status FROM consultations WHERE id=$1', [unverifiedConsultationId])).rows[0].status, 'requested');
 
+      const deniedMembershipSwitch = await sendJson(healthy.baseUrl, '/v1/auth/active-role', outsider.accessToken, 'POST', { activeRole: 'vet' });
+      assert.equal(deniedMembershipSwitch.status, 403);
+      const unchangedSession = await (await sendJson(healthy.baseUrl, '/v1/me', outsider.accessToken, 'GET')).json();
+      assert.equal(unchangedSession.activeRole, 'farmer');
       await database.query("INSERT INTO role_memberships(user_id,role) VALUES($1,'vet') ON CONFLICT DO NOTHING", [outsider.user.id]);
       await database.query("INSERT INTO vet_profiles(user_id,verification_status) VALUES($1,'pending') ON CONFLICT DO NOTHING", [outsider.user.id]);
-      const dualRoleLogin = await fetch(`${healthy.baseUrl}/v1/auth/login`, {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email: outsider.user.email, password: 'smoke-only-password-not-secret', activeRole: 'vet' }),
-      });
-      assert.equal(dualRoleLogin.status, 200);
-      const dualRole = await dualRoleLogin.json();
+      const originalFarmerSession = { ...outsider };
+      const switchToVetResponse = await sendJson(healthy.baseUrl, '/v1/auth/active-role', outsider.accessToken, 'POST', { activeRole: 'vet' });
+      assert.equal(switchToVetResponse.status, 200, await switchToVetResponse.clone().text());
+      const dualRole = await switchToVetResponse.json();
+      assert.equal(dualRole.activeRole, 'vet');
+      assert.deepEqual(dualRole.user.roles, ['farmer', 'vet']);
+      assert.equal(dualRole.sessionId, originalFarmerSession.sessionId);
+      assert.equal(dualRole.sessionExpiresAt, originalFarmerSession.sessionExpiresAt);
+      assert.notEqual(dualRole.accessToken, originalFarmerSession.accessToken);
+      assert.notEqual(dualRole.refreshToken, originalFarmerSession.refreshToken);
+      assert.equal((await sendJson(healthy.baseUrl, '/v1/me', originalFarmerSession.accessToken, 'GET')).status, 401);
+      const vetRoleMe = await (await sendJson(healthy.baseUrl, '/v1/me', dualRole.accessToken, 'GET')).json();
+      assert.equal(vetRoleMe.activeRole, 'vet');
+      assert.deepEqual(vetRoleMe.roles, ['farmer', 'vet']);
       assert.equal((await sendJson(healthy.baseUrl, `/v1/consultations/${chatConsultationId}`, dualRole.accessToken, 'GET')).status, 404);
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/payments?payableType=consultation&payableId=${randomUUID()}`, dualRole.accessToken, 'GET')).status, 403);
+      const switchBackResponse = await sendJson(healthy.baseUrl, '/v1/auth/active-role', dualRole.accessToken, 'POST', { activeRole: 'farmer' });
+      assert.equal(switchBackResponse.status, 200, await switchBackResponse.clone().text());
+      const switchedBack = await switchBackResponse.json();
+      assert.equal(switchedBack.activeRole, 'farmer');
+      assert.equal(switchedBack.sessionId, originalFarmerSession.sessionId);
+      assert.notEqual(switchedBack.accessToken, dualRole.accessToken);
+      Object.assign(outsider, switchedBack);
+      assert.equal((await sendJson(healthy.baseUrl, '/v1/me', outsider.accessToken, 'GET')).status, 200);
 
       const visitAddressResponse = await sendJson(healthy.baseUrl, '/v1/me/addresses', farmer.accessToken, 'POST', {
         label: 'Kandang Fiktif', recipientName: 'Peternak Fiktif', phone: '080000000000',
@@ -1147,11 +1178,12 @@ try {
       assert.equal(updatedAvailability.status,200,await updatedAvailability.clone().text());
       assert.equal(Number((await database.query('SELECT count(*)::int AS count FROM consultations WHERE vet_id=$1',[vet.user.id])).rows[0].count),Number(vetProfileBefore.rows[0].count));
       const createdAnimalResponse = await sendJson(healthy.baseUrl, '/v1/livestock', farmer.accessToken, 'POST', {
-        farmId, displayCode: 'new-001', name: 'Anak Fiktif', species: 'sapi', sex: 'unknown', estimatedAgeMonths: 2, weightKg: 12.5,
+        farmId: secondFarm.id, displayCode: 'new-001', name: 'Anak Fiktif', species: 'kambing', sex: 'unknown', estimatedAgeMonths: 2, weightKg: 12.5,
       });
       assert.equal(createdAnimalResponse.status, 201);
       const createdAnimal = await createdAnimalResponse.json();
       assert.equal(createdAnimal.display_code, 'NEW-001');
+      assert.equal(createdAnimal.farm_id, secondFarm.id);
       unpaidConsultationId = randomUUID();
       consultationIds.push(unpaidConsultationId);
       await database.query(`INSERT INTO consultations
@@ -1179,6 +1211,26 @@ try {
       const firstPayment = firstPaymentBodies[0];
       assert.equal(firstPayment.status, 'pending');
       assert.equal(firstPayment.amountIdr, 1000);
+      const paymentLookupPath = `/v1/payments?payableType=consultation&payableId=${unpaidConsultationId}`;
+      const paymentReadFromDeviceB = await sendJson(healthy.baseUrl, paymentLookupPath, farmerDeviceB.accessToken, 'GET');
+      assert.equal(paymentReadFromDeviceB.status, 200, await paymentReadFromDeviceB.clone().text());
+      const paymentFromDeviceB = await paymentReadFromDeviceB.json();
+      assert.equal(paymentFromDeviceB.id, firstPayment.id);
+      assert.equal(paymentFromDeviceB.status, 'pending');
+      assert.equal(paymentFromDeviceB.method, 'bank_transfer');
+      assert.equal(paymentFromDeviceB.attempt.status, 'pending');
+      assert.deepEqual(paymentFromDeviceB.attempts.map((attempt) => attempt.status), ['pending']);
+      assert.deepEqual(paymentFromDeviceB.attempts.map((attempt) => attempt.attemptNumber), [1]);
+      const paymentReadById = await sendJson(healthy.baseUrl, `/v1/payments/${firstPayment.id}`, farmerDeviceB.accessToken, 'GET');
+      assert.equal(paymentReadById.status, 200);
+      assert.equal((await paymentReadById.json()).id, firstPayment.id);
+      const attemptsRead = await sendJson(healthy.baseUrl, `/v1/payments/${firstPayment.id}/attempts`, farmerDeviceB.accessToken, 'GET');
+      assert.equal(attemptsRead.status, 200);
+      assert.equal((await attemptsRead.json()).items[0].id, firstPayment.attempt.id);
+      assert.equal((await sendJson(healthy.baseUrl, paymentLookupPath, outsider.accessToken, 'GET')).status, 404);
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/payments/${firstPayment.id}`, outsider.accessToken, 'GET')).status, 404);
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/payments/${firstPayment.id}/attempts`, outsider.accessToken, 'GET')).status, 404);
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/payments/${firstPayment.id}`, vet.accessToken, 'GET')).status, 403);
       const concurrentPaymentRows = await database.query(`SELECT count(DISTINCT p.id)::int AS payments,count(a.id)::int AS attempts
         FROM payments p JOIN payment_attempts a ON a.payment_id=p.id WHERE p.payable_id=$1`, [unpaidConsultationId]);
       assert.deepEqual(concurrentPaymentRows.rows[0], { payments: 1, attempts: 1 });
@@ -1193,18 +1245,41 @@ try {
         const failedEventId = `be06-failed-${randomUUID()}`;
         assert.equal((await localPayment.localCallback({ ...callbackBase, eventId: failedEventId, outcome: 'failed' })).status, 'failed');
         assert.equal((await localPayment.localCallback({ ...callbackBase, eventId: failedEventId, outcome: 'failed' })).status, 'failed');
+        const failedPaymentRead = await sendJson(healthy.baseUrl, `/v1/payments/${firstPayment.id}`, farmerDeviceB.accessToken, 'GET');
+        assert.equal(failedPaymentRead.status, 200);
+        const failedPayment = await failedPaymentRead.json();
+        assert.equal(failedPayment.status, 'failed');
+        assert.equal(failedPayment.attempt.status, 'failed');
+        assert.deepEqual(failedPayment.attempts.map((attempt) => attempt.status), ['failed']);
         const secondKey = `be06-retry-${randomUUID()}`;
-        const retryResponse = await sendJson(healthy.baseUrl, '/v1/payments', farmer.accessToken, 'POST', paymentBody, { 'idempotency-key': secondKey });
+        const retryResponse = await sendJson(healthy.baseUrl, '/v1/payments', farmerDeviceB.accessToken, 'POST', paymentBody, { 'idempotency-key': secondKey });
         assert.equal(retryResponse.status, 201);
         const retried = await retryResponse.json();
         assert.equal(retried.id, firstPayment.id);
         assert.notEqual(retried.attempt.id, firstPayment.attempt.id);
         assert.equal(retried.status, 'pending');
+        const retryHistoryRead = await sendJson(healthy.baseUrl, `/v1/payments/${firstPayment.id}`, farmer.accessToken, 'GET');
+        assert.equal(retryHistoryRead.status, 200);
+        const retryHistory = await retryHistoryRead.json();
+        assert.equal(retryHistory.status, 'pending');
+        assert.equal(retryHistory.attempt.id, retried.attempt.id);
+        assert.deepEqual(retryHistory.attempts.map((attempt) => attempt.status), ['failed', 'pending']);
+        assert.deepEqual(retryHistory.attempts.map((attempt) => attempt.attemptNumber), [1, 2]);
         const successEventId = `be06-success-${randomUUID()}`;
         const successInput = { paymentId: retried.id, attemptId: retried.attempt.id, reference: retried.attempt.reference, amountIdr: '1000', eventId: successEventId, outcome: 'succeeded' };
         assert.equal((await localPayment.localCallback(successInput)).status, 'succeeded');
         assert.equal((await localPayment.localCallback(successInput)).status, 'succeeded');
         await assert.rejects(localPayment.localCallback({ ...successInput, outcome: 'failed' }));
+        const succeededRead = await sendJson(healthy.baseUrl, paymentLookupPath, farmerDeviceB.accessToken, 'GET');
+        assert.equal(succeededRead.status, 200);
+        const succeededPayment = await succeededRead.json();
+        assert.equal(succeededPayment.id, firstPayment.id);
+        assert.equal(succeededPayment.status, 'succeeded');
+        assert.equal(succeededPayment.attempt.status, 'succeeded');
+        assert.deepEqual(succeededPayment.attempts.map((attempt) => attempt.status), ['failed', 'succeeded']);
+        const allAttemptsRead = await sendJson(healthy.baseUrl, `/v1/payments/${firstPayment.id}/attempts`, farmer.accessToken, 'GET');
+        assert.equal(allAttemptsRead.status, 200);
+        assert.deepEqual((await allAttemptsRead.json()).items.map((attempt) => attempt.attemptNumber), [1, 2]);
         const counts = await database.query(`SELECT count(DISTINCT p.id)::int payments,count(a.id)::int attempts
           FROM payments p JOIN payment_attempts a ON a.payment_id=p.id WHERE p.payable_id=$1`, [unpaidConsultationId]);
         assert.deepEqual(counts.rows[0], { payments: 1, attempts: 2 });

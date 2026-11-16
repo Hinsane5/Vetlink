@@ -1,6 +1,6 @@
 # Strategi pengujian VetLink
 
-Status QA per 16 November 2026: frontend masih memakai data lokal persisten tanpa integrasi API dan FE-03 autentikasi tetap ditunda. BE-00–15 memiliki route executable; `api:contract` dan `api:smoke` BE-16 lulus pada runtime lokal/PostgreSQL 17 terisolasi. Smoke BE-09/13/14/15 juga lulus. Mobile belum memakai API; kontrak dua sesi API sudah diuji, tetapi QA mobile dua perangkat fisik, interaksi/visual, ukuran kecil, serta font besar belum terbukti. APK Android preview sudah dibangun dan dipasang lewat USB pada 20 Oktober. Tidak ada pemanggilan Figma MCP baru.
+Status QA per 16 November 2026: frontend masih memakai data lokal persisten tanpa integrasi API dan FE-03 autentikasi tetap ditunda. BE-00–16 memiliki route executable; `api:contract` dan `api:smoke` BE-16 lulus pada runtime lokal/PostgreSQL 17 terisolasi, termasuk follow-up active-role dan payment recovery. Smoke BE-09/13/14/15 juga lulus. Mobile belum memakai API; kontrak dua sesi API sudah diuji, tetapi QA mobile dua perangkat fisik, interaksi/visual, ukuran kecil, serta font besar belum terbukti. APK Android preview sudah dibangun dan dipasang lewat USB pada 20 Oktober. Tidak ada pemanggilan Figma MCP baru.
 
 ## APK preview Android lokal (20 Oktober 2026)
 
@@ -799,7 +799,17 @@ Implementasi FE-25 menambahkan transport API mobile, adapter sesi BE-01, secure 
 | `npm run api:contract` di `apps/api` | **Lulus**, 4/4: OpenAPI/ref, route workflow, schema/request key, dan error envelope. Tidak memakai PostgreSQL. |
 | `git diff --check` | **Lulus** setelah perubahan kode/dokumen. |
 | Kontrak dua sesi backend | Hasil smoke BE-16 yang sudah dicatat di atas membuktikan sesi server terpisah dan deduplikasi payment dengan key/payload sama; smoke tidak diulang dalam task FE-25 ini. Bukti sesi API tersebut **bukan** uji UI pada dua perangkat fisik. |
-| Batas kontrak | Tidak ada endpoint active-role switch atau GET status/payment-attempt. Koordinasi Orca mencatat keduanya sebagai follow-up backend dan gate integrasi penuh. Journal lokal menjaga key pada perangkat yang sama, tetapi setelah install ulang/perangkat kedua client belum dapat mengetahui attempt berikutnya setelah server menyimpan status `failed`. |
+| Batas kontrak pada checkpoint FE-25 | Saat FE-25 diperiksa, server belum menyediakan active-role switch atau GET status/payment-attempt; keduanya ditutup pada follow-up BE-16 di bawah. Mobile belum memasang adapter API pada flow UI, jadi jurnal key lintas install/perangkat dan pembacaan status server belum terintegrasi end-to-end. |
 | QA dan integrasi | Tidak menjalankan Android build/emulator atau QA dua perangkat fisik sesuai arahan. Tidak ada UI yang berubah; referensi lokal Figma mapping/inventory ditinjau, Figma MCP tidak dipanggil, dan QA visual Android tetap **Belum diuji**. Flow UI tetap lokal; belum ada klaim integrasi API end-to-end atau provider/transaksi nyata. |
 
 FE-25 tetap **Sedang dikerjakan**. Jaringan tidak diulang otomatis; kegagalan transport mengembalikan status belum diketahui dan tidak membuat hasil sukses lokal. Adapter pembayaran API hanya memakai quote dan status yang dikembalikan server.
+
+## Bukti BE-16 lanjutan auth dan payment — 16 November 2026
+
+Follow-up ini menambahkan pergantian active role pada sesi yang sama dan route baca Payment/Attempt untuk recovery. Pemeriksaan dijalankan dari `apps/api` pada Node `24.10.0` / npm `11.6.0`; manifest meminta Node `24.15.0`, sehingga instalasi dependensi memberi peringatan engine. PostgreSQL 17.4 berjalan sebagai cluster sementara di loopback port `55494`, database lokal terisolasi; seluruh 18 migrasi dan seed fiktif lulus.
+
+- `npm run check` — **Lulus** (`tsc --noEmit` dan `nest build`).
+- `npm run api:contract` — **Lulus**, 4/4; OpenAPI memuat `POST /v1/auth/active-role`, GET lookup/status/history Payment, bearer security, DTO/status yang relevan, dan amount IDR integer.
+- `npm run api:smoke` — **Lulus** setelah migrasi dan seed. Role switch tanpa autentikasi mendapat 401; membership role yang tidak dimiliki mendapat 403 tanpa mutasi sesi; pergantian farmer → vet → farmer menerbitkan token baru, menjaga `sessionId` dan expiry absolut, serta menolak token lama. Pengujian pasien arbitrary-ID tetap 404 setelah role switch.
+- Smoke membuat konsultasi untuk hewan pada Farm kedua dan memeriksa `/v1/payments?payableType=...&payableId=...`, `/v1/payments/{id}`, dan `/v1/payments/{id}/attempts` dari sesi Peternak kedua. Akun Peternak lain mendapat 404, Dokter mendapat 403. Dua submit bersamaan dengan key sama menghasilkan satu Payment dan satu Attempt; setelah Attempt `failed`, sesi kedua retry memakai Payment yang sama dan key baru, dan kedua sesi membaca status/riwayat tersimpan hingga `succeeded` tanpa duplikasi.
+- `git diff --check` — **Lulus**. Smoke menggunakan adapter/callback internal lokal dan fixture fiktif; tidak ada provider produksi, kredensial produksi, transaksi uang nyata, integrasi UI, build Android, atau QA perangkat pada pekerjaan ini.

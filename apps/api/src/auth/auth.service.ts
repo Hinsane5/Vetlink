@@ -22,7 +22,7 @@ import {
   type AdapterOperationResult,
   type PasswordResetDeliveryAdapter,
 } from './password-reset-delivery.js';
-import type { AuthSessionResponse, AuthUser, SessionTokenPair, UserRole } from './auth.types.js';
+import type { AuthenticatedPrincipal, AuthSessionResponse, AuthUser, SessionTokenPair, UserRole } from './auth.types.js';
 
 const ACCESS_TOKEN_TTL_MS = 15 * 60_000;
 const SESSION_TTL_MS = 30 * 24 * 60 * 60_000;
@@ -49,6 +49,16 @@ interface CurrentRefreshSessionRow {
   unexpired: boolean;
 }
 
+interface ActiveRoleSessionRow {
+  session_id: string;
+  user_id: string;
+  email: string;
+  full_name: string;
+  active_role: UserRole;
+  refresh_token_hash: string;
+  session_expires_at: Date;
+}
+
 interface RefreshHistoryRow {
   session_id: string;
   session_status: 'active' | 'revoked';
@@ -72,13 +82,13 @@ function tokenHash(token: string): string {
   return createHash('sha256').update(token, 'utf8').digest('hex');
 }
 
-function createTokenPair(): SessionTokenPair {
+function createTokenPair(sessionExpiresAt?: Date): SessionTokenPair {
   const now = Date.now();
   return {
     accessToken: randomBytes(32).toString('base64url'),
     refreshToken: randomBytes(32).toString('base64url'),
     accessExpiresAt: new Date(now + ACCESS_TOKEN_TTL_MS),
-    sessionExpiresAt: new Date(now + SESSION_TTL_MS),
+    sessionExpiresAt: sessionExpiresAt ?? new Date(now + SESSION_TTL_MS),
   };
 }
 
@@ -175,7 +185,7 @@ export class AuthService {
     try {
       result = await this.database.query<UserCredentialRow>(
         `SELECT u.id, u.email, u.full_name, u.status, c.password_hash,
-                array_agg(m.role ORDER BY m.role) AS roles
+                array_agg(m.role ORDER BY m.role)::text[] AS roles
          FROM users u
          JOIN user_credentials c ON c.user_id = u.id
          JOIN role_memberships m ON m.user_id = u.id
@@ -295,6 +305,80 @@ export class AuthService {
       throw new UnauthorizedException({ code: 'UNAUTHENTICATED', message: 'Refresh token is invalid or expired' });
     }
     return this.toSessionResponse(outcome.user, outcome.activeRole, outcome.sessionId, tokens);
+  }
+
+  async switchActiveRole(
+    principal: AuthenticatedPrincipal,
+    authorization: string,
+    activeRole: UserRole,
+  ): Promise<AuthSessionResponse> {
+    const bearer = /^Bearer ([A-Za-z0-9_-]{40,128})$/i.exec(authorization ?? '');
+    if (!bearer) {
+      throw new UnauthorizedException({ code: 'UNAUTHENTICATED', message: 'Authentication is required' });
+    }
+    const currentAccessHash = tokenHash(bearer[1]);
+
+    try {
+      return await this.database.transaction(async (client) => {
+        const currentResult = await client.query<ActiveRoleSessionRow>(
+          `SELECT s.id AS session_id, s.user_id, s.active_role, s.refresh_token_hash,
+                  s.expires_at AS session_expires_at, u.email, u.full_name
+           FROM auth_sessions s
+           JOIN users u ON u.id = s.user_id
+           WHERE s.id = $1 AND s.user_id = $2 AND s.access_token_hash = $3
+             AND s.status = 'active' AND s.access_expires_at > now()
+             AND s.expires_at > now() AND u.status = 'active'
+           FOR UPDATE OF s`,
+          [principal.sessionId, principal.userId, currentAccessHash],
+        );
+        const current = currentResult.rows[0];
+        if (!current) {
+          throw new UnauthorizedException({ code: 'UNAUTHENTICATED', message: 'Authentication is required' });
+        }
+
+        const memberships = await client.query<{ role: UserRole }>(
+          'SELECT role FROM role_memberships WHERE user_id = $1 ORDER BY role',
+          [current.user_id],
+        );
+        const roles = memberships.rows.map((row) => row.role);
+        if (!roles.includes(activeRole)) {
+          throw new ForbiddenException({ code: 'FORBIDDEN', message: 'The account does not have the selected role' });
+        }
+
+        const tokens = createTokenPair(current.session_expires_at);
+        await client.query(
+          `INSERT INTO auth_refresh_token_history (session_id, token_hash, consumed_at)
+           VALUES ($1, $2, now())`,
+          [current.session_id, current.refresh_token_hash],
+        );
+        await client.query(
+          `UPDATE auth_sessions
+           SET active_role = $2,
+               access_token_hash = $3,
+               refresh_token_hash = $4,
+               access_expires_at = $5,
+               last_used_at = now(),
+               updated_at = now()
+           WHERE id = $1 AND status = 'active'`,
+          [
+            current.session_id,
+            activeRole,
+            tokenHash(tokens.accessToken),
+            tokenHash(tokens.refreshToken),
+            tokens.accessExpiresAt,
+          ],
+        );
+
+        return this.toSessionResponse(
+          { id: current.user_id, email: current.email, fullName: current.full_name, roles },
+          activeRole,
+          current.session_id,
+          tokens,
+        );
+      });
+    } catch (error) {
+      rethrowDatabaseFailure(error);
+    }
   }
 
   async logout(refreshToken: string): Promise<void> {

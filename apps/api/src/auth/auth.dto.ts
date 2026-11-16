@@ -46,6 +46,12 @@ export class LoginRequestDto {
   activeRole!: UserRole;
 }
 
+export class SwitchActiveRoleRequestDto {
+  @ApiProperty({ enum: USER_ROLES, description: 'Peran yang sudah terdaftar sebagai membership akun.' })
+  @IsIn(USER_ROLES)
+  activeRole!: UserRole;
+}
+
 export class RefreshTokenRequestDto {
   @ApiProperty({ writeOnly: true, minLength: 40, maxLength: 128 })
   @IsString()

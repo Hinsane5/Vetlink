@@ -39,7 +39,7 @@ export class AccessTokenGuard implements CanActivate {
     try {
       result = await this.database.query<SessionPrincipalRow>(
         `SELECT s.id AS session_id, u.id AS user_id, u.email, u.full_name,
-                s.active_role, array_agg(m.role ORDER BY m.role) AS roles
+                s.active_role, array_agg(m.role ORDER BY m.role)::text[] AS roles
          FROM auth_sessions s
          JOIN users u ON u.id = s.user_id
          JOIN role_memberships m ON m.user_id = u.id
