@@ -1,6 +1,6 @@
 # Strategi pengujian VetLink
 
-Status QA per 16 November 2026: frontend masih memakai data lokal persisten tanpa integrasi API dan FE-03 autentikasi tetap ditunda. BE-00–16 memiliki route executable; `api:contract` dan `api:smoke` BE-16 lulus pada runtime lokal/PostgreSQL 17 terisolasi, termasuk follow-up active-role dan payment recovery. Smoke BE-09/13/14/15 juga lulus. Mobile belum memakai API; kontrak dua sesi API sudah diuji, tetapi QA mobile dua perangkat fisik, interaksi/visual, ukuran kecil, serta font besar belum terbukti. APK Android preview sudah dibangun dan dipasang lewat USB pada 20 Oktober. Tidak ada pemanggilan Figma MCP baru.
+Status QA per 16 November 2026: frontend masih memakai data lokal persisten tanpa integrasi API dan FE-03 autentikasi tetap ditunda. BE-00–16 memiliki route executable; `api:contract` dan `api:smoke` BE-16 lulus pada runtime lokal/PostgreSQL 17 terisolasi, termasuk follow-up active-role, payment recovery, read DTO, owner/role scope, dan cursor pagination. Smoke BE-09/13/14/15 juga lulus. Mobile belum memakai API; kontrak dua sesi API sudah diuji, tetapi QA mobile dua perangkat fisik, interaksi/visual, ukuran kecil, serta font besar belum terbukti. APK Android preview sudah dibangun dan dipasang lewat USB pada 20 Oktober. Tidak ada pemanggilan Figma MCP baru.
 
 ## APK preview Android lokal (20 Oktober 2026)
 
@@ -836,7 +836,17 @@ Slice ini menambah port read-only `CatalogReadRepository` dan `HttpApiCatalogRep
 | --- | --- |
 | `npm ci --no-audit --no-fund` di `apps/mobile` | **Lulus** setelah laporan worker: 762 paket dipasang dari lockfile pada child worktree. |
 | `npm run check` di `apps/mobile` | Percobaan worker pertama terhenti karena `tsc` belum tersedia. Setelah `npm ci`, percobaan kedua menemukan adapter baru belum tercakup `tsconfig.domain-tests.json` (126/127 tes berjalan). Koordinator menambahkan kedua file adapter/port pada konfigurasi runner lalu mengulang: **Lulus**, typecheck, Expo lint, 142/142 tes (0 gagal), termasuk 3 tes katalog baru. |
-| Farm/address, livestock/patients, Vet directory/slots | Adapter belum dibuat. Route BE-02/03/04 aktif mengembalikan array tanpa cursor dan belum mendeklarasikan response DTO yang cukup untuk memvalidasi mapping. Jangan menerapkan pagination client atau menebak raw response; lanjutkan setelah kontrak server siap. |
+| Farm/address, livestock/patients, Vet directory/slots | Adapter belum dibuat. Saat slice frontend dijalankan, route BE-02/03/04 belum mendeklarasikan response DTO yang cukup untuk mapping dan cursor. Kontrak backend diperbaiki pada pekerjaan BE-16 read contract di bawah; adapter mobile untuk route tersebut belum dibuat. |
 | Integrasi dan QA | Tidak ada perubahan backend, runtime SQLite, UI, Figma MCP, emulator, perangkat, provider, secret, deployment, atau transaksi nyata. FE-25 end-to-end dan QA dua perangkat tetap gate. |
 
 FE-25 tetap **Sedang dikerjakan**. Catatan route dan cursor tersedia pada [handover API](MOBILE_API_HANDOVER.md). `git diff --check` **Lulus** setelah perubahan dokumen dan kode.
+
+## Bukti BE-16 read contract — 16 November 2026
+
+Pemeriksaan dijalankan dari `apps/api` pada Node `24.10.0` / npm `11.6.0`; engine manifest meminta Node `24.15.0`, sehingga `npm ci --no-audit --no-fund` memberi peringatan engine tetapi memasang 253 paket. PostgreSQL 17.4 dibuat sebagai cluster baru di loopback dengan port dinamis dan database `vetlink_be16_read_smoke`; cluster dihentikan setelah smoke. Semua 18 migrasi dan seed fiktif dijalankan pada database itu; port layanan lain, Docker, provider eksternal, dan data produksi tidak digunakan.
+
+- `npm run check` — **Lulus**: TypeScript typecheck dan Nest build/OpenAPI.
+- `npm run api:contract` — **Lulus**, 5/5: struktur OpenAPI/ref, auth/bearer, schema workflow sebelumnya, dan tambahan DTO response Farm/address/livestock/direktori/slot, timestamp, IDR integer, serta route pagination baru.
+- `npm run api:smoke` — **Lulus** pada PostgreSQL terisolasi. Memeriksa DTO camelCase dan tipe timestamp/decimal, detail Farm/address dengan 404 untuk akun lain dan 403 untuk role Dokter, array lama, cursor ternak tanpa duplicate/skip dan terikat user+role, cursor direktori tanpa duplicate/skip dan terikat filter, tarif IDR integer aman, scope pasien Dokter, serta bentuk slot `startsAt`/`endsAt`. Pemeriksaan BE-03–15 pada smoke yang sama juga lulus.
+- `git diff --check` — **Lulus** setelah seluruh perubahan kode dan dokumen.
+- Mobile tetap memakai SQLite; tidak ada perubahan runtime mobile, wiring API, build/emulator, Figma MCP, provider produksi, deployment, atau transaksi finansial nyata pada pekerjaan ini.

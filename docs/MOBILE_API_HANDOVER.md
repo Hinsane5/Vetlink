@@ -28,7 +28,15 @@ Adapter read-only `CatalogReadRepository` memanggil `GET /v1/products` dan `GET 
 
 Cursor adalah nilai opaque dari server: pertahankan persis `nextCursor` untuk request berikutnya dan hentikan saat `hasMore=false`. Jangan menghitung cursor, menyortir ulang, atau mengganti ID dengan kode tampilan. Akses katalog menggunakan bearer/session role server; jangan mengirim `ownerId`. Detail produk tidak dikenal/nonaktif menghasilkan 404 melalui error envelope.
 
-Farm/address (`GET /v1/me/farms`, `/v1/me/addresses`), livestock/patients (`GET /v1/livestock`, `/v1/patients`), dan Vet directory/slots (`GET /v1/vets`, `/v1/vets/{id}/slots`) saat ini mengembalikan array tanpa cursor. Response DTO eksplisit untuk daftar/detail tersebut belum tersedia pada OpenAPI aktif. Belum ada adapter mobile untuk route itu sampai kontrak response dapat divalidasi; jangan membuat pagination client atau menebak field raw database. Query tetap owner/assignment/verified scoped oleh server.
+Farm/address, ternak/pasien, dan direktori/slot Dokter kini memiliki kontrak respons eksplisit pada backend. Adapter mobile untuk route itu belum dibuat; gunakan DTO dan route cursor yang dijelaskan di bawah saat melanjutkan FE-25. Query tetap owner/assignment/verified scoped oleh server.
+
+## Read Farm, address, ternak, dan direktori
+
+`GET /v1/me/farms` dan `GET /v1/me/addresses` mengembalikan array camelCase milik Peternak aktif. `GET /v1/me/farms/{id}` dan `GET /v1/me/addresses/{id}` membaca detail saat diperlukan; akun lain mendapat 404 dan peran Dokter mendapat 403. DTO menyertakan `id`, field domain, `createdAt`, `updatedAt`, dan `version`; owner ID tidak dikirim. `location` Farm dapat `null`. Koordinat address dan `weightKg` ternak adalah string decimal PostgreSQL untuk menjaga presisi; timestamp adalah ISO-8601 UTC.
+
+`GET /v1/livestock` dan `GET /v1/vets` mempertahankan respons array lama. Untuk daftar besar gunakan route additive `GET /v1/livestock/page?limit=50` dan `GET /v1/vets/page?name=...&service=...&limit=50`; halaman memakai `{items,nextCursor,hasMore}`. Ternak Peternak diurutkan `createdAt DESC,id ASC`; Dokter hanya melihat ternak yang terkait layanan miliknya dan tidak melihat record draft/awaiting-payment. Direktori hanya berisi Dokter verified dengan availability/tarif, diurutkan `professionalName` lowercase lalu ID. Filter directory dapat dipakai bersama pagination.
+
+Jangan mengurai atau membuat cursor sendiri: salin `nextCursor` persis, kirim hanya ke route/scope yang sama, dan berhenti saat `hasMore=false`. Cursor ternak terikat ke user + active role; cursor direktori terikat ke filter. `limit` default 20 dan maksimum 100. API tidak memberi snapshot lintas halaman, sehingga insert/delete yang terjadi selama pagination dapat mengubah isi daftar. Direktori mengembalikan `fees`, `minFeeIdr`, dan `maxFeeIdr` sebagai JSON integer IDR yang aman; detail Dokter memuat object tarif `rates` dan durasi layanan. `GET /v1/vets/{id}/slots` adalah array berisi hanya `startsAt` dan `endsAt` timestamp ISO-8601, bukan ID slot atau reservasi.
 
 ## Flow mobile A–D
 

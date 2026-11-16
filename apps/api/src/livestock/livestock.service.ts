@@ -1,15 +1,111 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service.js';
 import type { AuthenticatedPrincipal } from '../auth/auth.types.js';
 import type { CareEventDto, CreateLivestockDto, PatchLivestockDto } from './livestock.dto.js';
+import type { LivestockListQueryDto } from './livestock-read.dto.js';
+
+interface LivestockRow {
+  id: string;
+  farmer_id: string;
+  farm_id: string;
+  display_code: string;
+  name: string;
+  species: string;
+  breed: string | null;
+  sex: 'female' | 'male' | 'unknown';
+  birth_date: string | null;
+  estimated_age_months: number | null;
+  weight_kg: string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+  version: number;
+  cursor_created_at?: string;
+}
+
+interface LivestockCursor {
+  createdAt: string;
+  id: string;
+  scope: string;
+}
+
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function invalidCursor(): never {
+  throw new BadRequestException({ code: 'VALIDATION_FAILED', message: 'Cursor ternak tidak valid.' });
+}
+
+function parseCursor(value: string | undefined, scope: string): LivestockCursor | undefined {
+  if (value === undefined) return undefined;
+  try {
+    const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as Partial<LivestockCursor>;
+    if (
+      typeof parsed.createdAt !== 'string'
+      || parsed.createdAt.length > 64
+      || !Number.isFinite(Date.parse(parsed.createdAt))
+      || typeof parsed.id !== 'string'
+      || !uuidPattern.test(parsed.id)
+      || parsed.scope !== scope
+      || Buffer.from(JSON.stringify(parsed), 'utf8').toString('base64url') !== value
+    ) invalidCursor();
+    return { createdAt: parsed.createdAt, id: parsed.id, scope };
+  } catch {
+    return invalidCursor();
+  }
+}
+
+function encodeCursor(createdAt: string, id: string, scope: string): string {
+  return Buffer.from(JSON.stringify({ createdAt, id, scope }), 'utf8').toString('base64url');
+}
+
+function livestockResponse(row: LivestockRow) {
+  return {
+    id: row.id,
+    farmerId: row.farmer_id,
+    farmId: row.farm_id,
+    displayCode: row.display_code,
+    name: row.name,
+    species: row.species,
+    breed: row.breed,
+    sex: row.sex,
+    birthDate: row.birth_date,
+    estimatedAgeMonths: row.estimated_age_months,
+    weightKg: row.weight_kg,
+    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : new Date(row.created_at).toISOString(),
+    updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : new Date(row.updated_at).toISOString(),
+    version: row.version,
+  };
+}
 
 @Injectable()
 export class LivestockService {
   constructor(private readonly db: DatabaseService) {}
 
   async list(p: AuthenticatedPrincipal) {
-    if (p.activeRole === 'farmer') return (await this.db.query('SELECT l.* FROM livestock l WHERE l.farmer_id=$1 ORDER BY l.created_at DESC,l.id',[p.userId])).rows;
-    return (await this.db.query(`SELECT DISTINCT l.* FROM livestock l JOIN consultations c ON c.animal_id=l.id AND c.farmer_id=l.farmer_id AND c.vet_id=$1 AND c.status NOT IN ('draft','awaiting_payment') ORDER BY l.created_at DESC,l.id`,[p.userId])).rows;
+    if (p.activeRole === 'farmer') return (await this.db.query<LivestockRow>('SELECT l.* FROM livestock l WHERE l.farmer_id=$1 ORDER BY l.created_at DESC,l.id',[p.userId])).rows.map(livestockResponse);
+    return (await this.db.query<LivestockRow>(`SELECT DISTINCT l.* FROM livestock l JOIN consultations c ON c.animal_id=l.id AND c.farmer_id=l.farmer_id AND c.vet_id=$1 AND c.status NOT IN ('draft','awaiting_payment') ORDER BY l.created_at DESC,l.id`,[p.userId])).rows.map(livestockResponse);
+  }
+
+  async listPage(p: AuthenticatedPrincipal, query: LivestockListQueryDto) {
+    const scope = `${p.activeRole}:${p.userId}`;
+    const cursor = parseCursor(query.cursor, scope);
+    const result = p.activeRole === 'farmer'
+      ? await this.db.query<LivestockRow>(`SELECT l.*,to_char(l.created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_created_at
+          FROM livestock l WHERE l.farmer_id=$1
+            AND ($2::timestamptz IS NULL OR l.created_at<$2::timestamptz OR (l.created_at=$2::timestamptz AND l.id>$3::uuid))
+          ORDER BY l.created_at DESC,l.id ASC LIMIT $4`, [p.userId,cursor?.createdAt??null,cursor?.id??null,query.limit+1])
+      : await this.db.query<LivestockRow>(`SELECT l.*,to_char(l.created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_created_at
+          FROM livestock l WHERE EXISTS (SELECT 1 FROM consultations c WHERE c.animal_id=l.id AND c.farmer_id=l.farmer_id
+            AND c.vet_id=$1 AND c.status NOT IN ('draft','awaiting_payment'))
+            AND ($2::timestamptz IS NULL OR l.created_at<$2::timestamptz OR (l.created_at=$2::timestamptz AND l.id>$3::uuid))
+          ORDER BY l.created_at DESC,l.id ASC LIMIT $4`, [p.userId,cursor?.createdAt??null,cursor?.id??null,query.limit+1]);
+    const hasMore = result.rows.length > query.limit;
+    const rows = hasMore ? result.rows.slice(0, query.limit) : result.rows;
+    const last = rows.at(-1);
+    return {
+      items: rows.map(livestockResponse),
+      nextCursor: hasMore && last?.cursor_created_at ? encodeCursor(last.cursor_created_at, last.id, scope) : null,
+      hasMore,
+    };
   }
 
   async patients(p: AuthenticatedPrincipal) {
@@ -20,8 +116,8 @@ export class LivestockService {
   }
 
   async get(p: AuthenticatedPrincipal,id: string) {
-    const r=await this.db.query(`SELECT l.* FROM livestock l WHERE l.id=$1 AND (${p.activeRole==='farmer'?'l.farmer_id=$2':"EXISTS (SELECT 1 FROM consultations c WHERE c.animal_id=l.id AND c.farmer_id=l.farmer_id AND c.vet_id=$2 AND c.status NOT IN ('draft','awaiting_payment'))"})`,[id,p.userId]);
-    if(!r.rows[0]) throw new NotFoundException({code:'RESOURCE_NOT_FOUND',message:'Ternak/pasien tidak ditemukan.'}); return r.rows[0];
+    const r=await this.db.query<LivestockRow>(`SELECT l.* FROM livestock l WHERE l.id=$1 AND (${p.activeRole==='farmer'?'l.farmer_id=$2':"EXISTS (SELECT 1 FROM consultations c WHERE c.animal_id=l.id AND c.farmer_id=l.farmer_id AND c.vet_id=$2 AND c.status NOT IN ('draft','awaiting_payment'))"})`,[id,p.userId]);
+    if(!r.rows[0]) throw new NotFoundException({code:'RESOURCE_NOT_FOUND',message:'Ternak/pasien tidak ditemukan.'}); return livestockResponse(r.rows[0]);
   }
 
   async create(p: AuthenticatedPrincipal,x: CreateLivestockDto) {
@@ -30,8 +126,8 @@ export class LivestockService {
     const farm=await this.db.query('SELECT id,species FROM farms WHERE id=$1 AND owner_id=$2',[x.farmId,p.userId]);
     if(!farm.rows[0]) throw new NotFoundException({code:'RESOURCE_NOT_FOUND',message:'Farm tidak ditemukan.'});
     if(farm.rows[0].species.length && !farm.rows[0].species.includes(x.species)) throw new UnprocessableEntityException({code:'RULE_VIOLATION',message:'Jenis ternak tidak sesuai dengan farm.'});
-    try { const r=await this.db.query(`INSERT INTO livestock(farmer_id,farm_id,display_code,name,species,breed,sex,birth_date,estimated_age_months,weight_kg)
-      VALUES($1,$2,upper(btrim($3)),btrim($4),btrim($5),nullif(btrim($6),''),$7,$8,$9,$10) RETURNING *`,[p.userId,x.farmId,x.displayCode,x.name,x.species,x.breed??null,x.sex,x.birthDate??null,x.estimatedAgeMonths??null,x.weightKg??null]); return r.rows[0]; }
+    try { const r=await this.db.query<LivestockRow>(`INSERT INTO livestock(farmer_id,farm_id,display_code,name,species,breed,sex,birth_date,estimated_age_months,weight_kg)
+      VALUES($1,$2,upper(btrim($3)),btrim($4),btrim($5),nullif(btrim($6),''),$7,$8,$9,$10) RETURNING *`,[p.userId,x.farmId,x.displayCode,x.name,x.species,x.breed??null,x.sex,x.birthDate??null,x.estimatedAgeMonths??null,x.weightKg??null]); return livestockResponse(r.rows[0]); }
     catch(e) { if((e as {code?:string}).code==='23505') throw new ConflictException({code:'CONFLICT',message:'Kode ternak sudah dipakai pada farm ini.'}); throw e; }
   }
 
@@ -39,9 +135,9 @@ export class LivestockService {
     this.requireFarmer(p);
     if(Object.keys(x).every((key)=>key==='expectedVersion')) throw new UnprocessableEntityException({code:'VALIDATION_FAILED',message:'Minimal satu field ternak harus diubah.'});
     if(x.birthDate && x.estimatedAgeMonths !== undefined && x.estimatedAgeMonths !== null) throw new UnprocessableEntityException({code:'VALIDATION_FAILED',message:'Isi tanggal lahir atau estimasi umur, bukan keduanya.'});
-    const r=await this.db.query(`UPDATE livestock SET display_code=upper(btrim(COALESCE($3,display_code))),name=btrim(COALESCE($4,name)),species=btrim(COALESCE($5,species)),breed=CASE WHEN $6::text IS NULL THEN breed ELSE nullif(btrim($6),'') END,sex=COALESCE($7,sex),birth_date=CASE WHEN $8::boolean THEN $9::date ELSE birth_date END,estimated_age_months=CASE WHEN $10::boolean THEN $11::integer ELSE estimated_age_months END,weight_kg=CASE WHEN $12::boolean THEN $13::numeric ELSE weight_kg END,updated_at=now(),version=version+1
+    const r=await this.db.query<LivestockRow>(`UPDATE livestock SET display_code=upper(btrim(COALESCE($3,display_code))),name=btrim(COALESCE($4,name)),species=btrim(COALESCE($5,species)),breed=CASE WHEN $6::text IS NULL THEN breed ELSE nullif(btrim($6),'') END,sex=COALESCE($7,sex),birth_date=CASE WHEN $8::boolean THEN $9::date ELSE birth_date END,estimated_age_months=CASE WHEN $10::boolean THEN $11::integer ELSE estimated_age_months END,weight_kg=CASE WHEN $12::boolean THEN $13::numeric ELSE weight_kg END,updated_at=now(),version=version+1
       WHERE id=$1 AND farmer_id=$2 AND version=$14 RETURNING *`,[id,p.userId,x.displayCode??null,x.name??null,x.species??null,x.breed===undefined?null:x.breed,x.sex??null,x.birthDate===null||x.birthDate!==undefined,x.birthDate??null,x.estimatedAgeMonths===null||x.estimatedAgeMonths!==undefined,x.estimatedAgeMonths??null,x.weightKg===null||x.weightKg!==undefined,x.weightKg??null,x.expectedVersion]);
-    if(!r.rows[0]) throw new NotFoundException({code:'RESOURCE_NOT_FOUND',message:'Ternak tidak ditemukan atau versinya berubah.'}); return r.rows[0];
+    if(!r.rows[0]) throw new NotFoundException({code:'RESOURCE_NOT_FOUND',message:'Ternak tidak ditemukan atau versinya berubah.'}); return livestockResponse(r.rows[0]);
   }
 
   async delete(p:AuthenticatedPrincipal,id:string) {

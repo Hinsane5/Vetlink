@@ -4,7 +4,7 @@ Status per 16 November 2026: OpenAPI executable memuat route BE-00–16. BE-16 m
 
 ## Konvensi
 
-Prefix `/v1`, JSON, ID stabil, timestamp ISO-8601 UTC, integer IDR, paginasi cursor untuk daftar. Auth memakai bearer credential opaque; token tidak menjadi query parameter. Error berbentuk `{code, message, fieldErrors?, requestId}` tanpa isi rahasia/stack trace. Client menerjemahkan pesan teknis ke bahasa Indonesia.
+Prefix `/v1`, JSON, ID stabil, timestamp ISO-8601 UTC, integer IDR. Daftar besar memakai cursor; Farm/address tetap array karena owner-scoped. Route lama `GET /livestock` dan `GET /vets` tetap array, sedangkan `/livestock/page` dan `/vets/page` adalah route additive untuk paginasi. Auth memakai bearer credential opaque; token tidak menjadi query parameter. Error berbentuk `{code, message, fieldErrors?, requestId}` tanpa isi rahasia/stack trace. Client menerjemahkan pesan teknis ke bahasa Indonesia.
 
 Mutasi concurrency-sensitive menerima `expectedVersion`. Mutasi pembayaran, order, pencairan, finalisasi dan completion menerima `Idempotency-Key`; key sama/payload sama mengembalikan hasil sebelumnya, payload berbeda ditolak. Review memakai unique consultation dan payload sama sebagai deduplikasi, tanpa key tambahan. Upload media juga mewajibkan `Idempotency-Key`; pesan memakai `clientMessageId` yang unik per actor/konsultasi. Status HTTP standar: 400 validation, 401 session, 403 role/access, 404 resource tersembunyi, 409 status/version/slot conflict, 413 payload terlalu besar, 422 rule, 429 rate limit, 503 dependency unavailable, dan 500 internal error.
 
@@ -26,6 +26,17 @@ NestJS melayani Swagger UI di `/docs` dan JSON di `/openapi.json`. Endpoint runt
 | `POST /v1/auth/password-reset` | Email | 202 generik | 400/429; tidak membocorkan keberadaan akun |
 | `POST /v1/auth/password-reset/confirm` | Reset token, password baru | 204 | 400/429 |
 | `GET /v1/me` | Bearer access token | Akun aktif dan memberships | 401/403 |
+| `GET /v1/me/farms` | Tanpa query; Farm milik active farmer | 200 array `FarmResponseDto` dalam urutan `createdAt,id` | 401/403 `ApiErrorResponseDto` |
+| `GET /v1/me/farms/{id}` | UUID Farm | 200 `FarmResponseDto` owner-scoped | 401/403/404 `ApiErrorResponseDto` |
+| `GET /v1/me/addresses` | Tanpa query; alamat milik active farmer | 200 array `AddressResponseDto` dalam urutan `createdAt,id` | 401/403 `ApiErrorResponseDto` |
+| `GET /v1/me/addresses/{id}` | UUID address | 200 `AddressResponseDto` owner-scoped | 401/403/404 `ApiErrorResponseDto` |
+| `GET /v1/livestock` | Tidak memakai pagination | 200 array `LivestockResponseDto`; route lama dipertahankan | 401/403 `ApiErrorResponseDto` |
+| `GET /v1/livestock/page` | `cursor?`, `limit?` 1–100 (default 20) | 200 `LivestockPageResponseDto`; scope Peternak owner atau Dokter pasien terkait | 400/401/403 `ApiErrorResponseDto` |
+| `GET /v1/livestock/{id}` | UUID ternak | 200 `LivestockResponseDto`; owner/assignment scope | 401/403/404 `ApiErrorResponseDto` |
+| `GET /v1/vets` | Filter opsional discovery | 200 array `VetDirectoryResponseDto`; route lama dipertahankan | 401/403 `ApiErrorResponseDto` |
+| `GET /v1/vets/page` | Filter discovery + `cursor?`, `limit?` 1–100 (default 20) | 200 `VetDirectoryPageResponseDto` | 400/401/403/503 `ApiErrorResponseDto` |
+| `GET /v1/vets/{id}` | UUID Dokter | 200 `VetDirectoryDetailResponseDto`, hanya profil verified yang discoverable | 401/403/404/503 `ApiErrorResponseDto` |
+| `GET /v1/vets/{id}/slots` | `dateFrom`, `dateTo`, `service=chat|visit` | 200 array `{startsAt,endsAt}` timestamp ISO-8601 | 400/401/403/404/503 `ApiErrorResponseDto` |
 | `GET /v1/products` | Filter opsional `name`, `category`, `species`, `minPrice`, `maxPrice`, `cursor`, `limit` | 200 `ProductPageResponseDto` berisi `items: ProductResponseDto[]`, `nextCursor`, `hasMore` | 400/401/403/503 `ApiErrorResponseDto` |
 | `GET /v1/products/{id}` | ID produk UUID | 200 `ProductResponseDto` dan `unitPriceIdr` authoritative | 401/403/404/503 `ApiErrorResponseDto` |
 | `GET /v1/me/cart` | Tanpa body; membuat cart kosong milik sesi bila belum ada | 200 `CartResponseDto`, harga aktif dibaca dari katalog | 401/403/503 `ApiErrorResponseDto` |
@@ -53,13 +64,15 @@ Semua route memakai bearer; actor ID selalu berasal dari sesi. Farm dan address 
 | Method / path | Request → response | Otorisasi / aturan |
 | --- | --- | --- |
 | `GET/PATCH /v1/me/farmer`, `/v1/me/vet` | profil; PATCH nama dan field profesi terbatas | owner sesi; status verifikasi dan owner tidak dapat diubah |
-| `GET/POST /v1/me/farms`; `PATCH /v1/me/farms/{id}` | daftar banyak farm milik akun, tambah farm baru, ubah satu farm; PATCH wajib `expectedVersion` | Peternak owner, update hanya saat versi cocok; pilihan farm pada mobile tidak mengubah otoritas ownership |
-| `GET/POST /v1/me/addresses`; `PATCH /v1/me/addresses/{id}`; `DELETE /v1/me/addresses/{id}` | address tersimpan; PATCH wajib `expectedVersion` | Peternak owner; arbitrary ID mendapat 404 |
+| `GET/POST /v1/me/farms`; `GET/PATCH /v1/me/farms/{id}` | daftar banyak farm milik akun atau satu farm; POST/PATCH menerima field farm; PATCH wajib `expectedVersion` | Peternak owner; GET/POST/PATCH mengembalikan `FarmResponseDto` camelCase tanpa owner ID; arbitrary ID mendapat 404 |
+| `GET/POST /v1/me/addresses`; `GET/PATCH/DELETE /v1/me/addresses/{id}` | daftar banyak alamat atau satu alamat; POST/PATCH menerima field alamat; PATCH wajib `expectedVersion` | Peternak owner; GET/POST/PATCH mengembalikan `AddressResponseDto` camelCase tanpa owner ID; arbitrary ID mendapat 404 |
 | `POST /v1/me/vet/professional-documents` | multipart `file` → metadata privat | Dokter pemilik; signature MIME, ukuran dan adapter storage diperiksa |
 | `POST /v1/me/vet/verification-submissions`; `GET /v1/me/vet/verification` | `documentIds[]` → riwayat submission | Dokter sendiri; verified tidak dapat submit ulang |
 | `GET /v1/me/internal/reviews`; `GET /v1/me/internal/reviews/documents/{id}/content`; `POST /v1/me/internal/reviews/{id}` | queue; byte dokumen; `{status: verified|revision_required, reason?}` | Hanya user yang ada di `trusted_reviewers`; grant diadministrasikan di luar API. Dokumen disajikan privat untuk submission pending. Revisi wajib menyimpan alasan. Status pending hanya dapat diputus sekali. |
 
 `trusted_reviewers` tidak memiliki endpoint pemberian hak. Tidak ada alat toko/katalog Dokter. Akses dokumen review memakai streaming privat dengan `no-store` dan pemeriksaan ulang trusted reviewer.
+
+Read DTO profil mengikuti query service dengan nama property camelCase: `FarmResponseDto` berisi `id,name,species,timezone,location,visitAddressId,createdAt,updatedAt,version`; `AddressResponseDto` berisi `id,label,recipientName,phone,addressLine,city,province,postalCode,latitude,longitude,createdAt,updatedAt,version`. Daftar Farm/address tetap array dan owner-scoped; endpoint detail menambahkan lookup owner-scoped dengan 404 untuk ID akun lain. Kolom `owner_id` tidak diekspos. `latitude`/`longitude` tetap decimal string dari driver PostgreSQL `numeric`; timestamp dikembalikan sebagai ISO-8601 UTC. Tidak ada paging karena scope satu akun.
 
 ## Ternak, pasien, dan timeline kesehatan BE-03
 
@@ -67,9 +80,10 @@ Semua route memakai bearer dan active role membership. Ternak Peternak dibatasi 
 
 | Method / path | Request → response | Otorisasi / aturan |
 | --- | --- | --- |
-| `GET /v1/livestock` | Array ternak | Peternak milik sendiri; Dokter pasien dari layanan terkait yang sudah terkirim saja (`draft`/`awaiting_payment` dikecualikan) |
+| `GET /v1/livestock` | Array `LivestockResponseDto` camelCase; tidak memakai cursor | Peternak milik sendiri; Dokter pasien dari layanan terkait yang sudah terkirim saja (`draft`/`awaiting_payment` dikecualikan); dipertahankan untuk klien lama |
+| `GET /v1/livestock/page` | `{items,nextCursor,hasMore}` dengan `cursor?`, `limit?` 1–100 (default 20) | Route additive; cursor keyset opaque `createdAt DESC,id ASC` dan berlaku untuk user+active role yang sama; query owner/assignment diulang pada tiap halaman |
 | `POST /v1/livestock` | `{farmId,displayCode,name,species,breed?,sex,birthDate?,estimatedAgeMonths?,weightKg?}` → 201 | Peternak; farm harus milik actor dan spesies konsisten; displayCode unik per farm |
-| `GET /v1/livestock/{id}` | Detail ternak | Owner Peternak atau Dokter dari layanan terkait yang sudah terkirim |
+| `GET /v1/livestock/{id}` | Satu `LivestockResponseDto` camelCase | Owner Peternak atau Dokter dari layanan terkait yang sudah terkirim |
 | `PATCH /v1/livestock/{id}` | Field ternak + `expectedVersion` → detail versi baru | Peternak owner; stale version/ID tidak mengubah record |
 | `DELETE /v1/livestock/{id}` | `{deleted:true}` | Peternak owner; hanya bila tidak ada riwayat yang mereferensikannya |
 | `GET /v1/livestock/{id}/health-events` | Timeline terurut terbaru | Owner Peternak atau Dokter terkait; final note muncul satu kali, draft tidak ditampilkan |
@@ -77,6 +91,8 @@ Semua route memakai bearer dan active role membership. Ternak Peternak dibatasi 
 | `GET /v1/patients` | Data ringkas pasien | Dokter; distinct pasien dari layanan terkait yang sudah terkirim |
 
 Data timeline BE-03 memakai `health_events` dengan provenance dan unique key. `clinical_note_id` unik memastikan proyeksi note tidak tertaut ganda; query timeline menampilkan sumber clinical note langsung dari record final dan mengabaikan baris proyeksi clinical_note agar tidak menduplikasi tampilan. Endpoint note/finalisasi tetap cakupan BE-08.
+
+`LivestockResponseDto` memetakan row ke camelCase (`farmerId`, `farmId`, `displayCode`, `birthDate`, `estimatedAgeMonths`, `weightKg`, `createdAt`, `updatedAt`) dan tidak menyertakan kolom cursor internal; `weightKg` adalah decimal string PostgreSQL agar presisi tidak hilang. Route array lama tetap tersedia. Untuk data besar, `GET /livestock/page` memakai keyset `(created_at DESC,id ASC)` dengan cursor opaque tervalidasi dan terikat ke user serta active role. Page mengambil `limit + 1` row untuk menentukan `hasMore`; tidak ada snapshot lintas request, sehingga perubahan membership data selama klien menelusuri halaman dapat mengubah hasil.
 
 Error menggunakan `{code, message, fieldErrors?, requestId}`. `fieldErrors` adalah object dari nama field ke daftar pesan; exception filter tidak mengirim stack trace. Setiap response juga mengirim header `X-Request-Id`. Shared error code/status, request pagination (`cursor`, `limit` 1–100), base `expectedVersion`, dan parameter header `Idempotency-Key` terdokumentasi sebagai schema/response reusable. `AdapterOperationResult` memiliki outcome `pending/succeeded/failed`; outcome gagal membawa `{code, message, retryable}`, dan pemanggil harus menyimpan hasil adapter sebelum memberi respons sukses.
 
@@ -148,7 +164,7 @@ Semua route memakai bearer dan active role membership. `POST /v1/consultations/{
 | Verifikasi | POST `/me/vet/verification-submissions`; GET `/me/vet/verification` | Dokter submit/revisi; hasil review hanya trusted reviewer |
 | Ternak | GET/POST `/livestock`; GET/PATCH `/livestock/{id}` | Peternak own CRUD; dokter read sesuai assignment |
 | Kesehatan | GET `/livestock/{id}/health-events`; POST `/livestock/{id}/care-events`; GET `/patients` | Dokter daftar scoped; Peternak tidak menulis clinical note |
-| Dokter | GET `/vets`, `/vets/{id}`, `/vets/{id}/slots`, `/vets/{id}/reviews` | Filter name/species/service/location/available/minFee/maxFee; only verified profiles with configured availability and rates are discoverable; directory/detail membawa `ratingAverage` dua desimal dan `ratingCount` dari ulasan valid |
+| Dokter | GET `/vets`, `/vets/page`, `/vets/{id}`, `/vets/{id}/slots`, `/vets/{id}/reviews` | Filter name/species/service/location/available/minFee/maxFee; only verified profiles with configured availability and rates are discoverable; response directory/detail camelCase dengan `ratingAverage` dua desimal dan `ratingCount` dari ulasan valid |
 | Ketersediaan | GET/PUT `/me/vet/availability`; CRUD `/me/vet/blocked-times`; GET `/me/vet/schedule` | Owner dokter; preserve accepted appointments; half-open interval conflict checks |
 | Booking | POST `/consultation-quotes`, `/consultations`; GET `/consultations`, `/consultations/{id}` | Peternak owner, doctor assigned; fee dari server |
 | Request | POST `/consultations/{id}/accept`, `/reject`, `/schedule-proposals` | Dokter assigned verified untuk accept; reject reason wajib |
@@ -255,6 +271,8 @@ Adapter submission lokal tidak mengirim uang. Outcome `succeeded` yang tersimpan
 ### BE-04 executable contract
 
 Semua route BE-04 memerlukan bearer dan active role membership. Discovery/slot dapat dibaca Peternak maupun Dokter; konfigurasi, block dan kalender hanya Dokter pemilik. Vet discovery hanya mengembalikan profil `verified` dengan profil direktori, availability dan tarif yang telah dikonfigurasi. Query `name`, `species`, `service`, `location`, `available`, `minFee`, `maxFee` dapat digabungkan; biaya adalah integer rupiah dan sedikitnya satu tarif layanan aktif harus berada dalam seluruh batas tarif yang diminta.
+
+`GET /vets` tetap mengembalikan array untuk kompatibilitas lama. `GET /vets/page` memakai filter discovery yang sama ditambah `cursor?` dan `limit?` (1–100, default 20), mengembalikan `VetDirectoryPageResponseDto`, mengurutkan `lower(professionalName),id`, serta mengikat cursor ke kombinasi filter yang sama. `VetDirectoryResponseDto` memuat `id,professionalName,experienceYears,specialties,species,practiceLocation,serviceAreas,acceptingNewRequests,services,timezone,weekdayRules,fees,minFeeIdr,maxFeeIdr,ratingAverage,ratingCount`. Tarif dalam `fees` dan min/max adalah JSON integer IDR; nilai lebih dari `Number.MAX_SAFE_INTEGER` ditolak oleh service agar tidak kehilangan presisi. Detail `VetDirectoryDetailResponseDto` menambahkan durasi chat/visit dan object tarif `rates`. `GET /vets/{id}/slots` menghasilkan array dengan tepat `startsAt` dan `endsAt` (ISO-8601 UTC); pembacaan slot tidak membuat reservasi. Data hasil query slot tidak menyediakan `feeIdr`, status, atau ID slot.
 
 `PUT /me/vet/availability` menerima `expectedVersion`, accepting flag, layanan, IANA timezone, aturan weekday lokal (Minggu=0), durasi, metadata direktori serta tarif integer rupiah per layanan. Server mengunci konfigurasi dokter, menolak versi basi/jam invalid/aturan weekday ganda, menyimpan konfigurasi dan rate efektif-dated; tarif pada consultation lama tetap snapshot. Mengubah availability tidak menghapus atau mengubah consultation yang sudah ada. Hasil mutasi berisi operationId/status/occurredAt dan nilai tersimpan.
 
