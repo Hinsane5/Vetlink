@@ -17,7 +17,8 @@
     "check": "npm run typecheck && npm run build",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
-    "api:smoke": "node scripts/smoke.mjs"
+    "api:smoke": "node scripts/smoke.mjs",
+    "api:contract": "node --test scripts/api-contract.test.mjs"
   },
   "dependencies": {
     "@nestjs/common": "12.1.3",

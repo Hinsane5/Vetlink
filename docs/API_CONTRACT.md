@@ -1,6 +1,6 @@
 # Kontrak integrasi backend v1
 
-Status per 16 November 2026: OpenAPI executable memuat route BE-00–15: health/auth, profil/verifikasi, ternak/pasien/riwayat, vet discovery/availability/reviews dan rating agregat, booking/request/proposal/visit/completion, payment quote/create, chat/media, note/recommendation, follow-up, reminder/care completion, laporan perkembangan, inbox/read/preferences dan notification delivery, katalog aktif, cart, checkout quote, order, shipment timeline owner-scoped, pendapatan Dokter, tujuan pencairan fiktif, dan reservasi ledger pencairan. Runtime acceptance BE-09/13/14/15 lulus dengan PostgreSQL lokal. BE-16/17 tetap menunggu; aplikasi mobile belum memakai backend jaringan.
+Status per 16 November 2026: OpenAPI executable memuat route BE-00–15. BE-16 menambahkan pemeriksaan schema request/response DTO, autentikasi bearer, route mobile A–D, referensi lokal, header idempotensi, serta suite HTTP lintas sesi. Runtime acceptance BE-09/13/14/15 dan smoke BE-16 lulus pada PostgreSQL lokal terisolasi. Aplikasi mobile belum memakai backend jaringan; handover adapter dan batas integrasi ada di [dokumen mobile](MOBILE_API_HANDOVER.md).
 
 ## Konvensi
 
@@ -10,7 +10,7 @@ Mutasi concurrency-sensitive menerima `expectedVersion`. Mutasi pembayaran, orde
 
 Gunakan action endpoint untuk transisi yang membutuhkan syarat; jangan menyediakan PATCH umum yang membolehkan client mengatur `verified`, `completed`, `paid`, `balance`, atau `finalizedAt`.
 
-## OpenAPI executable BE-00–15
+## OpenAPI executable BE-00–16
 
 NestJS melayani Swagger UI di `/docs` dan JSON di `/openapi.json`. Endpoint runtime yang tersedia:
 
@@ -278,8 +278,10 @@ Nama event usulan: `ConsultationRequested`, `RequestAccepted`, `ScheduleProposed
 
 Payload event minimal: eventId, aggregateId, actorId, occurredAt, version. Efek notification/inbox dan health projection harus idempotent. Callback provider payment/shipping/payout mengubah status hanya setelah signature, reference, amount dan duplicate event tervalidasi.
 
-## Contract tests wajib
+## Suite kontrak BE-16
 
-Jalankan suite yang sama terhadap repository lokal dan API: scope ownership, verified guard, slot conflicts, final-note immutability, complete guard, sequence visit, computed totals, earning once, withdrawal reservation/retry, notification recipient. Perbedaan teknis error harus dinormalisasi ke domain error yang sama.
+`npm run api:contract` menjalankan empat pemeriksaan Node built-in terhadap OpenAPI dari aplikasi yang dibangun: struktur OpenAPI 3.0 serta resolusi `$ref`, seluruh route dan cakupan bearer, schema request/response yang dipakai mobile, uang integer IDR, operasi ber-`Idempotency-Key`, dan error envelope unauthenticated. Suite ini tidak membutuhkan PostgreSQL.
 
-OpenAPI executable BE-00–15 memuat healthcheck, auth, profil/verifikasi, livestock/patient, vet discovery/availability/slots/reviews/blocked-times/schedule, booking/request/proposal/visit/completion/review, payment quote/create, chat/media, note/recommendation, follow-up/reminder/reports, inbox/read/preferences notifikasi, katalog produk aktif, cart, checkout quote, order/snapshots, shipment timeline, earnings, payout destinations, dan withdrawals owner-scoped. BE-16/17 dan provider produksi tetap menunggu scope masing-masing. Kontrak BE-13 diselaraskan melalui Orca: `stars` dan `text?`, replay isi sama, konflik isi berbeda, serta `ratingAverage`/`ratingCount`. Kontrak BE-15 disampaikan melalui Orca untuk koordinasi.
+`npm run api:smoke` menjalankan kontrak HTTP dan service terhadap PostgreSQL lokal/test terisolasi. Suite memeriksa owner/assignment, penolakan akses lintas akun, dokter verified, konflik slot, note final immutable, guard completion, urutan Visit, total snapshot, earning sekali, reservasi withdrawal, retry callback, notification recipient, serta pembayaran dan pencairan paralel dari sesi terpisah. Flow A–D dibuktikan melalui quote/booking/payment/note/completion, Visit berurutan, update availability, dan earnings/withdrawal. Callback finansial hanya dipanggil internal di test harness; tidak ada route callback publik.
+
+OpenAPI executable memuat route health/auth, profil/verifikasi, livestock/patient, vet discovery/availability/slots/reviews/blocked-times/schedule, booking/request/proposal/visit/completion/review, payment quote/create, chat/media, note/recommendation, follow-up/reminder/reports, inbox/read/preferences notifikasi, katalog, cart/checkout/order, shipment timeline, earnings, payout destinations, dan withdrawals owner-scoped. Semua operasi terproteksi meminta bearer. Header idempotensi didokumentasikan untuk seluruh mutasi yang mewajibkannya. BE-16 tidak mengklaim mobile terintegrasi atau QA fisik dua perangkat; lihat [handover mobile](MOBILE_API_HANDOVER.md) dan [bukti run](TESTING.md#bukti-be-16-16-november-2026).

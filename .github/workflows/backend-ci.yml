@@ -52,6 +52,7 @@ jobs:
           cache-dependency-path: apps/api/package-lock.json
       - run: npm ci
       - run: npm run check
+      - run: npm run api:contract
       - run: npm run db:migrate
       - run: npm run db:migrate
       - run: npm run db:seed

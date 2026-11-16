@@ -111,6 +111,16 @@ async function registerSmokeUser(baseUrl, role, fullName) {
   return response.json();
 }
 
+async function loginSmokeUser(baseUrl, email, role) {
+  const response = await fetch(`${baseUrl}/v1/auth/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email, password: 'smoke-only-password-not-secret', activeRole: role }),
+  });
+  assert.equal(response.status, 200, await response.clone().text());
+  return response.json();
+}
+
 async function sendJson(baseUrl, path, accessToken, method, body, extraHeaders = {}) {
   return fetch(`${baseUrl}${path}`, {
     method,
@@ -300,10 +310,23 @@ try {
     let failedStorageServer;
     try {
       const farmer = await registerSmokeUser(healthy.baseUrl, 'farmer', 'Peternak Fiktif BE-07');
+      const farmerDeviceB = await loginSmokeUser(healthy.baseUrl, farmer.user.email, 'farmer');
       const vet = await registerSmokeUser(healthy.baseUrl, 'vet', 'Dokter Fiktif BE-07');
+      const vetDeviceB = await loginSmokeUser(healthy.baseUrl, vet.user.email, 'vet');
       const outsider = await registerSmokeUser(healthy.baseUrl, 'farmer', 'Peternak Lain Fiktif BE-07');
       const unverifiedVet = await registerSmokeUser(healthy.baseUrl, 'vet', 'Dokter Belum Terverifikasi BE-04');
-      actors.push(farmer.user.id, vet.user.id, outsider.user.id,unverifiedVet.user.id);
+      actors.push(farmer.user.id, vet.user.id, outsider.user.id, unverifiedVet.user.id);
+      assert.notEqual(farmer.sessionId, farmerDeviceB.sessionId);
+      assert.notEqual(vet.sessionId, vetDeviceB.sessionId);
+      const [farmerDeviceAMe, farmerDeviceBMe] = await Promise.all([
+        sendJson(healthy.baseUrl, '/v1/me', farmer.accessToken, 'GET'),
+        sendJson(healthy.baseUrl, '/v1/me', farmerDeviceB.accessToken, 'GET'),
+      ]);
+      assert.equal(farmerDeviceAMe.status, 200);
+      assert.equal(farmerDeviceBMe.status, 200);
+      const farmerSessions = await Promise.all([farmerDeviceAMe.json(), farmerDeviceBMe.json()]);
+      assert.equal(farmerSessions[0].id, farmerSessions[1].id);
+      assert.notEqual(farmerSessions[0].sessionId, farmerSessions[1].sessionId);
       const payoutDestinationId = randomUUID();
       await database.query(
         `INSERT INTO payout_destinations(id,vet_id,label,bank_label,account_masked,account_holder)
@@ -410,6 +433,24 @@ try {
          VALUES ($1, $2, 'Farm Fiktif BE-07', ARRAY['sapi'], 'Asia/Jakarta')`,
         [farmId, farmer.user.id],
       );
+      const secondFarmResponse = await sendJson(healthy.baseUrl, '/v1/me/farms', farmerDeviceB.accessToken, 'POST', {
+        name: 'Farm Kedua Fiktif BE-16', species: ['kambing'], timezone: 'Asia/Jakarta',
+      });
+      assert.equal(secondFarmResponse.status, 201, await secondFarmResponse.clone().text());
+      const secondFarm = await secondFarmResponse.json();
+      const [farmerFarmsAResponse, farmerFarmsBResponse] = await Promise.all([
+        sendJson(healthy.baseUrl, '/v1/me/farms', farmer.accessToken, 'GET'),
+        sendJson(healthy.baseUrl, '/v1/me/farms', farmerDeviceB.accessToken, 'GET'),
+      ]);
+      assert.equal(farmerFarmsAResponse.status, 200);
+      assert.equal(farmerFarmsBResponse.status, 200);
+      const [farmerFarmsA, farmerFarmsB] = await Promise.all([farmerFarmsAResponse.json(), farmerFarmsBResponse.json()]);
+      assert.deepEqual(farmerFarmsA.map((farm) => farm.id).sort(), [farmId, secondFarm.id].sort());
+      assert.deepEqual(farmerFarmsB.map((farm) => farm.id).sort(), [farmId, secondFarm.id].sort());
+      const foreignFarmUpdate = await sendJson(healthy.baseUrl, `/v1/me/farms/${farmId}`, outsider.accessToken, 'PATCH', {
+        expectedVersion: 1, name: 'Farm milik akun lain tidak boleh berubah',
+      });
+      assert.equal(foreignFarmUpdate.status, 404);
       const addressResponse = await sendJson(healthy.baseUrl, '/v1/me/addresses', farmer.accessToken, 'POST', {
         label: 'Kandang Budi Fiktif', recipientName: 'Budi Fiktif', phone: '081234567899',
         addressLine: 'Jalan Ternak Fiktif Nomor 11', city: 'Bogor', province: 'Jawa Barat', postalCode: '16111',
@@ -961,10 +1002,23 @@ try {
       assert.deepEqual(afterSettlement.balances, { pending: 0, available: 382499, reserved: 0, paidOut: 0 });
 
       const withdrawalKey = `be15-withdraw-${randomUUID()}`;
-      const firstWithdrawalResponse = await sendJson(healthy.baseUrl, '/v1/me/vet/withdrawals', vet.accessToken, 'POST',
-        { amount: 200000, destinationId: payoutDestinationId }, { 'idempotency-key': withdrawalKey });
-      assert.equal(firstWithdrawalResponse.status, 201, await firstWithdrawalResponse.clone().text());
-      const firstWithdrawalOperation = await firstWithdrawalResponse.json();
+      const firstWithdrawalResponses = await Promise.all([
+        sendJson(healthy.baseUrl, '/v1/me/vet/withdrawals', vet.accessToken, 'POST',
+          { amount: 200000, destinationId: payoutDestinationId }, { 'idempotency-key': withdrawalKey }),
+        sendJson(healthy.baseUrl, '/v1/me/vet/withdrawals', vetDeviceB.accessToken, 'POST',
+          { amount: 200000, destinationId: payoutDestinationId }, { 'idempotency-key': withdrawalKey }),
+      ]);
+      assert.deepEqual(firstWithdrawalResponses.map((response) => response.status), [201, 201]);
+      const firstWithdrawalBodies = await Promise.all(firstWithdrawalResponses.map((response) => response.json()));
+      assert.equal(firstWithdrawalBodies[0].withdrawal.id, firstWithdrawalBodies[1].withdrawal.id);
+      const withdrawalRows = await database.query('SELECT count(*)::int AS withdrawals FROM withdrawals WHERE vet_id=$1 AND operation_key=$2',
+        [vet.user.id, withdrawalKey]);
+      assert.equal(withdrawalRows.rows[0].withdrawals, 1);
+      const reserveRows = await database.query("SELECT count(*)::int AS entries FROM ledger_entries WHERE operation_key=$1", [
+        `withdrawal:${firstWithdrawalBodies[0].withdrawal.id}:reserve`,
+      ]);
+      assert.equal(reserveRows.rows[0].entries, 1);
+      const firstWithdrawalOperation = firstWithdrawalBodies[0];
       const firstWithdrawal = firstWithdrawalOperation.withdrawal;
       assert.equal(firstWithdrawalOperation.adapterOutcome, 'succeeded');
       assert.equal(firstWithdrawal.status, 'submitted');
@@ -1113,12 +1167,21 @@ try {
       assert.equal((await sendJson(healthy.baseUrl, `/v1/payment-quotes/order/${randomUUID()}`, farmer.accessToken, 'GET')).status, 404);
       const paymentBody = { payableType: 'consultation', payableId: unpaidConsultationId, method: 'bank_transfer' };
       const firstKey = `be06-first-${randomUUID()}`;
-      const firstPaymentResponse = await sendJson(healthy.baseUrl, '/v1/payments', farmer.accessToken, 'POST', paymentBody, { 'idempotency-key': firstKey });
-      assert.equal(firstPaymentResponse.status, 201);
+      const firstPaymentResponses = await Promise.all([
+        sendJson(healthy.baseUrl, '/v1/payments', farmer.accessToken, 'POST', paymentBody, { 'idempotency-key': firstKey }),
+        sendJson(healthy.baseUrl, '/v1/payments', farmerDeviceB.accessToken, 'POST', paymentBody, { 'idempotency-key': firstKey }),
+      ]);
+      assert.deepEqual(firstPaymentResponses.map((response) => response.status), [201, 201]);
       assert.equal((await sendJson(healthy.baseUrl, '/v1/payments', vet.accessToken, 'POST', paymentBody, { 'idempotency-key': `be06-vet-${randomUUID()}` })).status, 403);
-      const firstPayment = await firstPaymentResponse.json();
+      const firstPaymentBodies = await Promise.all(firstPaymentResponses.map((response) => response.json()));
+      assert.equal(firstPaymentBodies[0].id, firstPaymentBodies[1].id);
+      assert.equal(firstPaymentBodies[0].attempt.id, firstPaymentBodies[1].attempt.id);
+      const firstPayment = firstPaymentBodies[0];
       assert.equal(firstPayment.status, 'pending');
       assert.equal(firstPayment.amountIdr, 1000);
+      const concurrentPaymentRows = await database.query(`SELECT count(DISTINCT p.id)::int AS payments,count(a.id)::int AS attempts
+        FROM payments p JOIN payment_attempts a ON a.payment_id=p.id WHERE p.payable_id=$1`, [unpaidConsultationId]);
+      assert.deepEqual(concurrentPaymentRows.rows[0], { payments: 1, attempts: 1 });
       const replayResponse = await sendJson(healthy.baseUrl, '/v1/payments', farmer.accessToken, 'POST', paymentBody, { 'idempotency-key': firstKey });
       assert.equal((await replayResponse.json()).id, firstPayment.id);
       const parallelPending = await sendJson(healthy.baseUrl, '/v1/payments', farmer.accessToken, 'POST', paymentBody, { 'idempotency-key': `be06-other-${randomUUID()}` });
@@ -1146,6 +1209,9 @@ try {
           FROM payments p JOIN payment_attempts a ON a.payment_id=p.id WHERE p.payable_id=$1`, [unpaidConsultationId]);
         assert.deepEqual(counts.rows[0], { payments: 1, attempts: 2 });
       }
+      const farmerDeviceBPaymentRead = await sendJson(healthy.baseUrl, `/v1/consultations/${unpaidConsultationId}`, farmerDeviceB.accessToken, 'GET');
+      assert.equal(farmerDeviceBPaymentRead.status, 200);
+      assert.equal((await farmerDeviceBPaymentRead.json()).status, 'requested');
       const scheduleFrom=new Date().toISOString();
       const scheduleTo=new Date(Date.now()+5*60*60*1000).toISOString();
       const vetSchedule=await sendJson(healthy.baseUrl,`/v1/me/vet/schedule?from=${encodeURIComponent(scheduleFrom)}&to=${encodeURIComponent(scheduleTo)}`,vet.accessToken,'GET');

@@ -1,6 +1,6 @@
 # Strategi pengujian VetLink
 
-Status QA per 16 November 2026: frontend masih memakai data lokal persisten tanpa integrasi API dan FE-03 autentikasi tetap ditunda. BE-00–15 kini memiliki route executable; BE-09, BE-13, BE-14, dan BE-15 lulus migrasi, seed, dan smoke domain pada PostgreSQL 17 lokal terisolasi. BE-16/17 menunggu. APK Android preview sudah dibangun dan dipasang lewat USB pada 20 Oktober, tetapi QA interaksi/visual pada perangkat, ukuran kecil, serta font besar belum terbukti. Tidak ada pemanggilan Figma MCP baru.
+Status QA per 16 November 2026: frontend masih memakai data lokal persisten tanpa integrasi API dan FE-03 autentikasi tetap ditunda. BE-00–15 memiliki route executable; `api:contract` dan `api:smoke` BE-16 lulus pada runtime lokal/PostgreSQL 17 terisolasi. Smoke BE-09/13/14/15 juga lulus. Mobile belum memakai API; kontrak dua sesi API sudah diuji, tetapi QA mobile dua perangkat fisik, interaksi/visual, ukuran kecil, serta font besar belum terbukti. APK Android preview sudah dibangun dan dipasang lewat USB pada 20 Oktober. Tidak ada pemanggilan Figma MCP baru.
 
 ## APK preview Android lokal (20 Oktober 2026)
 
@@ -21,7 +21,7 @@ Status QA per 16 November 2026: frontend masih memakai data lokal persisten tanp
 | Visual | Figma vs Android screenshot, teks panjang/font scaling | Screen implementasi atau visual yang berubah |
 | Backend/security/concurrency | Role/owner access, race slot/payout, duplicate callbacks | Pada vertical slice backend terkait |
 
-Framework tes domain/UI dan E2E pada [Tech](TECH.md) belum dipasang. Jalankan script yang benar-benar tersedia dari manifest; backend belum memiliki `npm test`, sehingga pemeriksaan runtime BE-07 memakai `npm run api:smoke` yang memang ada pada manifest.
+Framework tes domain/UI dan E2E Android pada [Tech](TECH.md) belum dipasang. Backend menggunakan Node built-in runner lewat `npm run api:contract` untuk OpenAPI/auth dan `npm run api:smoke` untuk service/HTTP dengan PostgreSQL; tidak ada script lint backend terpisah. Pemeriksaan API dua sesi membuktikan data server bersama, bukan interaksi UI atau sinkronisasi offline mobile.
 
 ## Bukti BE-05 (19 Oktober 2026)
 
@@ -771,3 +771,17 @@ Review koordinator: pemeriksaan ulang pertama lulus typecheck lalu lint berhenti
 - `git diff --check` di repo utama **lulus**. Pencarian `rg -n -i 'Isi Contoh|Simulasikan|\bdemo\b' apps/mobile/src/ui` tidak menemukan label/kontrol tersebut (exit 1 karena tidak ada match), sebatas folder UI yang dicari.
 - Manifest `apps/mobile/package.json` memang memiliki script `typecheck`, `lint`, `test:domain`, `check`, dan `android`. Tidak ada script QA perangkat atau visual otomatis yang dijalankan.
 - **Gate belum lulus**: build Android terbaru, form/tabs/modal, Back Android, keyboard, scroll, perangkat kecil dan font besar, screenshot 390 × 844, perbandingan referensi visual lokal, serta alur A–D dan Peternak lintas perangkat. Pengguna melarang emulator; pemeriksaan ini menunggu perangkat fisik. Figma MCP tidak dipanggil.
+
+## Bukti BE-16 (16 November 2026)
+
+Commit implementasi lokal: `66ed661` (`test(api): add BE-16 contract and concurrency coverage`); tidak di-push.
+
+Pemeriksaan dijalankan dari `apps/api` pada Node `24.10.0` / npm `11.6.0`; `.nvmrc` meminta Node `24.15.0`, sehingga `npm ci --no-audit --no-fund` memberi peringatan engine. PostgreSQL 17.4 lokal berjalan sebagai cluster sementara terisolasi di loopback port `55494`; database berada di direktori temporer dan cluster dihentikan setelah smoke. Port 5432/service lain tidak dipakai. Tidak ada Docker, secret, data produksi, atau provider eksternal.
+
+- `npm ci --no-audit --no-fund` — **Lulus**, 253 paket dipasang; peringatan versi Node di atas tetap berlaku.
+- `npm run check` — **Lulus**: TypeScript typecheck dan `nest build`, termasuk plugin Swagger yang menghasilkan property request DTO di OpenAPI.
+- `npm run api:contract` — **Lulus**, 4/4: OpenAPI 3.0/ref dan bearer security, route/data contract A–D, schema integer IDR tanpa amount payment dari client, header idempotensi, DTO terdeskripsi, serta error envelope.
+- `npm run db:migrate` — **Lulus**, 18 migrasi diterapkan pada DB baru; `npm run db:seed` — **Lulus**, fixture fiktif tersedia.
+- `npm run api:smoke` — **Lulus** pada PostgreSQL setelah migrate/seed. Seluruh pemeriksaan BE-03–15 lama lulus, termasuk flow A–D, verified guard, owner/assignment denial dan arbitrary ID, status/slot/version guard, note final dan completion, totals/ledger. Tambahan BE-16 membuktikan satu Peternak memiliki dua Farm yang terbaca oleh dua sesi terpisah, dan akun lain mendapat 404 saat mencoba mengubah Farm tersebut. Smoke membuat dua sesi Peternak dan dua sesi Dokter dengan ID sesi terpisah; dua submit payment Peternak paralel dengan key/payload sama menghasilkan satu Payment/Attempt, dan dua submit pencairan Dokter paralel dengan key/payload sama menghasilkan satu Withdrawal serta satu `reserve_withdrawal`. Smoke juga menguji retry payload berbeda, pembayaran callback dedupe, race pencairan dengan key berbeda yang tidak overspend, serta pembacaan data yang sama dari sesi Peternak kedua.
+- Percobaan awal migrasi berhenti karena database `vetlink` belum dibuat di cluster temporer; cluster dihentikan. Run final menggunakan DB baru yang dibuat eksplisit dan lulus penuh. Ini tidak mengubah service pada port 5432.
+- `npm run api:contract` dan API smoke menguji backend; mobile belum terhubung. Sesi API kedua tidak setara dengan QA UI pada dua perangkat fisik. Emulator, perangkat, screenshot/visual, dan integrasi API React Native **tidak dijalankan**. Payment adapter aktif tetap `pending`; payout lokal hanya mengakui pengajuan `submitted`, bukan transfer dana. Tidak ada provider produksi atau transaksi finansial nyata.

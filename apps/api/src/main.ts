@@ -145,6 +145,38 @@ async function bootstrap(): Promise<void> {
       InternalError: { description: 'Unexpected server error', content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiErrorResponseDto' } } } },
     },
   };
+
+  const idempotentOperations: ReadonlyArray<readonly [string, 'post' | 'patch']> = [
+    ['/v1/consultation-quotes', 'post'],
+    ['/v1/consultations', 'post'],
+    ['/v1/consultations/{consultationId}/accept', 'post'],
+    ['/v1/consultations/{consultationId}/reject', 'post'],
+    ['/v1/consultations/{consultationId}/schedule-proposals', 'post'],
+    ['/v1/consultations/{consultationId}/schedule-proposals/{proposalId}/respond', 'post'],
+    ['/v1/consultations/{consultationId}/start', 'post'],
+    ['/v1/consultations/{consultationId}/visit/depart', 'post'],
+    ['/v1/consultations/{consultationId}/visit/arrive', 'post'],
+    ['/v1/consultations/{consultationId}/visit/start-examination', 'post'],
+    ['/v1/consultations/{consultationId}/complete', 'post'],
+    ['/v1/consultations/{consultationId}/follow-ups', 'post'],
+    ['/v1/follow-ups/{followUpId}', 'patch'],
+    ['/v1/follow-ups/{followUpId}/progress-reports', 'post'],
+    ['/v1/reminders', 'post'],
+    ['/v1/reminders/{reminderId}', 'patch'],
+    ['/v1/reminders/{reminderId}/complete', 'post'],
+    ['/v1/attachments/uploads', 'post'],
+    ['/v1/payments', 'post'],
+    ['/v1/me/vet/withdrawals', 'post'],
+    ['/v1/orders', 'post'],
+  ];
+  for (const [path, method] of idempotentOperations) {
+    const operation = document.paths[path]?.[method];
+    if (!operation) throw new Error(`Idempotency-Key OpenAPI mapping references missing operation: ${method.toUpperCase()} ${path}`);
+    if (!operation.parameters?.some((parameter) => '$ref' in parameter && parameter.$ref === '#/components/parameters/IdempotencyKey')) {
+      operation.parameters = [...(operation.parameters ?? []), { $ref: '#/components/parameters/IdempotencyKey' }];
+    }
+  }
+
   SwaggerModule.setup('docs', app, document, {
     jsonDocumentUrl: 'openapi.json',
     swaggerOptions: { persistAuthorization: false },

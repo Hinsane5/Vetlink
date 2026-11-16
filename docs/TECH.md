@@ -1,6 +1,6 @@
 # Teknologi dan bahan diskusi
 
-Status per 16 November 2026: FE-00/02 selesai; penerimaan FE-01/04–19 masih berjalan dan FE-03 ditunda sesuai DEC-23; BE-00–15 selesai setelah pemeriksaan lokal BE-14; BE-09/13/14/15 lulus migrasi, seed, dan smoke domain. Mobile tetap memakai persona lokal tanpa autentikasi/backend jaringan. Backend NestJS + PostgreSQL memiliki route health/auth/profile-verification/livestock/patients/vet discovery/availability/reviews/rating aggregation/booking/visit/completion/payment/chat/media/clinical/follow-up/reminder/inbox/preferences/catalog/cart/checkout/order/shipment timeline/earnings/withdrawals dengan migrasi dan smoke lokal. Bukti backend ada di [Testing](TESTING.md). QA visual/interaksi Android FE-14 sebelumnya belum terverifikasi karena MIUI menolak tap ADB (`INJECT_EVENTS`).
+Status per 16 November 2026: FE-00/02 selesai; penerimaan FE-01/04–19 masih berjalan dan FE-03 ditunda sesuai DEC-23; BE-00–15 memiliki route executable, sedangkan BE-16 menambah suite OpenAPI/lintas sesi dan handover mobile. Smoke BE-09/13/14/15 serta BE-16 lulus pada PostgreSQL lokal terisolasi. Mobile tetap memakai persona SQLite lokal tanpa autentikasi/backend jaringan; QA UI fisik dua perangkat dan wiring mobile API belum dilakukan. Backend NestJS + PostgreSQL memiliki route health/auth/profile-verification/livestock/patients/vet discovery/availability/reviews/rating aggregation/booking/visit/completion/payment/chat/media/clinical/follow-up/reminder/inbox/preferences/catalog/cart/checkout/order/shipment timeline/earnings/withdrawals dengan migrasi dan pemeriksaan lokal. Bukti backend ada di [Testing](TESTING.md); handover API ada di [MOBILE_API_HANDOVER](MOBILE_API_HANDOVER.md). QA visual/interaksi Android FE-14 sebelumnya belum terverifikasi karena MIUI menolak tap ADB (`INJECT_EVENTS`).
 
 ## Keputusan mobile
 
@@ -126,7 +126,7 @@ Harness diagnostik FE-02 hanya tampil saat development dengan `EXPO_PUBLIC_FE02_
 
 Paket Expo yang benar-benar terpasang dan keterkaitannya dengan FE-01–04 dicatat di README. Form/test framework dan seluruh kandidat lain tetap usulan; tidak ada kewajiban menginstall semua kandidat state/form/test sekaligus.
 
-## Pilihan backend dan realisasi BE-00–15
+## Pilihan backend dan realisasi BE-00–16
 
 | Kandidat | Kesesuaian untuk VetLink | Tradeoff yang perlu dibahas |
 | --- | --- | --- |
