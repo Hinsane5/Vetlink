@@ -834,7 +834,8 @@ Slice ini menambah port read-only `CatalogReadRepository` dan `HttpApiCatalogRep
 
 | Pemeriksaan | Hasil dan batas bukti |
 | --- | --- |
-| `npm run check` di `apps/mobile` | **Terhenti pada typecheck**: `sh: tsc: command not found` (exit 127). Lint dan domain tests tidak mulai; fixture adapter belum dijalankan oleh runner pada task ini. Dependency tidak dipasang dan skrip lain tidak dijalankan sesuai batas task. |
+| `npm ci --no-audit --no-fund` di `apps/mobile` | **Lulus** setelah laporan worker: 762 paket dipasang dari lockfile pada child worktree. |
+| `npm run check` di `apps/mobile` | Percobaan worker pertama terhenti karena `tsc` belum tersedia. Setelah `npm ci`, percobaan kedua menemukan adapter baru belum tercakup `tsconfig.domain-tests.json` (126/127 tes berjalan). Koordinator menambahkan kedua file adapter/port pada konfigurasi runner lalu mengulang: **Lulus**, typecheck, Expo lint, 142/142 tes (0 gagal), termasuk 3 tes katalog baru. |
 | Farm/address, livestock/patients, Vet directory/slots | Adapter belum dibuat. Route BE-02/03/04 aktif mengembalikan array tanpa cursor dan belum mendeklarasikan response DTO yang cukup untuk memvalidasi mapping. Jangan menerapkan pagination client atau menebak raw response; lanjutkan setelah kontrak server siap. |
 | Integrasi dan QA | Tidak ada perubahan backend, runtime SQLite, UI, Figma MCP, emulator, perangkat, provider, secret, deployment, atau transaksi nyata. FE-25 end-to-end dan QA dua perangkat tetap gate. |
 

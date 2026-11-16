@@ -34,6 +34,7 @@
     "src/application/ports/EarningsRepository.ts",
     "src/application/ports/AuthRepository.ts",
     "src/application/ports/ApiPaymentRepository.ts",
+    "src/application/ports/CatalogReadRepository.ts",
     "src/application/ports/ApiPaymentOperationStore.ts",
     "src/application/ports/ServerAuthRepository.ts",
     "src/application/ports/CommerceRepository.ts",
@@ -62,6 +63,7 @@
     "src/application/ports/ShipmentStatusProvider.ts",
     "src/data/remote/ApiClient.ts",
     "src/data/remote/ApiAuthRepository.ts",
-    "src/data/remote/HttpApiPaymentRepository.ts"
+    "src/data/remote/HttpApiPaymentRepository.ts",
+    "src/data/remote/HttpApiCatalogRepository.ts"
   ]
 }
