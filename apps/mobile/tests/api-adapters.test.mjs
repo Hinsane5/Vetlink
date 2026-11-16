@@ -522,7 +522,11 @@ test('verified Vet directory reads map filters, detail, slots, and exact server 
     name: '  Dokter Fiktif ', species: 'cattle', service: 'visit', location: ' Bogor ',
     available: false, minFeeIdr: 30000, maxFeeIdr: 350000, limit: 1,
   });
-  const next = await repository.search({ cursor: page.nextCursor, limit: 1 });
+  const next = await repository.search({
+    name: 'Dokter Fiktif', species: 'cattle', service: 'visit', location: 'Bogor',
+    available: false, minFeeIdr: 30000, maxFeeIdr: 350000,
+    cursor: page.nextCursor, limit: 1,
+  });
   const vet = await repository.getById(vetId);
   const slots = await repository.getSlots(vetId, { dateFrom: '2026-11-18', dateTo: '2026-11-19', service: 'chat' });
 
@@ -543,6 +547,8 @@ test('verified Vet directory reads map filters, detail, slots, and exact server 
   assert.equal(directoryQuery.get('maxFee'), '350000');
   assert.equal(directoryQuery.get('limit'), '1');
   assert.equal(new URL(requests[1].url).searchParams.get('cursor'), cursor);
+  assert.equal(new URL(requests[1].url).searchParams.get('name'), 'Dokter Fiktif');
+  assert.equal(new URL(requests[1].url).searchParams.get('service'), 'visit');
   assert.equal(new URL(requests[3].url).searchParams.get('dateFrom'), '2026-11-18');
   assert.equal(new URL(requests[3].url).searchParams.get('service'), 'chat');
   assert.equal(requests.every((request) => request.init.method === 'GET'), true);
