@@ -813,3 +813,17 @@ Follow-up ini menambahkan pergantian active role pada sesi yang sama dan route b
 - `npm run api:smoke` — **Lulus** setelah migrasi dan seed. Role switch tanpa autentikasi mendapat 401; membership role yang tidak dimiliki mendapat 403 tanpa mutasi sesi; pergantian farmer → vet → farmer menerbitkan token baru, menjaga `sessionId` dan expiry absolut, serta menolak token lama. Pengujian pasien arbitrary-ID tetap 404 setelah role switch.
 - Smoke membuat konsultasi untuk hewan pada Farm kedua dan memeriksa `/v1/payments?payableType=...&payableId=...`, `/v1/payments/{id}`, dan `/v1/payments/{id}/attempts` dari sesi Peternak kedua. Akun Peternak lain mendapat 404, Dokter mendapat 403. Dua submit bersamaan dengan key sama menghasilkan satu Payment dan satu Attempt; setelah Attempt `failed`, sesi kedua retry memakai Payment yang sama dan key baru, dan kedua sesi membaca status/riwayat tersimpan hingga `succeeded` tanpa duplikasi.
 - `git diff --check` — **Lulus**. Smoke menggunakan adapter/callback internal lokal dan fixture fiktif; tidak ada provider produksi, kredensial produksi, transaksi uang nyata, integrasi UI, build Android, atau QA perangkat pada pekerjaan ini.
+
+## Pemeriksaan FE-25 lanjutan — adapter role switch dan recovery payment (16 November 2026)
+
+Mobile kini mengirim `POST /v1/auth/active-role`, memvalidasi response terhadap membership `/me`, user serta expiry sesi yang sama, lalu menyimpan token hasil rotasi. Repository Payment membaca status per payable, detail, dan history Attempt; gateway memeriksa status server sebelum create. `pending` dan `succeeded` tidak membuat Attempt baru. Retry setelah `failed` memakai payable, metode dan jumlah server yang sama serta idempotency key dari urutan Attempt server; journal lokal hanya menyimpan key dan nomor Attempt. Sesi kedua dengan SecureStore terpisah memulihkan status yang sama dan tidak mengulang payment pending.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm ci --no-audit --no-fund` di `apps/mobile` | **Lulus**, 762 paket dipasang; npm menampilkan peringatan deprecation dependency. |
+| `npm run check` di `apps/mobile` | **Lulus**: typecheck, Expo lint, dan 139 tes domain/repository (0 gagal); 13 tes API adapter mencakup role switch/membership, status/history Payment, retry lintas sesi, pending/failed/succeeded, integer IDR, dan tidak fallback ke sukses lokal. |
+| Runtime UI | Tetap SQLite: `App.tsx` membuka `LocalStore` dan memasang `FrontendFlow`; `createApiAdapters` tidak dipakai runtime. Belum ada wiring parsial agar satu flow tidak mempunyai dua sumber tulis. |
+| Dua perangkat fisik | **Belum diuji** pada task ini. Tes HTTP adapter dengan dua session store bukan bukti UI pada dua perangkat. Emulator, Android build, Figma MCP, provider, serta transaksi uang nyata tidak dijalankan sesuai scope. |
+| `git diff --check` | **Lulus** setelah update kode dan dokumen. |
+
+FE-25 tetap **Sedang dikerjakan**: API auth/payment adapters tersedia, sementara FE-03 auth UI tetap ditunda sesuai DEC-23. Wiring runtime menunggu cakupan repository API seluruh flow yang terkait dan perpindahan sumber data terkoordinasi; QA interaksi dan visual Android di dua perangkat tetap gate.

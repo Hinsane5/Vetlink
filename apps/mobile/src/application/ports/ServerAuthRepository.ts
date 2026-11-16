@@ -45,6 +45,7 @@ export interface ServerSessionStore {
 export interface ServerAuthRepository {
   register(input: { email: string; fullName: string; password: string; role: AccountRole }): Promise<ServerAuthResponse>;
   login(input: { email: string; password: string; activeRole: AccountRole }): Promise<ServerAuthResponse>;
+  switchActiveRole(activeRole: AccountRole): Promise<ServerAuthResponse>;
   me(): Promise<ServerMeResponse>;
   logout(refreshToken: string): Promise<void>;
 }

@@ -3,13 +3,11 @@ import type {
   ApiPaymentOperationPersistence,
   ApiPaymentOperationStore,
 } from './ports/ApiPaymentOperationStore';
-import type { PaymentMethod, PayableType } from './PaymentService';
 import { DomainError } from '../domain/errors';
 
 type StoredOperation = ApiPaymentOperationInput & {
   attempt: number;
   operationKey: string;
-  outcome: 'pending' | 'succeeded' | 'failed';
 };
 
 let serialTail: Promise<void> = Promise.resolve();
@@ -18,25 +16,22 @@ let serialTail: Promise<void> = Promise.resolve();
 export class ApiPaymentOperationJournal implements ApiPaymentOperationStore {
   constructor(private readonly persistence: ApiPaymentOperationPersistence) {}
 
-  getOrCreate(input: ApiPaymentOperationInput): Promise<string> {
+  getOrCreate(input: ApiPaymentOperationInput, attemptNumber: number): Promise<string> {
     return serialize(async () => {
+      if (!Number.isSafeInteger(attemptNumber) || attemptNumber < 1) {
+        throw new DomainError('VALIDATION_FAILED', 'Nomor Attempt pembayaran server tidak valid.');
+      }
       const current = await this.read(input);
-      if (current && current.outcome === 'pending') return current.operationKey;
-      const attempt = (current?.attempt ?? 0) + 1;
-      const operationKey = `pay:${input.payableType}:${input.payableId}:${input.method}:${attempt}`;
+      if (current?.attempt === attemptNumber) {
+        await this.write(input, current);
+        return current.operationKey;
+      }
+      const operationKey = `pay:${input.payableType}:${input.payableId}:${input.method}:${attemptNumber}`;
       if (operationKey.length < 8 || operationKey.length > 128) {
         throw new DomainError('VALIDATION_FAILED', 'Kunci operasi pembayaran melampaui batas API.');
       }
-      await this.write(input, { ...input, attempt, operationKey, outcome: 'pending' });
+      await this.write(input, { ...input, attempt: attemptNumber, operationKey });
       return operationKey;
-    });
-  }
-
-  recordOutcome(operationKey: string, outcome: 'pending' | 'succeeded' | 'failed'): Promise<void> {
-    return serialize(async () => {
-      const current = await this.readByOperationKey(operationKey);
-      if (!current) return;
-      await this.write(current, { ...current, outcome });
     });
   }
 
@@ -49,18 +44,16 @@ export class ApiPaymentOperationJournal implements ApiPaymentOperationStore {
         await this.persistence.deleteItem(storageKey(input));
         return null;
       }
-      return value;
+      return {
+        payableType: input.payableType,
+        payableId: input.payableId,
+        method: input.method,
+        attempt: Number(value.attempt),
+        operationKey: String(value.operationKey),
+      };
     } catch {
       throw new DomainError('SESSION_STORAGE_FAILED', 'Kunci retry pembayaran tidak dapat dibaca dengan aman.');
     }
-  }
-
-  private async readByOperationKey(operationKey: string): Promise<StoredOperation | null> {
-    const match = /^pay:(consultation|order):([^:]+):(bank_transfer|e_wallet):\d+$/.exec(operationKey);
-    if (!match) throw new DomainError('VALIDATION_FAILED', 'Kunci retry pembayaran tidak valid.');
-    const payableType: PayableType = match[1] === 'consultation' ? 'consultation' : 'order';
-    const method: PaymentMethod = match[3] === 'bank_transfer' ? 'bank_transfer' : 'e_wallet';
-    return this.read({ payableType, payableId: match[2], method });
   }
 
   private async write(input: ApiPaymentOperationInput, operation: StoredOperation): Promise<void> {
@@ -85,7 +78,7 @@ function isStoredOperation(value: unknown, input: ApiPaymentOperationInput): val
     && Number.isSafeInteger(operation.attempt)
     && Number(operation.attempt) > 0
     && typeof operation.operationKey === 'string'
-    && ['pending', 'succeeded', 'failed'].includes(String(operation.outcome));
+    && operation.operationKey === `pay:${input.payableType}:${input.payableId}:${input.method}:${Number(operation.attempt)}`;
 }
 
 function serialize<T>(work: () => Promise<T>): Promise<T> {

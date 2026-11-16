@@ -21,6 +21,13 @@ export class HttpServerAuthRepository implements ServerAuthRepository {
     });
   }
 
+  switchActiveRole(activeRole: AccountRole): Promise<ServerAuthResponse> {
+    return this.api.request('/v1/auth/active-role', {
+      method: 'POST',
+      body: { activeRole },
+    });
+  }
+
   me(): Promise<ServerMeResponse> {
     return this.api.request('/v1/me');
   }

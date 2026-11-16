@@ -50,16 +50,20 @@ export class ServerAuthService {
   }
 
   async switchRole(role: AccountRole): Promise<SessionSnapshot> {
-    const stored = await this.readSession();
-    if (!stored) throw new DomainError('SESSION_INVALID', 'Sesi server tidak tersedia. Masuk kembali untuk melanjutkan.');
-    if (stored.activeRole === role) {
-      const current = await this.restoreSession();
-      if (!current) throw new DomainError('SESSION_INVALID', 'Sesi server tidak tersedia. Masuk kembali untuk melanjutkan.');
-      return current;
-    }
     const current = await this.restoreSession();
+    if (!current) throw new DomainError('SESSION_INVALID', 'Sesi server tidak tersedia. Masuk kembali untuk melanjutkan.');
+    if (current.activeRole === role) return current;
     if (!current?.roles.includes(role)) throw new DomainError('FORBIDDEN', 'Akun ini tidak memiliki membership untuk peran tersebut.');
-    throw new DomainError('INVALID_STATE', 'API belum menyediakan pergantian peran pada sesi aktif. Masuk kembali melalui autentikasi server.');
+
+    const response = validateAuthResponse(await this.repository.switchActiveRole(role));
+    if (response.sessionId !== current.sessionId
+      || response.sessionExpiresAt !== current.expiresAt
+      || response.user.id !== current.userId
+      || response.activeRole !== role) {
+      throw new DomainError('API_RESPONSE_INVALID', 'Pergantian peran server tidak mempertahankan sesi dan membership yang aktif.');
+    }
+    await this.store(response);
+    return snapshot(response);
   }
 
   async logout(): Promise<void> {

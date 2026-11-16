@@ -8,8 +8,7 @@ export interface ApiPaymentOperationInput {
 
 /** Stores only the retry key and attempt number, never a local payment outcome or balance. */
 export interface ApiPaymentOperationStore {
-  getOrCreate(input: ApiPaymentOperationInput): Promise<string>;
-  recordOutcome(operationKey: string, outcome: 'pending' | 'succeeded' | 'failed'): Promise<void>;
+  getOrCreate(input: ApiPaymentOperationInput, attemptNumber: number): Promise<string>;
 }
 
 /** Storage boundary for the retry journal; it contains no payment authority. */
