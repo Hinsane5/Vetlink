@@ -774,6 +774,8 @@ Review koordinator: pemeriksaan ulang pertama lulus typecheck lalu lint berhenti
 
 ## Bukti BE-16 (16 November 2026)
 
+Commit implementasi lokal: `66ed661` (`test(api): add BE-16 contract and concurrency coverage`); tidak di-push.
+
 Pemeriksaan dijalankan dari `apps/api` pada Node `24.10.0` / npm `11.6.0`; `.nvmrc` meminta Node `24.15.0`, sehingga `npm ci --no-audit --no-fund` memberi peringatan engine. PostgreSQL 17.4 lokal berjalan sebagai cluster sementara terisolasi di loopback port `55494`; database berada di direktori temporer dan cluster dihentikan setelah smoke. Port 5432/service lain tidak dipakai. Tidak ada Docker, secret, data produksi, atau provider eksternal.
 
 - `npm ci --no-audit --no-fund` — **Lulus**, 253 paket dipasang; peringatan versi Node di atas tetap berlaku.
