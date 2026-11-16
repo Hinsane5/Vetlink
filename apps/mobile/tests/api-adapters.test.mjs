@@ -11,6 +11,8 @@ import { HttpApiFarmReadRepository } from '../.test-build/src/data/remote/HttpAp
 import { HttpApiFarmWriteRepository } from '../.test-build/src/data/remote/HttpApiFarmWriteRepository.js';
 import { HttpApiLivestockReadRepository } from '../.test-build/src/data/remote/HttpApiLivestockReadRepository.js';
 import { HttpApiLivestockWriteRepository } from '../.test-build/src/data/remote/HttpApiLivestockWriteRepository.js';
+import { HttpApiLivestockHealthRepository } from '../.test-build/src/data/remote/HttpApiLivestockHealthRepository.js';
+import { HttpApiPatientReadRepository } from '../.test-build/src/data/remote/HttpApiPatientReadRepository.js';
 import { HttpApiPaymentRepository } from '../.test-build/src/data/remote/HttpApiPaymentRepository.js';
 import { HttpApiVetDirectoryReadRepository } from '../.test-build/src/data/remote/HttpApiVetDirectoryReadRepository.js';
 
@@ -744,6 +746,204 @@ test('livestock adapter validates bounds and rejects malformed DTOs before mappi
   await assert.rejects(new HttpApiLivestockReadRepository(malformedApi).listPage(), { code: 'API_RESPONSE_INVALID' });
 });
 
+test('BE-03 health timeline parses the raw array, provenance, and server createdAt unchanged', async () => {
+  const livestockId = '11111111-1111-4111-8111-111111111111';
+  const timeline = [
+    apiHealthEventFixture('22222222-2222-4222-8222-222222222222', {
+      kind: 'examination', provenance: 'clinical_note', description: 'Penilaian pemeriksaan fiktif',
+    }),
+    apiHealthEventFixture('33333333-3333-4333-8333-333333333333', {
+      kind: 'care', provenance: 'farmer_report', description: 'Perawatan ternak fiktif',
+    }),
+    apiHealthEventFixture('44444444-4444-4444-8444-444444444444', {
+      kind: 'care', provenance: 'reminder', description: 'Perawatan pengingat fiktif',
+    }),
+  ];
+  const requests = [];
+  const api = new ApiClient('http://localhost:3000', new MemoryServerSessionStore(tokenSet()), async (url, init) => {
+    requests.push({ url, init });
+    return response(200, timeline);
+  });
+  const repository = new HttpApiLivestockHealthRepository(api);
+
+  const result = await repository.listHealthEvents(livestockId);
+
+  assert.deepEqual(result, timeline, 'the BE-03 projection remains distinct from a richer local UI note');
+  assert.deepEqual(result.map((event) => event.provenance), ['clinical_note', 'farmer_report', 'reminder']);
+  assert.equal(result[0].createdAt, timeline[0].createdAt);
+  assert.equal(requests[0].url, `http://localhost:3000/v1/livestock/${livestockId}/health-events`);
+  assert.equal(requests[0].init.method, 'GET');
+  assert.equal(requests[0].init.headers.Authorization, 'Bearer access-token-1');
+  assert.equal(new URL(requests[0].url).searchParams.has('ownerId'), false);
+});
+
+test('BE-03 care write allowlists farmer report fields and preserves the server result', async () => {
+  const livestockId = '55555555-5555-4555-8555-555555555555';
+  const input = {
+    kind: 'vaccine', occurredAt: '2026-11-17T10:15:00+07:00',
+    description: 'Vaksinasi fiktif tanpa dosis obat.', sourceKey: 'care-source-key-0001',
+    ownerId: 'must-not-be-sent', actorId: 'must-not-be-sent', provenance: 'clinical_note',
+  };
+  const returned = apiCareEventFixture('66666666-6666-4666-8666-666666666666', {
+    kind: 'vaccine', description: input.description,
+  });
+  const requests = [];
+  const api = new ApiClient('http://localhost:3000', new MemoryServerSessionStore(tokenSet()), async (url, init) => {
+    requests.push({ url, init });
+    return response(201, returned);
+  });
+  const repository = new HttpApiLivestockHealthRepository(api);
+
+  const event = await repository.createCareEvent(livestockId, input);
+
+  assert.deepEqual(event, returned);
+  assert.equal(requests[0].url, `http://localhost:3000/v1/livestock/${livestockId}/care-events`);
+  assert.equal(requests[0].init.method, 'POST');
+  assert.equal(requests[0].init.headers.Authorization, 'Bearer access-token-1');
+  assert.equal(requests[0].init.headers['Idempotency-Key'], undefined, 'sourceKey in the request body is the BE-03 idempotency contract');
+  assert.deepEqual(JSON.parse(requests[0].init.body), {
+    kind: 'vaccine', occurredAt: input.occurredAt, description: input.description, sourceKey: input.sourceKey,
+  });
+  assert.equal(Object.hasOwn(event, 'createdAt'), false, 'the POST response does not contain createdAt');
+  assert.equal(event.provenance, 'farmer_report', 'care report cannot be promoted to a clinical note');
+});
+
+test('BE-03 care validates UUID, farmer kinds, timestamp, description, and sourceKey bounds before transport', async () => {
+  let calls = 0;
+  const validResponse = apiCareEventFixture('77777777-7777-4777-8777-777777777777');
+  const api = new ApiClient('http://localhost:3000', new MemoryServerSessionStore(tokenSet()), async () => {
+    calls += 1;
+    return response(201, validResponse);
+  });
+  const repository = new HttpApiLivestockHealthRepository(api);
+  const validInput = {
+    kind: 'care', occurredAt: '2026-11-17T10:15:00.123456+07:00',
+    description: 'Catatan perawatan fiktif.', sourceKey: 'x'.repeat(128),
+  };
+
+  await repository.createCareEvent('88888888-8888-4888-8888-888888888888', { ...validInput, sourceKey: 'x'.repeat(8) });
+  await repository.createCareEvent('88888888-8888-4888-8888-888888888888', validInput);
+  assert.equal(calls, 2, '8 and 128 characters are valid sourceKey boundary lengths');
+
+  await assert.rejects(repository.createCareEvent('local-animal-id', validInput), { code: 'VALIDATION_FAILED' });
+  for (const input of [
+    { ...validInput, kind: 'examination' },
+    { ...validInput, occurredAt: '2026-11-17T10:15:00' },
+    { ...validInput, occurredAt: '2026-02-30T10:15:00Z' },
+    { ...validInput, occurredAt: '2026-11-17T10:15:00+14:30' },
+    { ...validInput, description: '' },
+    { ...validInput, description: ' '.repeat(20) },
+    { ...validInput, description: 'x'.repeat(2001) },
+    { ...validInput, sourceKey: 'short' },
+    { ...validInput, sourceKey: 'x'.repeat(129) },
+    { ...validInput, sourceKey: ' '.repeat(8) },
+  ]) {
+    await assert.rejects(repository.createCareEvent('88888888-8888-4888-8888-888888888888', input), { code: 'VALIDATION_FAILED' });
+  }
+  assert.equal(calls, 2, 'invalid inputs are rejected before an API request');
+});
+
+test('BE-03 same sourceKey and payload retries recover the same event; uncertain transport never succeeds locally', async () => {
+  const livestockId = '99999999-9999-4999-8999-999999999999';
+  const input = {
+    kind: 'care', occurredAt: '2026-11-17T10:15:00Z',
+    description: 'Perawatan fiktif dicatat.', sourceKey: 'farmer-care-retry-001',
+  };
+  const committed = apiCareEventFixture('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', {
+    ...input, occurredAt: '2026-11-17T10:15:00.000Z',
+  });
+  const requests = [];
+  let hasCommitted = false;
+  const api = new ApiClient('http://localhost:3000', new MemoryServerSessionStore(tokenSet()), async (url, init) => {
+    const body = JSON.parse(init.body);
+    requests.push({ url, init, body });
+    if (!hasCommitted) {
+      hasCommitted = true;
+      throw new Error('server committed but response was lost');
+    }
+    if (body.sourceKey !== input.sourceKey || JSON.stringify(body) !== JSON.stringify({
+      kind: input.kind, occurredAt: input.occurredAt, description: input.description, sourceKey: input.sourceKey,
+    })) return response(409, { code: 'CONFLICT', message: 'sourceKey sudah digunakan untuk laporan yang berbeda.' });
+    return response(200, committed);
+  });
+  const repository = new HttpApiLivestockHealthRepository(api);
+
+  await assert.rejects(repository.createCareEvent(livestockId, input), { code: 'SERVICE_UNAVAILABLE' });
+  assert.equal(requests.length, 1, 'a possibly committed POST is not retried automatically');
+  const recovered = await repository.createCareEvent(livestockId, input);
+  assert.deepEqual(recovered, committed);
+  assert.equal(requests.length, 2);
+  assert.deepEqual(requests[0].body, requests[1].body);
+  assert.equal(requests[0].init.headers['Idempotency-Key'], undefined);
+
+  await assert.rejects(repository.createCareEvent(livestockId, { ...input, description: 'Payload berbeda.' }), { code: 'VERSION_CONFLICT' });
+  assert.equal(requests.length, 3);
+});
+
+test('BE-03 care write preserves server doctor denial without fabricating a result', async () => {
+  let calls = 0;
+  const api = new ApiClient('http://localhost:3000', new MemoryServerSessionStore({ ...tokenSet(), activeRole: 'vet' }), async () => {
+    calls += 1;
+    return response(403, { code: 'FORBIDDEN', message: 'Aksi hanya untuk Peternak.' });
+  });
+  const repository = new HttpApiLivestockHealthRepository(api);
+  await assert.rejects(repository.createCareEvent('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', {
+    kind: 'care', occurredAt: '2026-11-17T10:15:00Z', description: 'Perawatan fiktif.', sourceKey: 'doctor-denied-key',
+  }), { code: 'FORBIDDEN' });
+  assert.equal(calls, 1);
+});
+
+test('BE-03 patients adapter parses the actual compact service array without inventing UI metrics', async () => {
+  const patient = apiPatientFixture('cccccccc-cccc-4ccc-8ccc-cccccccccccc');
+  const requests = [];
+  const api = new ApiClient('http://localhost:3000', new MemoryServerSessionStore({ ...tokenSet(), activeRole: 'vet' }), async (url, init) => {
+    requests.push({ url, init });
+    return response(200, [patient]);
+  });
+  const repository = new HttpApiPatientReadRepository(api);
+
+  const patients = await repository.listPatients();
+
+  assert.deepEqual(patients, [patient]);
+  assert.equal(patients[0].weightKg, '850.50');
+  assert.equal(Object.hasOwn(patients[0], 'ownerName'), false);
+  assert.equal(Object.hasOwn(patients[0], 'serviceCount'), false);
+  assert.equal(requests[0].url, 'http://localhost:3000/v1/patients');
+  assert.equal(requests[0].init.method, 'GET');
+  assert.equal(requests[0].init.headers.Authorization, `Bearer ${'access-token-1'}`);
+});
+
+test('BE-03 health, care, and patient adapters reject malformed actual service projections', async () => {
+  const livestockId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  const healthRecord = apiHealthEventFixture('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee');
+  const invalidHealthRecords = [
+    [{ ...healthRecord, id: 'not-a-uuid' }],
+    [{ ...healthRecord, provenance: 'unknown' }],
+    [{ ...healthRecord, createdAt: '2026-11-17T10:15:00' }],
+    [{ ...healthRecord, occurredAt: '2026-02-30T10:15:00.000Z' }],
+    { items: [healthRecord] },
+  ];
+  for (const payload of invalidHealthRecords) {
+    const api = new ApiClient('http://localhost:3000', new MemoryServerSessionStore(tokenSet()), async () => response(200, payload));
+    await assert.rejects(new HttpApiLivestockHealthRepository(api).listHealthEvents(livestockId), { code: 'API_RESPONSE_INVALID' });
+  }
+
+  const wrongCare = apiCareEventFixture('ffffffff-ffff-4fff-8fff-ffffffffffff', { provenance: 'clinical_note' });
+  const careApi = new ApiClient('http://localhost:3000', new MemoryServerSessionStore(tokenSet()), async () => response(201, wrongCare));
+  await assert.rejects(new HttpApiLivestockHealthRepository(careApi).createCareEvent(livestockId, {
+    kind: 'care', occurredAt: '2026-11-17T10:15:00Z', description: 'Perawatan fiktif.', sourceKey: 'source-key-0001',
+  }), { code: 'API_RESPONSE_INVALID' });
+
+  const invalidPatient = { ...apiPatientFixture('abababab-abab-4bab-8bab-abababababab'), weightKg: 850.5 };
+  const patientApi = new ApiClient('http://localhost:3000', new MemoryServerSessionStore(tokenSet()), async () => response(200, [invalidPatient]));
+  await assert.rejects(new HttpApiPatientReadRepository(patientApi).listPatients(), { code: 'API_RESPONSE_INVALID' });
+
+  const patientEnvelopeApi = new ApiClient('http://localhost:3000', new MemoryServerSessionStore(tokenSet()), async () => response(200, {
+    items: [apiPatientFixture('abababab-abab-4bab-8bab-abababababab')],
+  }));
+  await assert.rejects(new HttpApiPatientReadRepository(patientEnvelopeApi).listPatients(), { code: 'API_RESPONSE_INVALID' });
+});
+
 test('verified Vet directory reads map filters, detail, slots, and exact server paging', async () => {
   const vetId = '88888888-8888-4888-8888-888888888888';
   const cursor = 'directory:opaque/+ =';
@@ -842,6 +1042,40 @@ function catalogProductFixture(id, name, unitPriceIdr) {
     id, name, category: 'care', species: ['cattle'],
     description: 'Fixture katalog fiktif untuk kontrak read-only.',
     unitPriceIdr, imageAttachmentId: null, active: true,
+  };
+}
+
+function apiHealthEventFixture(id, overrides = {}) {
+  return {
+    id,
+    kind: 'care',
+    occurredAt: '2026-11-17T10:15:00.000Z',
+    description: 'Catatan kesehatan fiktif.',
+    provenance: 'farmer_report',
+    createdAt: '2026-11-17T10:16:00.000Z',
+    ...overrides,
+  };
+}
+
+function apiCareEventFixture(id, overrides = {}) {
+  const kind = overrides.kind ?? 'care';
+  const occurredAt = overrides.occurredAt ?? '2026-11-17T03:15:00.000Z';
+  const description = overrides.description ?? 'Perawatan fiktif.';
+  const provenance = overrides.provenance ?? 'farmer_report';
+  return {
+    id,
+    kind,
+    occurredAt,
+    description,
+    provenance,
+  };
+}
+
+function apiPatientFixture(id) {
+  return {
+    id, displayCode: 'SAPI-002', name: 'Sapi Fiktif', species: 'cattle', breed: null, sex: 'female',
+    birthDate: '2024-03-01', estimatedAgeMonths: 32, weightKg: '850.50',
+    farmId: 'abababab-abab-4bab-8bab-abababababab', farmerId: 'bcbcbcbc-bcbc-4bcb-8bcb-bcbcbcbcbcbc',
   };
 }
 

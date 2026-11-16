@@ -876,3 +876,19 @@ Slice ini menambahkan `FarmWriteRepository` dan `LivestockWriteRepository` beser
 | API runtime dan QA Android | Tes memakai fake HTTP lokal dan fixture fiktif; backend/OpenAPI smoke tidak dijalankan. Tidak ada wiring `App.tsx`, SQLite/API dual-write, build Android, emulator, Figma MCP, provider, secret, deployment, transaksi nyata, care-event, atau scope konsultasi. QA perangkat dua peran tetap gate integrasi. |
 
 FE-25 tetap **Sedang dikerjakan**. Adapter write mematuhi sesi server tetapi belum dipakai oleh layar; wiring flow menunggu perpindahan terkoordinasi ke satu sumber baca/tulis dan integrasi end-to-end.
+
+## FE-25 lanjutan — adapter timeline kesehatan, care-event, dan pasien (17 November 2026)
+
+`LivestockHealthReadRepository`/`LivestockCareEventWriteRepository` dan `HttpApiLivestockHealthRepository` menambahkan GET timeline dan POST laporan perawatan BE-03. Timeline diparse dari array aktual dengan UUID, kind, provenance, `occurredAt`, dan `createdAt`; POST mengirim body allowlist dan menunggu row tersimpan dari server. `sourceKey` + payload sama bisa diulang untuk mengambil hasil server yang sama; payload berbeda mengembalikan konflik. Kegagalan transport tidak diulang otomatis dan tidak menghasilkan hasil sukses lokal. Kontrol owner, Dokter/Peternak, serta assignment tetap di bearer dan backend.
+
+`PatientReadRepository`/`HttpApiPatientReadRepository` membaca array compact hasil query service yang aktual dan mempertahankan decimal berat sebagai string. Responsnya belum setara dengan `PatientSnapshot` dan belum memiliki schema OpenAPI di controller; adapter hanya menyimpan model API terpisah sampai kontrak response UI pasien ditetapkan. `createApiAdapters` mengekspos repository, tetapi `App.tsx` tetap memakai SQLite. Bukti perintah ada pada tabel berikut.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm ci --no-audit --no-fund` di `apps/mobile` | **Lulus**, 762 paket dipasang dari lockfile. npm memberi peringatan deprecation pada `uuid@7.0.3` dan `eslint@9.39.5`. |
+| `npm run check` di `apps/mobile` | **Lulus**: typecheck, Expo lint, kompilasi tes domain, dan 162/162 tes (0 gagal). Tujuh tes adapter baru memeriksa parsing timeline/pasien, validasi body, provenance, penolakan dokter, retry dan transport tidak pasti. |
+| `git diff --check` | **Lulus** setelah kode dan dokumentasi ditambahkan. |
+| Tes baru FE-25 | Fixture HTTP lokal memeriksa array timeline dan `createdAt`, provenance catatan final/laporan/reminder, payload POST tanpa identitas client, bounds UUID/kind/timestamp/deskripsi/sourceKey, retry sourceKey/payload yang sama setelah response hilang, konflik payload berbeda, penolakan Dokter 403, serta parse pasien compact. Tes ini tidak menghubungi backend runtime. |
+| Shape gap dan QA | Timeline tidak mengembalikan actor/metadata note/attachment; hasil POST tidak memiliki `createdAt`; daftar pasien tidak memiliki `PatientSnapshot` fields dan tidak memiliki response DTO OpenAPI. Tidak ada wiring UI/SQLite API dual-write, API smoke, Android build/emulator, Figma MCP, provider, secret, deployment, atau transaksi uang nyata. QA dua perangkat tetap gate. |
+
+FE-25 tetap **Sedang dikerjakan**. Adapter tidak dipakai layar; gate list pasien dan proyeksi riwayat klinis perlu keputusan kontrak sebelum pemetaan UI, sedangkan migrasi runtime tetap menunggu perpindahan satu otoritas baca/tulis dan QA integrasi.
