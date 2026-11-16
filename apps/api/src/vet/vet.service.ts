@@ -1,9 +1,9 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException, UnprocessableEntityException } from '@nestjs/common';
+import { createHash, randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import type { AuthenticatedPrincipal } from '../auth/auth.types.js';
 import { DatabaseService } from '../database/database.service.js';
-import type { BlockedTimeDto, BlockedTimePatchDto, DirectoryQueryDto, ScheduleQueryDto, SlotsQueryDto, VetAvailabilityDto } from './vet.dto.js';
+import type { BlockedTimeDto, BlockedTimePatchDto, DirectoryPageQueryDto, DirectoryQueryDto, ScheduleQueryDto, SlotsQueryDto, VetAvailabilityDto } from './vet.dto.js';
 
 const ACTIVE = "('awaiting_payment','requested','scheduled','reschedule_pending','in_progress')";
 const VISIBLE_APPOINTMENTS = "('requested','scheduled','reschedule_pending','in_progress')";
@@ -16,19 +16,127 @@ const REVIEW_AGGREGATE_JOIN = `LEFT JOIN LATERAL (
 ) rating ON true`;
 type Db = Pick<DatabaseService, 'query'|'transaction'>;
 
+interface DirectoryCursor {
+  name: string;
+  id: string;
+  filterHash: string;
+}
+
+interface DirectoryRow {
+  id: string;
+  professionalName: string;
+  experienceYears: number;
+  specialties: string[];
+  species: string[];
+  practiceLocation: string;
+  serviceAreas: string[];
+  acceptingNewRequests: boolean;
+  services: ('chat' | 'visit')[];
+  timezone: string;
+  weekdayRules: Array<{ weekday: number; start: string; end: string }>;
+  fees: Record<string, number>;
+  minFeeIdr: string;
+  maxFeeIdr: string;
+  ratingAverage: number;
+  ratingCount: number;
+  cursor_name: string;
+}
+
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function invalidCursor(): never {
+  throw new BadRequestException({ code: 'VALIDATION_FAILED', message: 'Cursor direktori Dokter tidak valid.' });
+}
+
+function parseDirectoryCursor(value: string | undefined, filterHash: string): DirectoryCursor | undefined {
+  if (value === undefined) return undefined;
+  try {
+    const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as Partial<DirectoryCursor>;
+    if (
+      typeof parsed.name !== 'string'
+      || parsed.name.length > 120
+      || typeof parsed.id !== 'string'
+      || !uuidPattern.test(parsed.id)
+      || parsed.filterHash !== filterHash
+      || Buffer.from(JSON.stringify(parsed), 'utf8').toString('base64url') !== value
+    ) invalidCursor();
+    return { name: parsed.name, id: parsed.id, filterHash };
+  } catch {
+    return invalidCursor();
+  }
+}
+
+function directoryFilterHash(query: DirectoryQueryDto): string {
+  return createHash('sha256').update(JSON.stringify([
+    query.name ?? null,
+    query.species ?? null,
+    query.service ?? null,
+    query.location ?? null,
+    query.available ?? null,
+    query.minFee ?? null,
+    query.maxFee ?? null,
+  ])).digest('hex');
+}
+
+function encodeDirectoryCursor(name: string, id: string, filterHash: string): string {
+  return Buffer.from(JSON.stringify({ name, id, filterHash }), 'utf8').toString('base64url');
+}
+
+function safeIdr(value: number | string): number {
+  const amount = Number(value);
+  if (!Number.isSafeInteger(amount) || amount < 0) {
+    throw new ServiceUnavailableException({ code: 'VET_DIRECTORY_DATA_INVALID', message: 'Tarif Dokter tidak dapat dibaca sebagai rupiah integer.' });
+  }
+  return amount;
+}
+
+function safeRates(values: Record<string, number>): Record<string, number> {
+  return Object.fromEntries(Object.entries(values).map(([service, amount]) => [service, safeIdr(amount)]));
+}
+
+function directoryResponse(row: Omit<DirectoryRow, 'cursor_name'>) {
+  return {
+    ...row,
+    fees: safeRates(row.fees),
+    minFeeIdr: safeIdr(row.minFeeIdr),
+    maxFeeIdr: safeIdr(row.maxFeeIdr),
+  };
+}
+
 @Injectable()
 export class VetService {
   constructor(private readonly db: DatabaseService) {}
 
   async directory(q: DirectoryQueryDto) {
-    const rows = await this.db.query(`
+    const rows = await this.directoryRows(q);
+    return rows.map(({ cursor_name: _cursorName, ...row }) => directoryResponse(row));
+  }
+
+  async directoryPage(q: DirectoryPageQueryDto) {
+    const filterHash = directoryFilterHash(q);
+    const cursor = parseDirectoryCursor(q.cursor, filterHash);
+    const result = await this.directoryRows(q, cursor, q.limit + 1);
+    const hasMore = result.length > q.limit;
+    const rows = hasMore ? result.slice(0, q.limit) : result;
+    const last = rows.at(-1);
+    return {
+      items: rows.map(({ cursor_name: _cursorName, ...row }) => directoryResponse(row)),
+      nextCursor: hasMore && last ? encodeDirectoryCursor(last.cursor_name, last.id, filterHash) : null,
+      hasMore,
+    };
+  }
+
+  private async directoryRows(q: DirectoryQueryDto, cursor?: DirectoryCursor, limit?: number): Promise<DirectoryRow[]> {
+    const paginated = limit !== undefined;
+    const result = await this.db.query<DirectoryRow>(`
       SELECT v.user_id AS id, COALESCE(v.professional_name,u.full_name) AS "professionalName",
         d.experience_years AS "experienceYears", d.specialties, d.species,
         d.practice_location AS "practiceLocation", d.service_areas AS "serviceAreas",
         a.accepting_new_requests AS "acceptingNewRequests", a.services, a.timezone,
         a.weekday_rules AS "weekdayRules",
         rates.fees, rates.min_fee AS "minFeeIdr", rates.max_fee AS "maxFeeIdr",
-        rating.rating_average AS "ratingAverage", rating.rating_count AS "ratingCount"
+        rating.rating_average AS "ratingAverage", rating.rating_count AS "ratingCount",
+        lower(COALESCE(v.professional_name,u.full_name)) AS cursor_name
       FROM vet_profiles v JOIN users u ON u.id=v.user_id
       JOIN vet_directory_profiles d ON d.vet_id=v.user_id
       JOIN vet_availabilities a ON a.vet_id=v.user_id
@@ -51,9 +159,12 @@ export class VetService {
         AND EXISTS (SELECT 1 FROM jsonb_each_text(rates.fees) fee
           WHERE ($6::bigint IS NULL OR fee.value::bigint >= $6)
             AND ($7::bigint IS NULL OR fee.value::bigint <= $7))
-      ORDER BY COALESCE(v.professional_name,u.full_name),v.user_id`,
-    [q.name ?? null,q.species ?? null,q.service ?? null,q.location ?? null,q.available === undefined ? null : q.available === 'true',q.minFee ?? null,q.maxFee ?? null]);
-    return rows.rows;
+        ${paginated ? `AND ($8::text IS NULL OR lower(COALESCE(v.professional_name,u.full_name))>$8 OR (lower(COALESCE(v.professional_name,u.full_name))=$8 AND v.user_id>$9::uuid))` : ''}
+      ORDER BY ${paginated ? 'lower(COALESCE(v.professional_name,u.full_name)),v.user_id' : 'COALESCE(v.professional_name,u.full_name)'}${paginated ? ' LIMIT $10' : ''}`,
+    paginated
+      ? [q.name ?? null,q.species ?? null,q.service ?? null,q.location ?? null,q.available === undefined ? null : q.available === 'true',q.minFee ?? null,q.maxFee ?? null,cursor?.name ?? null,cursor?.id ?? null,limit]
+      : [q.name ?? null,q.species ?? null,q.service ?? null,q.location ?? null,q.available === undefined ? null : q.available === 'true',q.minFee ?? null,q.maxFee ?? null]);
+    return result.rows;
   }
 
   async detail(id: string) {
@@ -70,7 +181,8 @@ export class VetService {
       ${REVIEW_AGGREGATE_JOIN}
       WHERE v.user_id=$1 AND v.verification_status='verified' AND rates.fees IS NOT NULL`, [id]);
     if (!r.rows[0]) throw new NotFoundException({code:'RESOURCE_NOT_FOUND',message:'Dokter tidak ditemukan.'});
-    return r.rows[0];
+    const row = r.rows[0];
+    return { ...row, rates: safeRates(row.rates) };
   }
 
   async availability(p: AuthenticatedPrincipal) {

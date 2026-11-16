@@ -249,6 +249,50 @@ test('all mutation keys and DTO request bodies are documented', () => {
   assert.deepEqual(emptyDtoSchemas, [], `DTO schemas must describe their fields: ${emptyDtoSchemas.join(', ')}`);
 });
 
+test('BE-16 read DTOs describe Farm, address, livestock, directory and slots', () => {
+  const paths = openApi.paths;
+  const schemas = openApi.components.schemas;
+  for (const path of ['/v1/me/farms', '/v1/me/farms/{id}', '/v1/me/addresses', '/v1/me/addresses/{id}', '/v1/livestock', '/v1/livestock/{id}', '/v1/livestock/page', '/v1/vets', '/v1/vets/page', '/v1/vets/{id}', '/v1/vets/{id}/slots']) {
+    assert.ok(paths[path]?.get, `Missing read route ${path}`);
+  }
+  for (const [path, schemaName] of [
+    ['/v1/me/farms', 'FarmResponseDto'],
+    ['/v1/me/addresses', 'AddressResponseDto'],
+    ['/v1/livestock', 'LivestockResponseDto'],
+    ['/v1/vets', 'VetDirectoryResponseDto'],
+    ['/v1/vets/{id}/slots', 'VetSlotResponseDto'],
+  ]) {
+    assert.equal(paths[path].get.responses['200'].content['application/json'].schema.type, 'array');
+    assert.equal(paths[path].get.responses['200'].content['application/json'].schema.items.$ref, `#/components/schemas/${schemaName}`);
+  }
+  assert.equal(paths['/v1/me/farms/{id}'].get.responses['200'].content['application/json'].schema.$ref, '#/components/schemas/FarmResponseDto');
+  assert.equal(paths['/v1/me/addresses/{id}'].get.responses['200'].content['application/json'].schema.$ref, '#/components/schemas/AddressResponseDto');
+  assert.equal(paths['/v1/livestock/{id}'].get.responses['200'].content['application/json'].schema.$ref, '#/components/schemas/LivestockResponseDto');
+  assert.equal(paths['/v1/livestock/page'].get.responses['200'].content['application/json'].schema.$ref, '#/components/schemas/LivestockPageResponseDto');
+  assert.equal(paths['/v1/vets/page'].get.responses['200'].content['application/json'].schema.$ref, '#/components/schemas/VetDirectoryPageResponseDto');
+
+  for (const schemaName of ['FarmResponseDto', 'AddressResponseDto', 'LivestockResponseDto', 'VetDirectoryResponseDto', 'VetDirectoryDetailResponseDto', 'VetSlotResponseDto']) {
+    assert.ok(Object.keys(schemas[schemaName].properties).every((field) => !field.includes('_')), `${schemaName} uses camelCase properties`);
+  }
+  for (const field of ['createdAt', 'updatedAt']) assert.equal(schemas.FarmResponseDto.properties[field].format, 'date-time');
+  assert.equal(schemas.AddressResponseDto.properties.latitude.type, 'string');
+  assert.equal(schemas.AddressResponseDto.properties.latitude.nullable, true);
+  assert.equal(schemas.LivestockResponseDto.properties.birthDate.format, 'date');
+  assert.equal(schemas.LivestockResponseDto.properties.weightKg.type, 'string');
+  assert.equal(schemas.VetDirectoryResponseDto.properties.fees.additionalProperties.type, 'integer');
+  assert.equal(schemas.VetDirectoryResponseDto.properties.minFeeIdr.type, 'integer');
+  assert.equal(schemas.VetDirectoryDetailResponseDto.properties.rates.additionalProperties.type, 'integer');
+  for (const field of ['startsAt', 'endsAt']) assert.equal(schemas.VetSlotResponseDto.properties[field].format, 'date-time');
+
+  for (const path of ['/v1/livestock/page', '/v1/vets/page']) {
+    const names = paths[path].get.parameters.filter((parameter) => parameter.in === 'query').map((parameter) => parameter.name);
+    assert.ok(names.includes('cursor'));
+    assert.ok(names.includes('limit'));
+  }
+  assert.ok(paths['/v1/vets/page'].get.parameters.some((parameter) => parameter.name === 'name'));
+  assert.ok(paths['/v1/vets/page'].get.parameters.some((parameter) => parameter.name === 'service'));
+});
+
 test('unauthenticated API access returns the shared error envelope', async () => {
   const response = await fetch(`${baseUrl}/v1/me`);
   assert.equal(response.status, 401);

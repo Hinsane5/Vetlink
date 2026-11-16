@@ -35,22 +35,42 @@ export class ProfileService {
     return this.profile(p);
   }
 
-  async addresses(p: AuthenticatedPrincipal) { this.farmer(p); return (await this.db.query('SELECT * FROM addresses WHERE owner_id=$1 ORDER BY created_at', [p.userId])).rows; }
+  async addresses(p: AuthenticatedPrincipal) {
+    this.farmer(p);
+    const rows = await this.db.query('SELECT * FROM addresses WHERE owner_id=$1 ORDER BY created_at,id', [p.userId]);
+    return rows.rows.map((row) => this.addressResponse(row));
+  }
+  async address(p: AuthenticatedPrincipal, id: string) {
+    this.farmer(p);
+    const result = await this.db.query('SELECT * FROM addresses WHERE id=$1 AND owner_id=$2', [id, p.userId]);
+    if (!result.rows[0]) throw new NotFoundException({ code: 'RESOURCE_NOT_FOUND', message: 'Alamat tidak ditemukan.' });
+    return this.addressResponse(result.rows[0]);
+  }
   async addAddress(p: AuthenticatedPrincipal, x: AddressInput) {
     this.farmer(p);
     const r = await this.db.query('INSERT INTO addresses(owner_id,label,recipient_name,phone,address_line,city,province,postal_code,latitude,longitude) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *', [p.userId,x.label,x.recipientName,x.phone,x.addressLine,x.city,x.province,x.postalCode,x.latitude ?? null,x.longitude ?? null]);
-    return r.rows[0];
+    return this.addressResponse(r.rows[0]);
   }
   async patchAddress(p: AuthenticatedPrincipal, id: string, x: AddressInput & { expectedVersion: number }) {
     this.farmer(p);
     const r=await this.db.query(`UPDATE addresses SET label=$3,recipient_name=$4,phone=$5,address_line=$6,city=$7,province=$8,postal_code=$9,latitude=$10,longitude=$11,updated_at=now(),version=version+1 WHERE id=$1 AND owner_id=$2 AND version=$12 RETURNING *`,[id,p.userId,x.label,x.recipientName,x.phone,x.addressLine,x.city,x.province,x.postalCode,x.latitude??null,x.longitude??null,x.expectedVersion]);
-    if(!r.rows[0]) throw new NotFoundException({code:'RESOURCE_NOT_FOUND',message:'Alamat tidak ditemukan atau versinya berubah.'}); return r.rows[0];
+    if(!r.rows[0]) throw new NotFoundException({code:'RESOURCE_NOT_FOUND',message:'Alamat tidak ditemukan atau versinya berubah.'}); return this.addressResponse(r.rows[0]);
   }
   async deleteAddress(p: AuthenticatedPrincipal, id: string) { this.farmer(p); const r = await this.db.query('DELETE FROM addresses WHERE id=$1 AND owner_id=$2 RETURNING id', [id,p.userId]); if (!r.rowCount) throw new NotFoundException({ code:'RESOURCE_NOT_FOUND', message:'Alamat tidak ditemukan.' }); }
-  async farms(p: AuthenticatedPrincipal) { this.farmer(p); return (await this.db.query('SELECT * FROM farms WHERE owner_id=$1 ORDER BY created_at', [p.userId])).rows; }
+  async farms(p: AuthenticatedPrincipal) {
+    this.farmer(p);
+    const rows = await this.db.query('SELECT * FROM farms WHERE owner_id=$1 ORDER BY created_at,id', [p.userId]);
+    return rows.rows.map((row) => this.farmResponse(row));
+  }
+  async farm(p: AuthenticatedPrincipal, id: string) {
+    this.farmer(p);
+    const result = await this.db.query('SELECT * FROM farms WHERE id=$1 AND owner_id=$2', [id, p.userId]);
+    if (!result.rows[0]) throw new NotFoundException({ code: 'RESOURCE_NOT_FOUND', message: 'Farm tidak ditemukan.' });
+    return this.farmResponse(result.rows[0]);
+  }
   async addFarm(p: AuthenticatedPrincipal, x: FarmInput) { this.farmer(p); const r=await this.db.query(`INSERT INTO farms(owner_id,name,species,timezone,location,visit_address_id)
-    SELECT $1,$2,$3,$4,$5,$6 WHERE $6::uuid IS NULL OR EXISTS(SELECT 1 FROM addresses WHERE id=$6 AND owner_id=$1) RETURNING *`,[p.userId,x.name,x.species??[],x.timezone??'Asia/Jakarta',x.location??null,x.visitAddressId??null]); if (!r.rows[0]) throw new NotFoundException({code:'RESOURCE_NOT_FOUND',message:'Alamat kunjungan bukan milik Peternak.'}); return r.rows[0]; }
-  async patchFarm(p: AuthenticatedPrincipal, id: string, x: Partial<FarmInput>, version: number) { this.farmer(p); const r=await this.db.query(`UPDATE farms SET name=COALESCE($3,name), species=COALESCE($4,species),timezone=COALESCE($5,timezone),location=COALESCE($6,location),visit_address_id=COALESCE($8,visit_address_id),updated_at=now(),version=version+1 WHERE id=$1 AND owner_id=$2 AND version=$7 AND ($8::uuid IS NULL OR EXISTS(SELECT 1 FROM addresses WHERE id=$8 AND owner_id=$2)) RETURNING *`,[id,p.userId,x.name??null,x.species??null,x.timezone??null,x.location??null,version,x.visitAddressId??null]); if(!r.rows[0]) throw new NotFoundException({code:'RESOURCE_NOT_FOUND',message:'Farm/alamat tidak ditemukan atau versinya berubah.'}); return r.rows[0]; }
+    SELECT $1,$2,$3,$4,$5,$6 WHERE $6::uuid IS NULL OR EXISTS(SELECT 1 FROM addresses WHERE id=$6 AND owner_id=$1) RETURNING *`,[p.userId,x.name,x.species??[],x.timezone??'Asia/Jakarta',x.location??null,x.visitAddressId??null]); if (!r.rows[0]) throw new NotFoundException({code:'RESOURCE_NOT_FOUND',message:'Alamat kunjungan bukan milik Peternak.'}); return this.farmResponse(r.rows[0]); }
+  async patchFarm(p: AuthenticatedPrincipal, id: string, x: Partial<FarmInput>, version: number) { this.farmer(p); const r=await this.db.query(`UPDATE farms SET name=COALESCE($3,name), species=COALESCE($4,species),timezone=COALESCE($5,timezone),location=COALESCE($6,location),visit_address_id=COALESCE($8,visit_address_id),updated_at=now(),version=version+1 WHERE id=$1 AND owner_id=$2 AND version=$7 AND ($8::uuid IS NULL OR EXISTS(SELECT 1 FROM addresses WHERE id=$8 AND owner_id=$2)) RETURNING *`,[id,p.userId,x.name??null,x.species??null,x.timezone??null,x.location??null,version,x.visitAddressId??null]); if(!r.rows[0]) throw new NotFoundException({code:'RESOURCE_NOT_FOUND',message:'Farm/alamat tidak ditemukan atau versinya berubah.'}); return this.farmResponse(r.rows[0]); }
 
   async uploadDocument(p: AuthenticatedPrincipal, file?: IncomingFile) {
     this.vet(p); if (!file?.buffer?.length || file.size > 10 * 1024 * 1024) throw new UnprocessableEntityException({code:'VALIDATION_FAILED',message:'Dokumen kosong atau melewati batas 10 MiB.'});
@@ -97,6 +117,39 @@ export class ProfileService {
       const out=await c.query('UPDATE verification_submissions SET status=$2,reviewer_reason=$3,reviewed_at=now(),reviewed_by=$4,version=version+1 WHERE id=$1 RETURNING *',[id,status,status==='revision_required'?reason!.trim():null,p.userId]);
       await c.query('UPDATE vet_profiles SET verification_status=$2,updated_at=now(),version=version+1 WHERE user_id=$1',[s.vet_id,status]); return out.rows[0];
     });
+  }
+  private farmResponse(row: Record<string, any>) {
+    return {
+      id: row.id,
+      name: row.name,
+      species: row.species,
+      timezone: row.timezone,
+      location: row.location,
+      visitAddressId: row.visit_address_id,
+      createdAt: this.isoTimestamp(row.created_at),
+      updatedAt: this.isoTimestamp(row.updated_at),
+      version: row.version,
+    };
+  }
+  private addressResponse(row: Record<string, any>) {
+    return {
+      id: row.id,
+      label: row.label,
+      recipientName: row.recipient_name,
+      phone: row.phone,
+      addressLine: row.address_line,
+      city: row.city,
+      province: row.province,
+      postalCode: row.postal_code,
+      latitude: row.latitude,
+      longitude: row.longitude,
+      createdAt: this.isoTimestamp(row.created_at),
+      updatedAt: this.isoTimestamp(row.updated_at),
+      version: row.version,
+    };
+  }
+  private isoTimestamp(value: Date | string): string {
+    return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
   }
   private farmer(p: AuthenticatedPrincipal) { if(p.activeRole!=='farmer') throw new ForbiddenException({code:'FORBIDDEN',message:'Aksi hanya untuk Peternak.'}); }
   private vet(p: AuthenticatedPrincipal) { if(p.activeRole!=='vet') throw new ForbiddenException({code:'FORBIDDEN',message:'Aksi hanya untuk Dokter Hewan.'}); }

@@ -1,6 +1,6 @@
 # Strategi pengujian VetLink
 
-Status QA per 16 November 2026: frontend masih memakai data lokal persisten tanpa integrasi API dan FE-03 autentikasi tetap ditunda. BE-00–16 memiliki route executable; `api:contract` dan `api:smoke` BE-16 lulus pada runtime lokal/PostgreSQL 17 terisolasi, termasuk follow-up active-role dan payment recovery. Smoke BE-09/13/14/15 juga lulus. Mobile belum memakai API; kontrak dua sesi API sudah diuji, tetapi QA mobile dua perangkat fisik, interaksi/visual, ukuran kecil, serta font besar belum terbukti. APK Android preview sudah dibangun dan dipasang lewat USB pada 20 Oktober. Tidak ada pemanggilan Figma MCP baru.
+Status QA per 16 November 2026: frontend masih memakai data lokal persisten tanpa integrasi API dan FE-03 autentikasi tetap ditunda. BE-00–16 memiliki route executable; `api:contract` dan `api:smoke` BE-16 lulus pada runtime lokal/PostgreSQL 17 terisolasi, termasuk follow-up active-role, payment recovery, read DTO, owner/role scope, dan cursor pagination. Smoke BE-09/13/14/15 juga lulus. Mobile belum memakai API; kontrak dua sesi API sudah diuji, tetapi QA mobile dua perangkat fisik, interaksi/visual, ukuran kecil, serta font besar belum terbukti. APK Android preview sudah dibangun dan dipasang lewat USB pada 20 Oktober. Tidak ada pemanggilan Figma MCP baru.
 
 ## APK preview Android lokal (20 Oktober 2026)
 
@@ -827,3 +827,13 @@ Mobile kini mengirim `POST /v1/auth/active-role`, memvalidasi response terhadap 
 | `git diff --check` | **Lulus** setelah update kode dan dokumen. |
 
 FE-25 tetap **Sedang dikerjakan**: API auth/payment adapters tersedia, sementara FE-03 auth UI tetap ditunda sesuai DEC-23. Wiring runtime menunggu cakupan repository API seluruh flow yang terkait dan perpindahan sumber data terkoordinasi; QA interaksi dan visual Android di dua perangkat tetap gate.
+
+## Bukti BE-16 read contract — 16 November 2026
+
+Pemeriksaan dijalankan dari `apps/api` pada Node `24.10.0` / npm `11.6.0`; engine manifest meminta Node `24.15.0`, sehingga `npm ci --no-audit --no-fund` memberi peringatan engine tetapi memasang 253 paket. PostgreSQL 17.4 dibuat sebagai cluster baru di loopback dengan port dinamis dan database `vetlink_be16_read_smoke`; cluster dihentikan setelah smoke. Semua 18 migrasi dan seed fiktif dijalankan pada database itu; port layanan lain, Docker, provider eksternal, dan data produksi tidak digunakan.
+
+- `npm run check` — **Lulus**: TypeScript typecheck dan Nest build/OpenAPI.
+- `npm run api:contract` — **Lulus**, 5/5: struktur OpenAPI/ref, auth/bearer, schema workflow sebelumnya, dan tambahan DTO response Farm/address/livestock/direktori/slot, timestamp, IDR integer, serta route pagination baru.
+- `npm run api:smoke` — **Lulus** pada PostgreSQL terisolasi. Memeriksa DTO camelCase dan tipe timestamp/decimal, detail Farm/address dengan 404 untuk akun lain dan 403 untuk role Dokter, array lama, cursor ternak tanpa duplicate/skip dan terikat user+role, cursor direktori tanpa duplicate/skip dan terikat filter, tarif IDR integer aman, scope pasien Dokter, serta bentuk slot `startsAt`/`endsAt`. Pemeriksaan BE-03–15 pada smoke yang sama juga lulus.
+- `git diff --check` — **Lulus** setelah seluruh perubahan kode dan dokumen.
+- Mobile tetap memakai SQLite; tidak ada perubahan runtime mobile, wiring API, build/emulator, Figma MCP, provider produksi, deployment, atau transaksi finansial nyata pada pekerjaan ini.

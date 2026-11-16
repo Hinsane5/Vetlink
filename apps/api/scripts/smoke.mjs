@@ -203,8 +203,16 @@ try {
   assert.equal(openApi.paths['/v1/products/{id}']?.get?.responses?.['200']?.content?.['application/json']?.schema?.$ref, '#/components/schemas/ProductResponseDto');
   assert.ok(openApi.paths['/v1/products']?.get?.parameters?.some((parameter) => parameter.name === 'maxPrice'));
   assert.ok(openApi.paths['/v1/vets']?.get);
+  assert.ok(openApi.paths['/v1/vets/page']?.get);
   assert.ok(openApi.paths['/v1/vets/{id}']?.get);
   assert.ok(openApi.paths['/v1/vets/{id}/slots']?.get);
+  assert.ok(openApi.paths['/v1/me/farms/{id}']?.get);
+  assert.ok(openApi.paths['/v1/me/addresses/{id}']?.get);
+  assert.ok(openApi.paths['/v1/livestock/page']?.get);
+  assert.equal(openApi.paths['/v1/me/farms']?.get?.responses?.['200']?.content?.['application/json']?.schema?.items?.$ref, '#/components/schemas/FarmResponseDto');
+  assert.equal(openApi.paths['/v1/me/addresses/{id}']?.get?.responses?.['200']?.content?.['application/json']?.schema?.$ref, '#/components/schemas/AddressResponseDto');
+  assert.equal(openApi.paths['/v1/livestock/page']?.get?.responses?.['200']?.content?.['application/json']?.schema?.$ref, '#/components/schemas/LivestockPageResponseDto');
+  assert.equal(openApi.paths['/v1/vets/page']?.get?.responses?.['200']?.content?.['application/json']?.schema?.$ref, '#/components/schemas/VetDirectoryPageResponseDto');
   assert.ok(openApi.paths['/v1/me/vet/availability']?.put);
   assert.ok(openApi.paths['/v1/me/vet/blocked-times']?.post);
   assert.ok(openApi.paths['/v1/me/vet/earnings']?.get);
@@ -325,7 +333,8 @@ try {
       const vetDeviceB = await loginSmokeUser(healthy.baseUrl, vet.user.email, 'vet');
       const outsider = await registerSmokeUser(healthy.baseUrl, 'farmer', 'Peternak Lain Fiktif BE-07');
       const unverifiedVet = await registerSmokeUser(healthy.baseUrl, 'vet', 'Dokter Belum Terverifikasi BE-04');
-      actors.push(farmer.user.id, vet.user.id, outsider.user.id, unverifiedVet.user.id);
+      const directoryVetBeta = await registerSmokeUser(healthy.baseUrl, 'vet', 'BE16 Dokter Beta Fiktif');
+      actors.push(farmer.user.id, vet.user.id, outsider.user.id, unverifiedVet.user.id, directoryVetBeta.user.id);
       assert.notEqual(farmer.sessionId, farmerDeviceB.sessionId);
       assert.notEqual(vet.sessionId, vetDeviceB.sessionId);
       const [farmerDeviceAMe, farmerDeviceBMe] = await Promise.all([
@@ -394,6 +403,7 @@ try {
 
       // BE-04 directory fixture is explicitly verified by this test setup, never by a vet-facing API.
       await database.query("UPDATE vet_profiles SET verification_status='verified',professional_name='Dokter Uji Fiktif BE-04' WHERE user_id=$1",[vet.user.id]);
+      await database.query("UPDATE vet_profiles SET verification_status='verified',professional_name='BE16 Dokter Beta Fiktif' WHERE user_id=$1",[directoryVetBeta.user.id]);
       const localDate = new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Jakarta',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(Date.now()+48*60*60*1000));
       const weekday = Number(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Jakarta',weekday:'short'}).format(new Date(`${localDate}T12:00:00+07:00`)).replace(/^Sun$/,'0').replace(/^Mon$/,'1').replace(/^Tue$/,'2').replace(/^Wed$/,'3').replace(/^Thu$/,'4').replace(/^Fri$/,'5').replace(/^Sat$/,'6'));
       const availBody={expectedVersion:1,acceptingNewRequests:true,services:['chat','visit'],timezone:'Asia/Jakarta',weekdayRules:[{weekday,start:'00:00',end:'23:59'}],chatDurationMinutes:60,visitDurationMinutes:60,rates:{chat:125000,visit:400000},experienceYears:7,specialties:['hewan besar'],species:['sapi'],practiceLocation:'Bogor',serviceAreas:['Bogor']};
@@ -402,6 +412,8 @@ try {
       const availabilityResult=await savedAvailability.json();
       assert.equal(availabilityResult.status,'succeeded');
       assert.equal(Number(availabilityResult.value.rates.chat),125000);
+      const directoryAvailability = await sendJson(healthy.baseUrl,'/v1/me/vet/availability',directoryVetBeta.accessToken,'PUT',availBody);
+      assert.equal(directoryAvailability.status,200,await directoryAvailability.clone().text());
       const filteredDirectory=await sendJson(healthy.baseUrl,'/v1/vets?name=Uji&species=sapi&service=chat&location=Bogor&available=true&minFee=100000&maxFee=130000',farmer.accessToken,'GET');
       assert.equal(filteredDirectory.status,200);
       assert.deepEqual((await filteredDirectory.json()).map(x=>x.id),[vet.user.id]);
@@ -412,10 +424,38 @@ try {
       const pendingDirectory=await sendJson(healthy.baseUrl,'/v1/vets?name=Belum%20Terverifikasi',outsider.accessToken,'GET');
       assert.equal(pendingDirectory.status,200);
       assert.deepEqual(await pendingDirectory.json(),[]);
+      await database.query("UPDATE vet_profiles SET professional_name='BE16 Dokter Alpha Fiktif' WHERE user_id=$1",[vet.user.id]);
+      const directoryPageOneResponse = await sendJson(healthy.baseUrl,'/v1/vets/page?name=BE16&limit=1',farmer.accessToken,'GET');
+      assert.equal(directoryPageOneResponse.status,200,await directoryPageOneResponse.clone().text());
+      const directoryPageOne = await directoryPageOneResponse.json();
+      assert.equal(directoryPageOne.items.length,1);
+      assert.equal(directoryPageOne.items[0].id,vet.user.id);
+      assert.equal(directoryPageOne.items[0].professionalName,'BE16 Dokter Alpha Fiktif');
+      assert.equal(directoryPageOne.items[0].minFeeIdr,125000);
+      assert.ok(Number.isSafeInteger(directoryPageOne.items[0].minFeeIdr));
+      assert.ok(Number.isSafeInteger(directoryPageOne.items[0].fees.chat));
+      assert.equal(directoryPageOne.hasMore,true);
+      assert.ok(directoryPageOne.nextCursor);
+      assert.throws(() => JSON.parse(directoryPageOne.nextCursor));
+      assert.equal(directoryPageOne.nextCursor.includes(vet.user.id),false);
+      const directoryPageTwoResponse = await sendJson(healthy.baseUrl,
+        `/v1/vets/page?name=BE16&limit=1&cursor=${encodeURIComponent(directoryPageOne.nextCursor)}`,farmer.accessToken,'GET');
+      assert.equal(directoryPageTwoResponse.status,200,await directoryPageTwoResponse.clone().text());
+      const directoryPageTwo = await directoryPageTwoResponse.json();
+      assert.deepEqual(directoryPageTwo.items.map((item)=>item.id),[directoryVetBeta.user.id]);
+      assert.equal(directoryPageTwo.hasMore,false);
+      assert.equal(directoryPageTwo.nextCursor,null);
+      assert.equal((await sendJson(healthy.baseUrl,`/v1/vets/page?name=changed&limit=1&cursor=${encodeURIComponent(directoryPageOne.nextCursor)}`,farmer.accessToken,'GET')).status,400);
+      assert.equal((await sendJson(healthy.baseUrl,'/v1/vets/page?cursor=not-a-cursor',farmer.accessToken,'GET')).status,400);
+      const directoryLegacy = await sendJson(healthy.baseUrl,'/v1/vets?name=BE16',farmer.accessToken,'GET');
+      assert.equal(directoryLegacy.status,200);
+      assert.deepEqual((await directoryLegacy.json()).map((item)=>item.id).sort(),[vet.user.id,directoryVetBeta.user.id].sort(),'Legacy directory route remains an array with the same records.');
       const slotResponse=await sendJson(healthy.baseUrl,`/v1/vets/${vet.user.id}/slots?dateFrom=${localDate}&dateTo=${localDate}&service=chat`,farmer.accessToken,'GET');
       assert.equal(slotResponse.status,200,`${await slotResponse.clone().text()}\n${healthy.output()}`);
       const availableSlots=await slotResponse.json();
       assert.ok(availableSlots.length>0);
+      assert.deepEqual(Object.keys(availableSlots[0]).sort(),['endsAt','startsAt']);
+      assert.ok(availableSlots.every((slot)=>Number.isFinite(Date.parse(slot.startsAt))&&Number.isFinite(Date.parse(slot.endsAt))));
       assert.ok(availableSlots.every(s=>Date.parse(s.startsAt)<Date.parse(s.endsAt)));
       assert.ok(availableSlots.every(s=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Jakarta',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(s.startsAt))===localDate));
       const blockedStart=`${localDate}T12:00:00+07:00`,blockedEnd=`${localDate}T13:00:00+07:00`;
@@ -457,6 +497,19 @@ try {
       const [farmerFarmsA, farmerFarmsB] = await Promise.all([farmerFarmsAResponse.json(), farmerFarmsBResponse.json()]);
       assert.deepEqual(farmerFarmsA.map((farm) => farm.id).sort(), [farmId, secondFarm.id].sort());
       assert.deepEqual(farmerFarmsB.map((farm) => farm.id).sort(), [farmId, secondFarm.id].sort());
+      const listedFarm = farmerFarmsA.find((farm) => farm.id === farmId);
+      assert.equal(listedFarm.name,'Farm Fiktif BE-07');
+      assert.equal(listedFarm.visitAddressId,null);
+      assert.equal(typeof listedFarm.createdAt,'string');
+      assert.ok(Number.isFinite(Date.parse(listedFarm.createdAt)));
+      assert.equal(listedFarm.version,1);
+      assert.equal('owner_id' in listedFarm,false);
+      const farmDetail = await sendJson(healthy.baseUrl,`/v1/me/farms/${farmId}`,farmer.accessToken,'GET');
+      assert.equal(farmDetail.status,200);
+      assert.deepEqual(await farmDetail.json(),listedFarm);
+      assert.equal((await sendJson(healthy.baseUrl,`/v1/me/farms/${farmId}`,outsider.accessToken,'GET')).status,404);
+      assert.equal((await sendJson(healthy.baseUrl,`/v1/me/farms/${farmId}`,vet.accessToken,'GET')).status,403);
+      assert.equal((await sendJson(healthy.baseUrl,'/v1/me/farms',vet.accessToken,'GET')).status,403);
       const foreignFarmUpdate = await sendJson(healthy.baseUrl, `/v1/me/farms/${farmId}`, outsider.accessToken, 'PATCH', {
         expectedVersion: 1, name: 'Farm milik akun lain tidak boleh berubah',
       });
@@ -468,6 +521,21 @@ try {
       assert.equal(addressResponse.status, 201, await addressResponse.clone().text());
       const checkoutAddress = await addressResponse.json();
       addressIds.push(checkoutAddress.id);
+      assert.equal(checkoutAddress.addressLine,'Jalan Ternak Fiktif Nomor 11');
+      assert.equal(checkoutAddress.latitude,null);
+      assert.equal(checkoutAddress.longitude,null);
+      assert.equal(typeof checkoutAddress.createdAt,'string');
+      assert.ok(Number.isFinite(Date.parse(checkoutAddress.createdAt)));
+      assert.equal('owner_id' in checkoutAddress,false);
+      const addressDetail = await sendJson(healthy.baseUrl,`/v1/me/addresses/${checkoutAddress.id}`,farmer.accessToken,'GET');
+      assert.equal(addressDetail.status,200);
+      assert.deepEqual(await addressDetail.json(),checkoutAddress);
+      const addressList = await sendJson(healthy.baseUrl,'/v1/me/addresses',farmerDeviceB.accessToken,'GET');
+      assert.equal(addressList.status,200);
+      assert.deepEqual((await addressList.json()).map((item)=>item.id),[checkoutAddress.id]);
+      assert.equal((await sendJson(healthy.baseUrl,`/v1/me/addresses/${checkoutAddress.id}`,outsider.accessToken,'GET')).status,404);
+      assert.equal((await sendJson(healthy.baseUrl,`/v1/me/addresses/${checkoutAddress.id}`,vet.accessToken,'GET')).status,403);
+      assert.equal((await sendJson(healthy.baseUrl,'/v1/me/addresses',vet.accessToken,'GET')).status,403);
       const checkoutFarmLink = await sendJson(healthy.baseUrl, `/v1/me/farms/${farmId}`, farmer.accessToken, 'PATCH', {
         expectedVersion: 1, name: 'Farm Fiktif BE-11', visitAddressId: checkoutAddress.id,
       });
@@ -897,7 +965,7 @@ try {
       const linkedFarm = await sendJson(healthy.baseUrl, `/v1/me/farms/${farmId}`, farmer.accessToken, 'PATCH',
         { name: 'Farm Fiktif BE-07', expectedVersion: 2, visitAddressId: visitAddress.id });
       assert.equal(linkedFarm.status, 200, await linkedFarm.clone().text());
-      assert.equal((await linkedFarm.json()).visit_address_id, visitAddress.id);
+      assert.equal((await linkedFarm.json()).visitAddressId, visitAddress.id);
       const visitQuote = await addQuote(visitStart, 'visit', 'Pemeriksaan ternak fiktif', visitAddress.id);
       assert.equal(visitQuote.quote.visitAddressSnapshot.addressLine, 'Jalan Contoh Tanpa Nomor');
       const visitBooking = await submitQuote(visitQuote.quote);
@@ -1182,8 +1250,51 @@ try {
       });
       assert.equal(createdAnimalResponse.status, 201);
       const createdAnimal = await createdAnimalResponse.json();
-      assert.equal(createdAnimal.display_code, 'NEW-001');
-      assert.equal(createdAnimal.farm_id, secondFarm.id);
+      assert.equal(createdAnimal.displayCode, 'NEW-001');
+      assert.equal(createdAnimal.farmId, secondFarm.id);
+      assert.equal(typeof createdAnimal.weightKg,'string');
+      assert.equal(Number(createdAnimal.weightKg),12.5);
+      assert.ok(Number.isFinite(Date.parse(createdAnimal.createdAt)));
+      assert.equal('farm_id' in createdAnimal,false);
+      const pagingAnimals = [];
+      for (const number of [1,2]) {
+        const response = await sendJson(healthy.baseUrl,'/v1/livestock',farmer.accessToken,'POST',{
+          farmId:secondFarm.id,displayCode:`PAGE-00${number}`,name:`Ternak Pagination ${number}`,species:'kambing',sex:'unknown',weightKg:number+1,
+        });
+        assert.equal(response.status,201,await response.clone().text());
+        pagingAnimals.push(await response.json());
+      }
+      const farmerLivestockArrayResponse = await sendJson(healthy.baseUrl,'/v1/livestock',farmer.accessToken,'GET');
+      assert.equal(farmerLivestockArrayResponse.status,200);
+      const farmerLivestockArray = await farmerLivestockArrayResponse.json();
+      assert.ok(Array.isArray(farmerLivestockArray));
+      assert.ok(farmerLivestockArray.every((animal)=>typeof animal.farmId==='string'&&typeof animal.createdAt==='string'));
+      const farmerLivestockDetail = await sendJson(healthy.baseUrl,`/v1/livestock/${createdAnimal.id}`,farmer.accessToken,'GET');
+      assert.equal(farmerLivestockDetail.status,200);
+      assert.deepEqual(await farmerLivestockDetail.json(),createdAnimal);
+      const farmerPageIds = [];
+      let farmerCursor;
+      for (let pageIndex = 0; pageIndex < 10; pageIndex += 1) {
+        const query = farmerCursor ? `?limit=2&cursor=${encodeURIComponent(farmerCursor)}` : '?limit=2';
+        const pageResponse = await sendJson(healthy.baseUrl,`/v1/livestock/page${query}`,farmer.accessToken,'GET');
+        assert.equal(pageResponse.status,200,await pageResponse.clone().text());
+        const page = await pageResponse.json();
+        farmerPageIds.push(...page.items.map((animal)=>animal.id));
+        if (!page.hasMore) {
+          assert.equal(page.nextCursor,null);
+          break;
+        }
+        assert.ok(page.nextCursor);
+        assert.throws(()=>JSON.parse(page.nextCursor));
+        farmerCursor = page.nextCursor;
+        if (pageIndex === 0) assert.equal(farmerCursor.includes(farmer.user.id),false);
+        assert.ok(pageIndex < 9,'Pagination must terminate.');
+      }
+      assert.equal(new Set(farmerPageIds).size,farmerPageIds.length,'Cursor pages must not repeat livestock.');
+      assert.deepEqual([...farmerPageIds].sort(),farmerLivestockArray.map((animal)=>animal.id).sort(),'Cursor pages must not skip owner livestock.');
+      assert.equal((await sendJson(healthy.baseUrl,`/v1/livestock/page?cursor=not-a-cursor`,farmer.accessToken,'GET')).status,400);
+      assert.equal((await sendJson(healthy.baseUrl,`/v1/livestock/page?cursor=${encodeURIComponent(farmerCursor)}`,outsider.accessToken,'GET')).status,400);
+      assert.deepEqual((await (await sendJson(healthy.baseUrl,'/v1/livestock/page',outsider.accessToken,'GET')).json()).items,[]);
       unpaidConsultationId = randomUUID();
       consultationIds.push(unpaidConsultationId);
       await database.query(`INSERT INTO consultations
@@ -1302,7 +1413,23 @@ try {
       assert.equal(vetUnrelatedAnimal.status, 404);
       const vetPatientList = await sendJson(healthy.baseUrl, '/v1/patients', vet.accessToken, 'GET');
       assert.equal(vetPatientList.status, 200);
-      assert.deepEqual((await vetPatientList.json()).map((item) => item.id).sort(), [animalId, createdAnimal.id].sort());
+      const vetPatients = await vetPatientList.json();
+      assert.deepEqual(vetPatients.map((item) => item.id).sort(), [animalId, createdAnimal.id].sort());
+      const vetLivestockPageOneResponse = await sendJson(healthy.baseUrl,'/v1/livestock/page?limit=1',vet.accessToken,'GET');
+      assert.equal(vetLivestockPageOneResponse.status,200);
+      const vetLivestockPageOne = await vetLivestockPageOneResponse.json();
+      assert.equal(vetLivestockPageOne.items.length,1);
+      assert.equal(vetLivestockPageOne.hasMore,true);
+      const vetLivestockPageTwoResponse = await sendJson(healthy.baseUrl,`/v1/livestock/page?limit=1&cursor=${encodeURIComponent(vetLivestockPageOne.nextCursor)}`,vet.accessToken,'GET');
+      assert.equal(vetLivestockPageTwoResponse.status,200);
+      const vetLivestockPageTwo = await vetLivestockPageTwoResponse.json();
+      assert.equal(vetLivestockPageTwo.hasMore,false);
+      const vetPagedIds=[...vetLivestockPageOne.items,...vetLivestockPageTwo.items].map((animal)=>animal.id);
+      assert.equal(new Set(vetPagedIds).size,vetPagedIds.length);
+      assert.deepEqual(vetPagedIds.sort(),vetPatients.map((animal)=>animal.id).sort());
+      const unverifiedVetPatientPage = await (await sendJson(healthy.baseUrl,'/v1/livestock/page?limit=1',unverifiedVet.accessToken,'GET')).json();
+      assert.deepEqual(unverifiedVetPatientPage.items.map((animal)=>animal.id),[animalId],'A Dokter may read only the animal attached to their own request, even when verification prevents acceptance.');
+      assert.equal((await sendJson(healthy.baseUrl,`/v1/livestock/page?cursor=${encodeURIComponent(farmerCursor)}`,vet.accessToken,'GET')).status,400);
       const outsiderPatientList = await sendJson(healthy.baseUrl, '/v1/patients', outsider.accessToken, 'GET');
       assert.equal(outsiderPatientList.status, 403);
       const patchAnimal = await sendJson(healthy.baseUrl, `/v1/livestock/${createdAnimal.id}`, farmer.accessToken, 'PATCH', { expectedVersion: 1, name: 'Anak Fiktif Revisi' });
