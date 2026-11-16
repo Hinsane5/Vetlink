@@ -1,6 +1,6 @@
 # Kontrak integrasi backend v1
 
-Status per 20 Oktober 2026: OpenAPI executable memuat route BE-00–08, BE-10/11/12, dan BE-15: health/auth, profil/verifikasi, ternak/pasien/riwayat, vet discovery/availability, booking/request/proposal/visit/completion, payment quote/create, chat/media, note/recommendation, katalog aktif, cart, checkout quote, order, shipment timeline owner-scoped, pendapatan Dokter, tujuan pencairan fiktif, dan reservasi ledger pencairan. BE-09, BE-13/14, dan BE-16/17 tetap menunggu tiket masing-masing. Aplikasi mobile belum memakai backend jaringan.
+Status per 20 Oktober 2026: OpenAPI executable memuat route BE-00–12 dan BE-15: health/auth, profil/verifikasi, ternak/pasien/riwayat, vet discovery/availability, booking/request/proposal/visit/completion, payment quote/create, chat/media, note/recommendation, follow-up, reminder/care completion, laporan perkembangan, katalog aktif, cart, checkout quote, order, shipment timeline owner-scoped, pendapatan Dokter, tujuan pencairan fiktif, dan reservasi ledger pencairan. Runtime acceptance BE-09 menunggu database lokal; BE-13/14 dan BE-16/17 tetap menunggu tiket masing-masing. Aplikasi mobile belum memakai backend jaringan.
 
 ## Konvensi
 
@@ -158,7 +158,7 @@ BE-07 memakai adapter filesystem privat lokal di luar static web root dan adapte
 | Pendapatan | GET `/me/vet/earnings?period=&from=&to=&cursor=&limit=`, `/me/vet/transactions/{id}` | Dokter own ledger projections; integer IDR, saldo semua periode dan transaksi per periode |
 | Tujuan pencairan | GET `/me/vet/payout-destinations` | Dokter sendiri; hanya tujuan aktif dengan rekening fiktif termasking |
 | Pencairan | GET/POST `/me/vet/withdrawals`; GET `.../{id}` | POST `{amount,destinationId}` + `Idempotency-Key`; positive ≤ available; reserve atomic; tidak menerima rekening mentah atau status paid dari client |
-| Notifikasi | GET `/me/notifications`; POST `.../{id}/read`; GET/PATCH `/me/preferences` | Recipient/owner |
+| Notifikasi | GET `/me/notifications`; POST `.../{id}/read`; GET/PATCH `/me/preferences` | Inbox/preferences menunggu BE-14; BE-09 mencatat event actor/recipient dengan unique recipient/event |
 
 Tooling admin review, pengelolaan katalog, dan provider callbacks tetap merupakan operasi internal, bukan fitur mobile dokter atau toko dokter. Seed katalog hanya menambahkan fixture tanpa menimpa record. Integrasi callbacks nyata diblokir sampai provider/security contract tersedia.
 
@@ -185,6 +185,14 @@ Semua mutasi BE-05 menggunakan `expectedVersion` dan idempotency key; replay pay
 BE-08 mengaktifkan route note dan recommendation di atas. PUT note menerima `expectedVersion` dan field clinical parsial; versi awal adalah `1`, lalu setiap simpan berikutnya menaikkan versi. Penulisan dan finalisasi hanya tersedia saat Consultation `in_progress`. Finalisasi mensyaratkan complaint, findings, assessment, actions, dan careInstructions non-whitespace, serta expectedVersion yang sedang ditinjau. Konfirmasi stale mengembalikan 409; trigger PostgreSQL membuat snapshot final tidak dapat diubah/dihapus. Finalisasi hanya mengubah note dan tidak menyelesaikan Consultation.
 
 Recommendation PUT mengganti item sesuai payload (termasuk daftar kosong untuk draft), memakai `expectedVersion`, dan menyimpan snapshot judul/instruksi/catatan serta productId opsional. Penulisan dan send hanya saat Consultation `in_progress`. Farmer hanya dapat membaca recommendation berstatus sent; Dokter harus menjadi vet konsultasi dan tidak memperoleh aksi cart/checkout. Send menolak daftar kosong; adapter delivery lokal mengembalikan outcome succeeded/failed, dan status sent hanya disimpan setelah succeeded. Adapter bukan provider notifikasi produksi.
+
+### BE-09 executable contract
+
+BE-09 mengaktifkan route follow-up, laporan perkembangan, reminder, retry delivery, dan care completion. Semua route memakai bearer dan scope owner/assignment; mengganti role tidak mengubah kepemilikan. Daftar follow-up hanya tersedia untuk peserta konsultasi. Membuat follow-up (`POST /consultations/{id}/follow-ups`) hanya untuk Dokter assigned/verified pada layanan dengan payment succeeded dan catatan final. `startsAt`/`endsAt` harus timestamp ISO-8601 berzona waktu, future, berjarak 5–240 menit, tepat pada batas menit, berada pada satu hari lokal timezone dokter dan dalam jam kerja. Slot setengah terbuka diperiksa ulang di bawah advisory lock Dokter terhadap konsultasi aktif, proposal pending, blocked time aktif, dan follow-up scheduled. Key dan payload sama mengembalikan record yang sama; payload berbeda mendapat 409. PATCH follow-up hanya menerima `action=cancel` dengan `expectedVersion` dan idempotency key; participant yang bukan pemilik/assigned mendapat 404.
+
+`POST /reminders` menerima `kind=care|follow_up`, `dueAt` future, `instructions`, dan relasi opsional ke ternak/konsultasi/follow-up. Peternak hanya membuat untuk ternak miliknya; Dokter harus verified dan terkait konsultasi yang telah dibayar dan memiliki catatan final. `deliveryStatus` terpisah dari `careStatus`; hasil adapter lokal (termasuk pending/failed) dan attempt tersimpan sebelum respons. `PATCH /reminders/{id}` menerima `action=retry_delivery`; pengiriman sent tidak dikirim ulang, attempt terserialisasi per reminder, dan key yang sama mengulang hasil tersimpan. Adapter lokal tidak memanggil provider. `POST /reminders/{id}/complete` hanya Peternak pemilik untuk `kind=care`, memerlukan `confirmation=true`, menyimpan status care `done` dan satu HealthEvent dengan `provenance=reminder` serta source key unik; status delivery tidak berubah. Retry dengan key sama mengulang respons tanpa HealthEvent kedua.
+
+Peternak terkait mengirim `POST /follow-ups/{id}/progress-reports` dengan teks dan maksimal lima attachment yang sudah committed, dimiliki Peternak, dan terkait konsultasi. Dokter hanya membaca laporan atas follow-up layanan yang ditugaskan; read pertama mengisi `viewedAt`. Notification event BE-09 mencatat `actorId` dan `recipientId` eksplisit serta unik per pasangan recipient/event. Inbox, read-state API, preferensi, dan delivery notification umum menunggu BE-14.
 
 ### BE-10 executable contract
 
