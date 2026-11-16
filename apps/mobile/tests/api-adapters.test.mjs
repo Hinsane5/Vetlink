@@ -431,6 +431,20 @@ test('Farm and address reads use owner-scoped routes and preserve decimal coordi
   }
 });
 
+test('BE-02 farm reads accept empty species and still reject invalid or duplicate values', async () => {
+  const farmId = '33333333-3333-4333-8333-333333333333';
+  let farms = [{ ...farmReadFixture(farmId), species: [] }];
+  const api = new ApiClient('http://localhost:3000', new MemoryServerSessionStore(tokenSet()), async () => response(200, farms));
+  const repository = new HttpApiFarmReadRepository(api);
+
+  assert.deepEqual((await repository.listFarms())[0].species, []);
+
+  for (const species of [['unknown'], ['cattle', 'cattle']]) {
+    farms = [{ ...farmReadFixture(farmId), species }];
+    await assert.rejects(repository.listFarms(), { code: 'API_RESPONSE_INVALID' });
+  }
+});
+
 test('Farm and address adapters reject invalid UUIDs, decimal strings, and timestamps', async () => {
   let calls = 0;
   const api = new ApiClient('http://localhost:3000', new MemoryServerSessionStore(tokenSet()), async () => {
