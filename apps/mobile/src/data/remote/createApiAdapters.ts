@@ -5,6 +5,7 @@ import { HttpServerAuthRepository } from './ApiAuthRepository';
 import { ExpoApiPaymentOperationStore } from './ExpoApiPaymentOperationStore';
 import { ExpoServerSessionStore } from './ExpoServerSessionStore';
 import { HttpApiPaymentRepository } from './HttpApiPaymentRepository';
+import { HttpApiCatalogRepository } from './HttpApiCatalogRepository';
 
 /** Build API-only services from an explicitly configured development base URL. */
 export function createApiAdapters(baseUrl: string) {
@@ -13,5 +14,6 @@ export function createApiAdapters(baseUrl: string) {
   return {
     auth: new ServerAuthService(new HttpServerAuthRepository(api), sessions),
     payments: new ApiPaymentGateway(new HttpApiPaymentRepository(api), new ExpoApiPaymentOperationStore()),
+    catalog: new HttpApiCatalogRepository(api),
   };
 }

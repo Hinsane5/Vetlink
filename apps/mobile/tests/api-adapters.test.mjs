@@ -6,6 +6,7 @@ import { ServerAuthService } from '../.test-build/src/application/ServerAuthServ
 import { DomainError } from '../.test-build/src/domain/errors.js';
 import { ApiClient, normalizeApiBaseUrl } from '../.test-build/src/data/remote/ApiClient.js';
 import { HttpServerAuthRepository } from '../.test-build/src/data/remote/ApiAuthRepository.js';
+import { HttpApiCatalogRepository } from '../.test-build/src/data/remote/HttpApiCatalogRepository.js';
 import { HttpApiPaymentRepository } from '../.test-build/src/data/remote/HttpApiPaymentRepository.js';
 
 test('API client refreshes a rejected access token once and replays with server session', async () => {
@@ -53,6 +54,101 @@ test('API base URL rejects non-private HTTP and embedded credentials', () => {
   assert.equal(normalizeApiBaseUrl('https://api.example.test/'), 'https://api.example.test');
   assert.throws(() => normalizeApiBaseUrl('http://api.example.test'), (error) => error instanceof DomainError);
   assert.throws(() => normalizeApiBaseUrl('https://user:password@example.test'), (error) => error instanceof DomainError);
+});
+
+test('catalog read adapter sends BE-10 filters and follows the opaque server cursor', async () => {
+  const requests = [];
+  const cursor = 'eyJuYW1lIjoiZmlrdGlmIn0';
+  const first = catalogProductFixture('11111111-1111-4111-8111-111111111111', 'Paket perawatan fiktif', 45000);
+  const second = catalogProductFixture('22222222-2222-4222-8222-222222222222', 'Peralatan kandang fiktif', 67000);
+  const api = new ApiClient('http://localhost:3000', new MemoryServerSessionStore(tokenSet()), async (url, init) => {
+    requests.push({ url, init });
+    const query = new URL(url).searchParams;
+    if (query.has('cursor')) return response(200, { items: [second], nextCursor: null, hasMore: false });
+    return response(200, { items: [first], nextCursor: cursor, hasMore: true });
+  });
+  const repository = new HttpApiCatalogRepository(api);
+
+  const firstPage = await repository.search({
+    name: '  perawatan fiktif ', category: ' care ', species: 'cattle',
+    minPriceIdr: 12000, maxPriceIdr: 45000, limit: 1,
+  });
+  const secondPage = await repository.search({ cursor: firstPage.nextCursor, limit: 1 });
+
+  assert.equal(firstPage.hasMore, true);
+  assert.equal(firstPage.nextCursor, cursor);
+  assert.equal(firstPage.items[0].id, first.id);
+  assert.equal(firstPage.items[0].unitPrice, 45000);
+  assert.equal(firstPage.items[0].currency, 'IDR');
+  assert.equal(secondPage.hasMore, false);
+  assert.equal(secondPage.nextCursor, null);
+  assert.equal(secondPage.items[0].id, second.id);
+  assert.equal(requests[0].init.method, 'GET');
+  assert.equal(requests[0].init.headers.Authorization, `Bearer ${'access-token-1'}`);
+  const firstQuery = new URL(requests[0].url).searchParams;
+  assert.equal(firstQuery.get('name'), 'perawatan fiktif');
+  assert.equal(firstQuery.get('category'), 'care');
+  assert.equal(firstQuery.get('species'), 'cattle');
+  assert.equal(firstQuery.get('minPrice'), '12000');
+  assert.equal(firstQuery.get('maxPrice'), '45000');
+  assert.equal(firstQuery.get('limit'), '1');
+  assert.equal(firstQuery.has('ownerId'), false, 'owner scope comes from the authenticated server session');
+  const secondQuery = new URL(requests[1].url).searchParams;
+  assert.equal(secondQuery.get('cursor'), cursor, 'the returned cursor is passed back unchanged');
+  assert.equal(secondQuery.get('limit'), '1');
+});
+
+test('catalog detail uses the server product UUID and preserves its error envelope', async () => {
+  const id = '33333333-3333-4333-8333-333333333333';
+  const requests = [];
+  const api = new ApiClient('http://localhost:3000', new MemoryServerSessionStore(tokenSet()), async (url, init) => {
+    requests.push({ url, init });
+    if (url.endsWith(`/v1/products/${id}`)) return response(200, catalogProductFixture(id, 'Produk fiktif untuk detail', 125000));
+    return response(404, {
+      code: 'RESOURCE_NOT_FOUND', message: 'Produk fiktif tidak ditemukan.',
+      fieldErrors: {}, requestId: 'req-fixture-catalog-404',
+    });
+  });
+  const repository = new HttpApiCatalogRepository(api);
+
+  const product = await repository.getById(id);
+  assert.equal(product.id, id);
+  assert.equal(product.unitPrice, 125000);
+  assert.equal(requests[0].url, `http://localhost:3000/v1/products/${id}`);
+  assert.equal(requests[0].init.headers.Authorization, `Bearer ${'access-token-1'}`);
+  await assert.rejects(repository.getById('44444444-4444-4444-8444-444444444444'), (error) => {
+    assert.ok(error instanceof DomainError);
+    assert.equal(error.code, 'NOT_FOUND');
+    assert.equal(error.message, 'Produk fiktif tidak ditemukan.');
+    return true;
+  });
+});
+
+test('catalog adapter rejects invalid query filters and malformed server product/page DTOs', async () => {
+  let calls = 0;
+  const api = new ApiClient('http://localhost:3000', new MemoryServerSessionStore(tokenSet()), async () => {
+    calls += 1;
+    return response(200, { items: [], nextCursor: null, hasMore: false });
+  });
+  const repository = new HttpApiCatalogRepository(api);
+
+  await assert.rejects(repository.search({ minPriceIdr: 200, maxPriceIdr: 100 }), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.search({ limit: 101 }), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.search({ cursor: '' }), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.getById('not-a-server-id'), { code: 'VALIDATION_FAILED' });
+  assert.equal(calls, 0);
+
+  const malformedPages = [
+    { items: [catalogProductFixture('55555555-5555-4555-8555-555555555555', 'Harga pecahan fiktif', 12000.5)], nextCursor: null, hasMore: false },
+    { items: [{ ...catalogProductFixture('66666666-6666-4666-8666-666666666666', 'Produk nonaktif fiktif', 12000), active: false }], nextCursor: null, hasMore: false },
+    { items: [{ ...catalogProductFixture('88888888-8888-4888-8888-888888888888', 'Produk tanpa attachment fiktif', 12000), imageAttachmentId: undefined }], nextCursor: null, hasMore: false },
+    { items: [{ ...catalogProductFixture('99999999-9999-4999-8999-999999999999', 'Spesies tak dikenal fiktif', 12000), species: ['unknown'] }], nextCursor: null, hasMore: false },
+    { items: [catalogProductFixture('77777777-7777-4777-8777-777777777777', 'Cursor halaman fiktif', 12000)], nextCursor: null, hasMore: true },
+  ];
+  for (const payload of malformedPages) {
+    const invalidApi = new ApiClient('http://localhost:3000', new MemoryServerSessionStore(tokenSet()), async () => response(200, payload));
+    await assert.rejects(new HttpApiCatalogRepository(invalidApi).search(), { code: 'API_RESPONSE_INVALID' });
+  }
 });
 
 test('server authentication stores opaque tokens and validates identity against /me', async () => {
@@ -292,6 +388,14 @@ test('remote payment gate rejects vet role before making API requests', async ()
     (error) => error instanceof DomainError && error.code === 'FORBIDDEN');
   assert.equal(calls, 0);
 });
+
+function catalogProductFixture(id, name, unitPriceIdr) {
+  return {
+    id, name, category: 'care', species: ['cattle'],
+    description: 'Fixture katalog fiktif untuk kontrak read-only.',
+    unitPriceIdr, imageAttachmentId: null, active: true,
+  };
+}
 
 function tokenSet(accessToken = 'access-token-1', refreshToken = 'refresh-token-1') {
   return {

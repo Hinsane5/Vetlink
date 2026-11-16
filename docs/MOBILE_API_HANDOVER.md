@@ -22,6 +22,14 @@ Pergantian active role pada sesi yang sama memakai `POST /v1/auth/active-role` d
 
 Envelope error memuat `{code, message, requestId}` dan dapat memuat `fieldErrors`. Peta respons untuk client: `400` input tidak valid, `401` sesi/token, `403` role, `404` resource tidak dapat diakses/ada, `409` konflik versi/status/idempotensi, `413` file terlalu besar, `422` aturan domain atau saldo, `429` pembatasan request, dan `503` layanan/adapter gagal. Untuk `409`/`503`, baca ulang status sebelum retry; jangan tampilkan keberhasilan yang belum tersimpan.
 
+## Baca katalog produk FE-25
+
+Adapter read-only `CatalogReadRepository` memanggil `GET /v1/products` dan `GET /v1/products/{id}`. Pencarian memakai query backend `name`, `category`, `species`, `minPrice`, `maxPrice`, `cursor`, dan `limit`; harga minimum/maksimum dikirim sebagai integer rupiah. Response halaman berbentuk `{items, nextCursor, hasMore}` dengan produk `{id, name, category, species, description, unitPriceIdr, imageAttachmentId, active}`. Adapter memvalidasi UUID server, produk aktif, spesies domain, nullable attachment, struktur cursor, dan harga rupiah aman sebelum memetakan harga ke `CatalogProduct.unitPrice`/`currency: IDR`.
+
+Cursor adalah nilai opaque dari server: pertahankan persis `nextCursor` untuk request berikutnya dan hentikan saat `hasMore=false`. Jangan menghitung cursor, menyortir ulang, atau mengganti ID dengan kode tampilan. Akses katalog menggunakan bearer/session role server; jangan mengirim `ownerId`. Detail produk tidak dikenal/nonaktif menghasilkan 404 melalui error envelope.
+
+Farm/address (`GET /v1/me/farms`, `/v1/me/addresses`), livestock/patients (`GET /v1/livestock`, `/v1/patients`), dan Vet directory/slots (`GET /v1/vets`, `/v1/vets/{id}/slots`) saat ini mengembalikan array tanpa cursor. Response DTO eksplisit untuk daftar/detail tersebut belum tersedia pada OpenAPI aktif. Belum ada adapter mobile untuk route itu sampai kontrak response dapat divalidasi; jangan membuat pagination client atau menebak field raw database. Query tetap owner/assignment/verified scoped oleh server.
+
 ## Flow mobile A–D
 
 | Flow | Urutan request backend | Hasil yang dibaca mobile |

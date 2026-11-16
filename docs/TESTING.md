@@ -827,3 +827,15 @@ Mobile kini mengirim `POST /v1/auth/active-role`, memvalidasi response terhadap 
 | `git diff --check` | **Lulus** setelah update kode dan dokumen. |
 
 FE-25 tetap **Sedang dikerjakan**: API auth/payment adapters tersedia, sementara FE-03 auth UI tetap ditunda sesuai DEC-23. Wiring runtime menunggu cakupan repository API seluruh flow yang terkait dan perpindahan sumber data terkoordinasi; QA interaksi dan visual Android di dua perangkat tetap gate.
+
+## FE-25 lanjutan — adapter baca katalog produk (16 November 2026)
+
+Slice ini menambah port read-only `CatalogReadRepository` dan `HttpApiCatalogRepository` untuk `GET /v1/products` serta `GET /v1/products/{id}`. Fake HTTP fixtures seluruhnya fiktif; test source memeriksa filter route, ID server, cursor opaque, integer rupiah, DTO aktif, detail, error envelope, dan query/response invalid. `createApiAdapters` mengekspos repository, tetapi `App.tsx`/UI tetap memakai SQLite dan tidak ada request API runtime.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm run check` di `apps/mobile` | **Terhenti pada typecheck**: `sh: tsc: command not found` (exit 127). Lint dan domain tests tidak mulai; fixture adapter belum dijalankan oleh runner pada task ini. Dependency tidak dipasang dan skrip lain tidak dijalankan sesuai batas task. |
+| Farm/address, livestock/patients, Vet directory/slots | Adapter belum dibuat. Route BE-02/03/04 aktif mengembalikan array tanpa cursor dan belum mendeklarasikan response DTO yang cukup untuk memvalidasi mapping. Jangan menerapkan pagination client atau menebak raw response; lanjutkan setelah kontrak server siap. |
+| Integrasi dan QA | Tidak ada perubahan backend, runtime SQLite, UI, Figma MCP, emulator, perangkat, provider, secret, deployment, atau transaksi nyata. FE-25 end-to-end dan QA dua perangkat tetap gate. |
+
+FE-25 tetap **Sedang dikerjakan**. Catatan route dan cursor tersedia pada [handover API](MOBILE_API_HANDOVER.md). `git diff --check` **Lulus** setelah perubahan dokumen dan kode.
