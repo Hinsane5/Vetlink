@@ -863,3 +863,16 @@ Ditambahkan `FarmReadRepository`, `LivestockReadRepository`, dan `VetDirectoryRe
 | Runtime dan QA | Tidak ada wiring UI/SQLite, backend, Android build/emulator, Figma MCP, perangkat fisik, provider, secret, deployment, atau transaksi finansial nyata. Backend DTO/route BE-16 menjadi sumber kontrak; tes adapter memakai fixture HTTP fiktif lokal, bukan smoke API atau integrasi dua perangkat. |
 
 FE-25 tetap **Sedang dikerjakan**. Adapter hanya tersedia sebagai API port terpisah; perpindahan runtime menunggu repository API untuk flow terkait dan migrasi otoritas tulis yang terkoordinasi. QA Android/visual serta integrasi API end-to-end belum dilakukan.
+
+## FE-25 lanjutan — adapter tulis Farm/alamat dan ternak (17 November 2026)
+
+Slice ini menambahkan `FarmWriteRepository` dan `LivestockWriteRepository` beserta adapter HTTP BE-02/03. Write request dibentuk dari allowlist agar `ownerId`/`farmerId` tidak ikut terkirim; create ternak selalu membawa Farm UUID yang dipilih. Adapter memeriksa bounds, species/sex, koordinat pasangan dan range, decimal weight, safe `expectedVersion`, serta response DTO menggunakan parser yang juga dipakai adapter read. Error HTTP server 403/404/409/422 menjadi domain error dan request gagal tidak menghasilkan fallback/optimistic success. BE-02 tidak menyediakan DELETE Farm; delete address tersedia. `createApiAdapters` mengekspos adapter terpisah, sedangkan `App.tsx` tetap memakai SQLite.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm ci --no-audit --no-fund` di `apps/mobile` | **Lulus**, 762 paket dipasang. npm menampilkan peringatan deprecation untuk `uuid@7.0.3` dan `eslint@9.39.5`. |
+| `npm run check` di `apps/mobile` | **Lulus**: TypeScript typecheck, Expo lint, kompilasi `tsconfig.domain-tests.json`, dan 154/154 tes domain/repository (0 gagal). Enam tes write adapter baru memeriksa allowlist payload, multi-Farm, versi aman/konflik, bounds/enum/UUID/koordinat/decimal, response DTO, error envelope, dan kegagalan jaringan tanpa hasil lokal. |
+| `git diff --check` | **Lulus** setelah kode serta dokumentasi diperbarui. |
+| API runtime dan QA Android | Tes memakai fake HTTP lokal dan fixture fiktif; backend/OpenAPI smoke tidak dijalankan. Tidak ada wiring `App.tsx`, SQLite/API dual-write, build Android, emulator, Figma MCP, provider, secret, deployment, transaksi nyata, care-event, atau scope konsultasi. QA perangkat dua peran tetap gate integrasi. |
+
+FE-25 tetap **Sedang dikerjakan**. Adapter write mematuhi sesi server tetapi belum dipakai oleh layar; wiring flow menunggu perpindahan terkoordinasi ke satu sumber baca/tulis dan integrasi end-to-end.

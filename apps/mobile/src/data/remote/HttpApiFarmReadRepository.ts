@@ -12,31 +12,31 @@ export class HttpApiFarmReadRepository implements FarmReadRepository {
   async listFarms(): Promise<ApiFarmRecord[]> {
     const value = await this.api.request<unknown>('/v1/me/farms');
     if (!Array.isArray(value)) throw invalidResponse('Daftar peternakan server tidak sesuai kontrak.');
-    return value.map(parseFarm);
+    return value.map(parseApiFarmRecord);
   }
 
   async getFarmById(farmId: string): Promise<ApiFarmRecord> {
     if (!isUuid(farmId)) throw invalidQuery('ID peternakan server harus UUID.');
-    return parseFarm(await this.api.request<unknown>(`/v1/me/farms/${encodeURIComponent(farmId)}`));
+    return parseApiFarmRecord(await this.api.request<unknown>(`/v1/me/farms/${encodeURIComponent(farmId)}`));
   }
 
   async listAddresses(): Promise<ApiAddressRecord[]> {
     const value = await this.api.request<unknown>('/v1/me/addresses');
     if (!Array.isArray(value)) throw invalidResponse('Daftar alamat server tidak sesuai kontrak.');
-    return value.map(parseAddress);
+    return value.map(parseApiAddressRecord);
   }
 
   async getAddressById(addressId: string): Promise<ApiAddressRecord> {
     if (!isUuid(addressId)) throw invalidQuery('ID alamat server harus UUID.');
-    return parseAddress(await this.api.request<unknown>(`/v1/me/addresses/${encodeURIComponent(addressId)}`));
+    return parseApiAddressRecord(await this.api.request<unknown>(`/v1/me/addresses/${encodeURIComponent(addressId)}`));
   }
 }
 
-function parseFarm(value: unknown): ApiFarmRecord {
+export function parseApiFarmRecord(value: unknown): ApiFarmRecord {
   if (!isRecord(value)
     || !isUuid(value.id)
     || !isNonEmptyText(value.name, 120)
-    || !Array.isArray(value.species) || value.species.length === 0 || !value.species.every(isLivestockSpecies)
+    || !Array.isArray(value.species) || !value.species.every(isLivestockSpecies)
     || new Set(value.species).size !== value.species.length
     || !isNonEmptyText(value.timezone, 80)
     || !(value.location === null || isRecord(value.location))
@@ -58,7 +58,7 @@ function parseFarm(value: unknown): ApiFarmRecord {
   };
 }
 
-function parseAddress(value: unknown): ApiAddressRecord {
+export function parseApiAddressRecord(value: unknown): ApiAddressRecord {
   if (!isRecord(value)
     || !isUuid(value.id)
     || !isNonEmptyText(value.label, 80)
@@ -68,7 +68,8 @@ function parseAddress(value: unknown): ApiAddressRecord {
     || !isNonEmptyText(value.city, 120)
     || !isNonEmptyText(value.province, 120)
     || !isNonEmptyText(value.postalCode, 16)
-    || !isNullableCoordinate(value.latitude) || !isNullableCoordinate(value.longitude)
+    || !isNullableCoordinate(value.latitude, -90, 90) || !isNullableCoordinate(value.longitude, -180, 180)
+    || (value.latitude === null) !== (value.longitude === null)
     || !isUtcTimestamp(value.createdAt) || !isUtcTimestamp(value.updatedAt)
     || !isVersion(value.version)) {
     throw invalidResponse('Data alamat server tidak sesuai DTO BE-16.');
@@ -94,8 +95,11 @@ function isLivestockSpecies(value: unknown): value is LivestockSpecies {
   return typeof value === 'string' && (livestockSpecies as readonly string[]).includes(value);
 }
 
-function isNullableCoordinate(value: unknown): value is string | null {
-  return value === null || isDecimalString(value, COORDINATE_PATTERN);
+function isNullableCoordinate(value: unknown, minimum: number, maximum: number): value is string | null {
+  if (value === null) return true;
+  if (!isDecimalString(value, COORDINATE_PATTERN)) return false;
+  const coordinate = Number(value);
+  return Number.isFinite(coordinate) && coordinate >= minimum && coordinate <= maximum;
 }
 
 function isVersion(value: unknown): value is number {

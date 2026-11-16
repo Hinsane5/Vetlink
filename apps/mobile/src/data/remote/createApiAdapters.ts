@@ -7,7 +7,9 @@ import { ExpoServerSessionStore } from './ExpoServerSessionStore';
 import { HttpApiPaymentRepository } from './HttpApiPaymentRepository';
 import { HttpApiCatalogRepository } from './HttpApiCatalogRepository';
 import { HttpApiFarmReadRepository } from './HttpApiFarmReadRepository';
+import { HttpApiFarmWriteRepository } from './HttpApiFarmWriteRepository';
 import { HttpApiLivestockReadRepository } from './HttpApiLivestockReadRepository';
+import { HttpApiLivestockWriteRepository } from './HttpApiLivestockWriteRepository';
 import { HttpApiVetDirectoryReadRepository } from './HttpApiVetDirectoryReadRepository';
 
 /** Build API-only services from an explicitly configured development base URL. */
@@ -19,7 +21,9 @@ export function createApiAdapters(baseUrl: string) {
     payments: new ApiPaymentGateway(new HttpApiPaymentRepository(api), new ExpoApiPaymentOperationStore()),
     catalog: new HttpApiCatalogRepository(api),
     farms: new HttpApiFarmReadRepository(api),
+    farmWrites: new HttpApiFarmWriteRepository(api),
     livestock: new HttpApiLivestockReadRepository(api),
+    livestockWrites: new HttpApiLivestockWriteRepository(api),
     vets: new HttpApiVetDirectoryReadRepository(api),
   };
 }

@@ -36,7 +36,9 @@
     "src/application/ports/ApiPaymentRepository.ts",
     "src/application/ports/CatalogReadRepository.ts",
     "src/application/ports/FarmReadRepository.ts",
+    "src/application/ports/FarmWriteRepository.ts",
     "src/application/ports/LivestockReadRepository.ts",
+    "src/application/ports/LivestockWriteRepository.ts",
     "src/application/ports/VetDirectoryReadRepository.ts",
     "src/application/ports/ApiPaymentOperationStore.ts",
     "src/application/ports/ServerAuthRepository.ts",
@@ -70,7 +72,9 @@
     "src/data/remote/HttpApiCatalogRepository.ts",
     "src/data/remote/apiReadValidation.ts",
     "src/data/remote/HttpApiFarmReadRepository.ts",
+    "src/data/remote/HttpApiFarmWriteRepository.ts",
     "src/data/remote/HttpApiLivestockReadRepository.ts",
+    "src/data/remote/HttpApiLivestockWriteRepository.ts",
     "src/data/remote/HttpApiVetDirectoryReadRepository.ts"
   ]
 }

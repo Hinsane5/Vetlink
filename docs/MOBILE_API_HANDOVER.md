@@ -1,6 +1,6 @@
 # Handover kontrak API untuk mobile
 
-Status 16 November 2026: dokumen ini menyiapkan integrasi mobile ke backend lokal. Aplikasi mobile masih memakai SQLite dan belum mengirim request ke API. Gunakan OpenAPI aktif di `/openapi.json` dan [kontrak integrasi](API_CONTRACT.md) sebagai sumber detail route/schema; tidak ada URL produksi yang dipilih.
+Status 17 November 2026: dokumen ini menyiapkan integrasi mobile ke backend lokal. Port dan adapter API tersedia secara terpisah, tetapi runtime aplikasi masih memakai SQLite dan tidak mengirim request API dari layar. Gunakan OpenAPI aktif di `/openapi.json` dan [kontrak integrasi](API_CONTRACT.md) sebagai sumber detail route/schema; tidak ada URL produksi yang dipilih.
 
 ## Koneksi dan sesi
 
@@ -41,6 +41,14 @@ Farm/address, ternak/pasien, dan direktori/slot Dokter memiliki kontrak respons 
 Jangan mengurai atau membuat cursor sendiri: salin `nextCursor` persis, kirim hanya ke route/scope yang sama, dan berhenti saat `hasMore=false`. Cursor ternak terikat ke user + active role; cursor direktori terikat ke filter. `limit` default 20 dan maksimum 100. API tidak memberi snapshot lintas halaman, sehingga insert/delete yang terjadi selama pagination dapat mengubah isi daftar. Direktori mengembalikan `fees`, `minFeeIdr`, dan `maxFeeIdr` sebagai JSON integer IDR yang aman; detail Dokter memuat object tarif `rates` dan durasi layanan. `GET /v1/vets/{id}/slots` adalah array berisi hanya `startsAt` dan `endsAt` timestamp ISO-8601, bukan ID slot atau reservasi.
 
 Adapter memvalidasi UUID sebelum detail request dan memeriksa DTO response sebelum mengembalikan record: enum species/service, nullable decimal address/weight, timestamp UTC, versi dan batas durasi, tarif sebagai safe integer IDR, serta struktur halaman. Cursor opaque dibatasi 512 karakter dan diteruskan tanpa trim atau decode. Query direktori mengikuti batas DTO (`name`/`location` 120 karakter, tarif integer IDR aman, `limit` 1–100); rentang slot harus berupa tanggal valid berurutan dengan selisih maksimal 31 hari (32 tanggal inklusif), sesuai aturan server. Respons detail dokter tetap bersifat discoverable/verified karena route server yang menyaringnya; aksi layanan tetap wajib melewati guard server.
+
+## Write Farm/alamat dan ternak FE-25
+
+`FarmWriteRepository`/`HttpApiFarmWriteRepository` mengirim `POST /v1/me/farms`, `PATCH /v1/me/farms/{id}`, `POST /v1/me/addresses`, `PATCH /v1/me/addresses/{id}`, dan `DELETE /v1/me/addresses/{id}`. BE-02 belum memiliki DELETE Farm. Farm memakai UUID `visitAddressId` opsional dan daftar spesies domain opsional (maksimal seluruh enum, tanpa duplikat; daftar kosong berarti tidak membatasi spesies); nama dibatasi 120 karakter, timezone 80 karakter, dan object `location` dibatasi 64 KiB pada adapter. PATCH Farm menyertakan `expectedVersion` positive safe integer.
+
+Address POST/PATCH mengirim field alamat dengan batas BE-02; PATCH menyertakan `expectedVersion`. Latitude/longitude dikirim sebagai JSON number, harus dikirim berpasangan, berada dalam rentang −90…90/−180…180 dan maksimal enam desimal. Read DTO mengembalikan string decimal PostgreSQL; parser memeriksa format, rentang, serta pasangan null. DELETE menunggu `{ "deleted": true }` sebelum resolve.
+
+`LivestockWriteRepository`/`HttpApiLivestockWriteRepository` mengirim `POST /v1/livestock` dan `PATCH /v1/livestock/{id}`. Create mewajibkan `farmId` UUID karena satu Peternak dapat memiliki banyak Farm; tidak ada `ownerId` atau `farmerId` di request. Bearer session memberi actor, sedangkan active-role, membership, kepemilikan Farm, kecocokan species, dan akses pasien diperiksa server. `displayCode` maksimal 32 karakter, nama 120, ras 80, species/sex memakai enum domain, umur 0–1200 bulan, dan tanggal memakai format `YYYY-MM-DD`; tanggal lahir dan estimasi umur tidak dikirim bersama. `weightKg` adalah JSON number maksimal dua desimal dan dibatasi sesuai `numeric(8,2)`, sedangkan response tetap decimal string. PATCH mewajibkan `expectedVersion` safe integer dan minimal satu field perubahan. Adapter memvalidasi DTO hasil POST/PATCH dengan parser yang sama seperti read adapter dan meneruskan envelope HTTP 403/404/409/422 sebagai error domain; error tidak membuat hasil lokal. Route DELETE ternak dan care-event tidak termasuk slice adapter ini.
 
 ## Flow mobile A–D
 

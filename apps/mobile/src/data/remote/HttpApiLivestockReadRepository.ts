@@ -5,6 +5,7 @@ import { ApiClient } from './ApiClient';
 import { invalidQuery, invalidResponse, isCalendarDate, isDecimalString, isNonEmptyText, isRecord, isUtcTimestamp, isUuid, parseReadPage, validateOpaqueCursor, validatePageLimit } from './apiReadValidation';
 
 const WEIGHT_PATTERN = /^\d+(?:\.\d{1,2})?$/;
+const MAX_WEIGHT_KG = 999999.99;
 
 /** Read-only adapter; ownership and patient assignment are enforced by the API session. */
 export class HttpApiLivestockReadRepository implements LivestockReadRepository {
@@ -18,16 +19,16 @@ export class HttpApiLivestockReadRepository implements LivestockReadRepository {
     if (query.limit !== undefined) params.set('limit', String(query.limit));
     const serialized = params.toString();
     const value = await this.api.request<unknown>(`/v1/livestock/page${serialized ? `?${serialized}` : ''}`);
-    return parseReadPage(value, parseLivestock, 'ternak');
+    return parseReadPage(value, parseApiLivestockRecord, 'ternak');
   }
 
   async getById(livestockId: string): Promise<ApiLivestockRecord> {
     if (!isUuid(livestockId)) throw invalidQuery('ID ternak server harus UUID.');
-    return parseLivestock(await this.api.request<unknown>(`/v1/livestock/${encodeURIComponent(livestockId)}`));
+    return parseApiLivestockRecord(await this.api.request<unknown>(`/v1/livestock/${encodeURIComponent(livestockId)}`));
   }
 }
 
-function parseLivestock(value: unknown): ApiLivestockRecord {
+export function parseApiLivestockRecord(value: unknown): ApiLivestockRecord {
   if (!isRecord(value)
     || !isUuid(value.id) || !isUuid(value.farmerId) || !isUuid(value.farmId)
     || !isNonEmptyText(value.displayCode, 32)
@@ -37,7 +38,7 @@ function parseLivestock(value: unknown): ApiLivestockRecord {
     || !isLivestockSex(value.sex)
     || !(value.birthDate === null || isCalendarDate(value.birthDate))
     || !(value.estimatedAgeMonths === null || (Number.isSafeInteger(value.estimatedAgeMonths) && Number(value.estimatedAgeMonths) >= 0 && Number(value.estimatedAgeMonths) <= 1200))
-    || !(value.weightKg === null || isDecimalString(value.weightKg, WEIGHT_PATTERN))
+    || !(value.weightKg === null || isWeightDecimal(value.weightKg))
     || !isUtcTimestamp(value.createdAt) || !isUtcTimestamp(value.updatedAt)
     || !isVersion(value.version)) {
     throw invalidResponse('Data ternak server tidak sesuai DTO BE-16.');
@@ -58,6 +59,10 @@ function parseLivestock(value: unknown): ApiLivestockRecord {
     updatedAt: value.updatedAt,
     version: value.version,
   };
+}
+
+function isWeightDecimal(value: unknown): value is string {
+  return isDecimalString(value, WEIGHT_PATTERN) && Number(value) <= MAX_WEIGHT_KG;
 }
 
 function isLivestockSpecies(value: unknown): value is LivestockSpecies {

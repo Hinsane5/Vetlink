@@ -8,7 +8,9 @@ import { ApiClient, normalizeApiBaseUrl } from '../.test-build/src/data/remote/A
 import { HttpServerAuthRepository } from '../.test-build/src/data/remote/ApiAuthRepository.js';
 import { HttpApiCatalogRepository } from '../.test-build/src/data/remote/HttpApiCatalogRepository.js';
 import { HttpApiFarmReadRepository } from '../.test-build/src/data/remote/HttpApiFarmReadRepository.js';
+import { HttpApiFarmWriteRepository } from '../.test-build/src/data/remote/HttpApiFarmWriteRepository.js';
 import { HttpApiLivestockReadRepository } from '../.test-build/src/data/remote/HttpApiLivestockReadRepository.js';
+import { HttpApiLivestockWriteRepository } from '../.test-build/src/data/remote/HttpApiLivestockWriteRepository.js';
 import { HttpApiPaymentRepository } from '../.test-build/src/data/remote/HttpApiPaymentRepository.js';
 import { HttpApiVetDirectoryReadRepository } from '../.test-build/src/data/remote/HttpApiVetDirectoryReadRepository.js';
 
@@ -448,6 +450,233 @@ test('Farm and address adapters reject invalid UUIDs, decimal strings, and times
   const invalidRepository = new HttpApiFarmReadRepository(invalidApi);
   await assert.rejects(invalidRepository.listFarms(), { code: 'API_RESPONSE_INVALID' });
   await assert.rejects(invalidRepository.listAddresses(), { code: 'API_RESPONSE_INVALID' });
+});
+
+test('BE-02 farm and address writes use allowlisted payloads and validate server DTOs', async () => {
+  const farmId = '33333333-3333-4333-8333-333333333333';
+  const addressId = '44444444-4444-4444-8444-444444444444';
+  const requests = [];
+  const api = new ApiClient('http://localhost:3000', new MemoryServerSessionStore(tokenSet()), async (url, init) => {
+    requests.push({ url, init });
+    if (init.method === 'POST' && url.endsWith('/v1/me/farms')) {
+      const body = JSON.parse(init.body);
+      return response(201, { ...farmReadFixture(farmId), name: body.name, species: body.species ?? [] });
+    }
+    if (init.method === 'PATCH' && url.endsWith(`/v1/me/farms/${farmId}`)) {
+      return response(200, { ...farmReadFixture(farmId), name: 'Farm Kedua', version: 2 });
+    }
+    if (init.method === 'POST' && url.endsWith('/v1/me/addresses')) return response(201, addressReadFixture(addressId));
+    if (init.method === 'PATCH' && url.endsWith(`/v1/me/addresses/${addressId}`)) {
+      return response(200, { ...addressReadFixture(addressId), version: 3 });
+    }
+    if (init.method === 'DELETE' && url.endsWith(`/v1/me/addresses/${addressId}`)) return response(200, { deleted: true });
+    throw new Error(`Unexpected route: ${init.method} ${url}`);
+  });
+  const repository = new HttpApiFarmWriteRepository(api);
+
+  const createdFarm = await repository.createFarm({
+    name: 'Farm Pertama', species: ['cattle', 'goat'], timezone: 'Asia/Jakarta', visitAddressId: addressId,
+    ownerId: 'must-not-be-sent',
+  });
+  const emptySpeciesFarm = await repository.createFarm({ name: 'Farm tanpa pembatas spesies' });
+  const updatedFarm = await repository.updateFarm(farmId, { name: 'Farm Kedua', expectedVersion: 1, ownerId: 'must-not-be-sent' });
+  const createdAddress = await repository.createAddress({
+    label: 'Kandang Utama', recipientName: 'Peternak Fiktif', phone: '+628123456789',
+    addressLine: 'Jalan Fiktif Nomor 1', city: 'Bogor', province: 'Jawa Barat', postalCode: '16111',
+    latitude: -6.123456, longitude: 106.123456, ownerId: 'must-not-be-sent',
+  });
+  const updatedAddress = await repository.updateAddress(addressId, {
+    label: 'Kandang Cadangan', recipientName: 'Peternak Fiktif', phone: '+628123456789',
+    addressLine: 'Jalan Fiktif Nomor 2', city: 'Bogor', province: 'Jawa Barat', postalCode: '16111',
+    latitude: -6.123456, longitude: 106.123456, expectedVersion: 2, ownerId: 'must-not-be-sent',
+  });
+  await repository.deleteAddress(addressId);
+
+  assert.equal(createdFarm.id, farmId);
+  assert.deepEqual(emptySpeciesFarm.species, [], 'BE-02 permits an empty species list to mean unrestricted');
+  assert.equal(updatedFarm.version, 2);
+  assert.equal(createdAddress.latitude, '-6.123456', 'read DTO keeps PostgreSQL coordinates as decimal strings');
+  assert.equal(updatedAddress.version, 3);
+  assert.deepEqual(requests.map(({ init }) => init.method), ['POST', 'POST', 'PATCH', 'POST', 'PATCH', 'DELETE']);
+  const firstFarmBody = JSON.parse(requests[0].init.body);
+  assert.deepEqual(firstFarmBody, {
+    name: 'Farm Pertama', species: ['cattle', 'goat'], timezone: 'Asia/Jakarta', visitAddressId: addressId,
+  });
+  assert.deepEqual(JSON.parse(requests[1].init.body), { name: 'Farm tanpa pembatas spesies' });
+  assert.deepEqual(JSON.parse(requests[2].init.body), { name: 'Farm Kedua', expectedVersion: 1 });
+  assert.equal(JSON.parse(requests[3].init.body).latitude, -6.123456);
+  assert.equal(JSON.parse(requests[4].init.body).expectedVersion, 2);
+  for (const request of requests) {
+    assert.equal(request.init.headers.Authorization, 'Bearer access-token-1');
+    assert.equal(Object.hasOwn(JSON.parse(request.init.body ?? '{}'), 'ownerId'), false);
+  }
+});
+
+test('BE-02 rejects invalid IDs, species, coordinates, bounds, and unsafe versions before HTTP', async () => {
+  let calls = 0;
+  const api = new ApiClient('http://localhost:3000', new MemoryServerSessionStore(tokenSet()), async () => {
+    calls += 1;
+    return response(200, farmReadFixture('55555555-5555-4555-8555-555555555555'));
+  });
+  const repository = new HttpApiFarmWriteRepository(api);
+  const address = {
+    label: 'Kandang', recipientName: 'Peternak', phone: '12345', addressLine: 'Jalan Contoh',
+    city: 'Bogor', province: 'Jawa Barat', postalCode: '16111',
+  };
+
+  await assert.rejects(repository.updateFarm('local-farm', { name: 'Valid', expectedVersion: 1 }), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.updateAddress('local-address', { ...address, expectedVersion: 1 }), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.createFarm({ name: 'Farm', species: ['bad-species'] }), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.createFarm({ name: 'x'.repeat(121) }), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.updateFarm('55555555-5555-4555-8555-555555555555', { expectedVersion: Number.MAX_SAFE_INTEGER + 1, name: 'Farm' }), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.createAddress({ ...address, latitude: -6.1 }), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.createAddress({ ...address, latitude: -91, longitude: 106 }), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.createAddress({ ...address, latitude: -6.1234567, longitude: 106.123456 }), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.updateFarm('55555555-5555-4555-8555-555555555555', { expectedVersion: 1 }), { code: 'VALIDATION_FAILED' });
+  assert.equal(calls, 0);
+});
+
+test('BE-02 rejects malformed write DTOs and malformed address deletion results', async () => {
+  let calls = 0;
+  const farmId = '55555555-5555-4555-8555-555555555555';
+  const addressId = '66666666-6666-4666-8666-666666666666';
+  const api = new ApiClient('http://localhost:3000', new MemoryServerSessionStore(tokenSet()), async (url, init) => {
+    calls += 1;
+    if (init.method === 'POST' && url.endsWith('/v1/me/farms')) {
+      return response(201, { ...farmReadFixture(farmId), species: ['unknown'] });
+    }
+    if (init.method === 'POST' && url.endsWith('/v1/me/addresses')) {
+      return response(201, { ...addressReadFixture(addressId), latitude: '91' });
+    }
+    if (init.method === 'DELETE') return response(200, { deleted: false });
+    throw new Error(`Unexpected route: ${init.method} ${url}`);
+  });
+  const repository = new HttpApiFarmWriteRepository(api);
+  const address = {
+    label: 'Kandang', recipientName: 'Peternak', phone: '12345', addressLine: 'Jalan Contoh',
+    city: 'Bogor', province: 'Jawa Barat', postalCode: '16111',
+  };
+
+  await assert.rejects(repository.createFarm({ name: 'Farm valid' }), { code: 'API_RESPONSE_INVALID' });
+  await assert.rejects(repository.createAddress(address), { code: 'API_RESPONSE_INVALID' });
+  await assert.rejects(repository.deleteAddress(addressId), { code: 'API_RESPONSE_INVALID' });
+  assert.equal(calls, 3);
+});
+
+test('BE-03 creates livestock for explicit farms, patches with a safe version, and sends no owner identity', async () => {
+  const farmOneId = '11111111-1111-4111-8111-111111111111';
+  const farmTwoId = '22222222-2222-4222-8222-222222222222';
+  const livestockId = '77777777-7777-4777-8777-777777777777';
+  const requests = [];
+  const api = new ApiClient('http://localhost:3000', new MemoryServerSessionStore(tokenSet()), async (url, init) => {
+    const body = init.body ? JSON.parse(init.body) : null;
+    requests.push({ url, init, body });
+    if (init.method === 'POST') {
+      const farmId = body.farmId;
+      return response(201, { ...livestockReadFixture(livestockId, '1234.50'), farmId, birthDate: null, estimatedAgeMonths: 0 });
+    }
+    if (init.method === 'PATCH') return response(200, { ...livestockReadFixture(livestockId, '1235.00'), version: 2, name: 'Sapi Fiktif Revisi' });
+    throw new Error(`Unexpected route: ${init.method} ${url}`);
+  });
+  const repository = new HttpApiLivestockWriteRepository(api);
+
+  const first = await repository.create({
+    farmId: farmOneId, displayCode: ' sapi-01 ', name: ' Sapi Fiktif ', species: 'cattle', sex: 'female',
+    estimatedAgeMonths: 0, weightKg: 1234.5, ownerId: 'must-not-be-sent', farmerId: 'must-not-be-sent',
+  });
+  const second = await repository.create({
+    farmId: farmTwoId, displayCode: 'sapi-01', name: 'Sapi Fiktif', species: 'cattle', sex: 'female', weightKg: 1234.5,
+  });
+  const updated = await repository.update(livestockId, { expectedVersion: 1, name: 'Sapi Fiktif Revisi', ownerId: 'must-not-be-sent' });
+
+  assert.equal(first.farmId, farmOneId);
+  assert.equal(second.farmId, farmTwoId, 'the same farmer may create records under a second Farm');
+  assert.equal(first.weightKg, '1234.50', 'decimal response precision is preserved');
+  assert.equal(updated.version, 2);
+  assert.deepEqual(requests.map(({ init }) => init.method), ['POST', 'POST', 'PATCH']);
+  assert.deepEqual(requests[0].body, {
+    farmId: farmOneId, displayCode: ' sapi-01 ', name: ' Sapi Fiktif ', species: 'cattle', sex: 'female',
+    estimatedAgeMonths: 0, weightKg: 1234.5,
+  });
+  assert.equal(requests[1].body.farmId, farmTwoId);
+  assert.deepEqual(requests[2].body, { expectedVersion: 1, name: 'Sapi Fiktif Revisi' });
+  for (const request of requests) {
+    assert.equal(request.init.headers.Authorization, 'Bearer access-token-1');
+    assert.equal(Object.hasOwn(request.body, 'ownerId'), false);
+    assert.equal(Object.hasOwn(request.body, 'farmerId'), false);
+  }
+});
+
+test('BE-03 rejects invalid livestock request bounds and malformed write response DTOs', async () => {
+  let calls = 0;
+  const validId = '88888888-8888-4888-8888-888888888888';
+  const api = new ApiClient('http://localhost:3000', new MemoryServerSessionStore(tokenSet()), async () => {
+    calls += 1;
+    return response(201, livestockReadFixture(validId, '1000000.00'));
+  });
+  const repository = new HttpApiLivestockWriteRepository(api);
+  const base = {
+    farmId: '99999999-9999-4999-8999-999999999999', displayCode: 'ID-1', name: 'Ternak Fiktif',
+    species: 'cattle', sex: 'unknown',
+  };
+
+  await assert.rejects(repository.create({ ...base, farmId: 'local-farm' }), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.create({ ...base, species: 'not-real' }), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.create({ ...base, sex: 'other' }), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.create({ ...base, name: 'x'.repeat(121) }), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.create({ ...base, birthDate: '2025-02-30' }), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.create({ ...base, birthDate: '2025-02-01', estimatedAgeMonths: 1 }), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.create({ ...base, weightKg: 1.234 }), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.create({ ...base, weightKg: 1000000 }), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.update('local-livestock', { expectedVersion: 1, name: 'Nama' }), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.update(validId, { expectedVersion: Number.MAX_SAFE_INTEGER + 1, name: 'Nama' }), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.update(validId, { expectedVersion: 1 }), { code: 'VALIDATION_FAILED' });
+  assert.equal(calls, 0);
+
+  await assert.rejects(repository.create(base), { code: 'API_RESPONSE_INVALID' });
+  assert.equal(calls, 1, 'an invalid server DTO is rejected without a local success result');
+});
+
+test('Farm and livestock mutations preserve server 403/404/409/422 envelopes as domain errors', async () => {
+  const cases = [
+    [403, 'FORBIDDEN'],
+    [404, 'NOT_FOUND'],
+    [409, 'VERSION_CONFLICT'],
+    [422, 'INVALID_STATE'],
+  ];
+  for (const [status, code] of cases) {
+    let calls = 0;
+    const api = new ApiClient('http://localhost:3000', new MemoryServerSessionStore(tokenSet()), async () => {
+      calls += 1;
+      return response(status, {
+        code: status === 403 ? 'FORBIDDEN' : status === 404 ? 'RESOURCE_NOT_FOUND' : status === 409 ? 'VERSION_CONFLICT' : 'RULE_VIOLATION',
+        message: `Server menolak perubahan ${status}.`,
+        fieldErrors: status === 422 ? { name: ['Tidak sesuai aturan.'] } : {},
+        requestId: `req-write-${status}`,
+      });
+    });
+    const repository = new HttpApiLivestockWriteRepository(api);
+    await assert.rejects(repository.update('88888888-8888-4888-8888-888888888888', { expectedVersion: 7, name: 'Nama Fiktif' }), (error) => {
+      assert.ok(error instanceof DomainError);
+      assert.equal(error.code, code);
+      assert.equal(error.message, `Server menolak perubahan ${status}.`);
+      return true;
+    });
+    assert.equal(calls, 1, 'the adapter does not retry a rejected mutation or return local success');
+  }
+
+  let calls = 0;
+  const offlineApi = new ApiClient('http://localhost:3000', new MemoryServerSessionStore(tokenSet()), async () => {
+    calls += 1;
+    throw new Error('connection lost');
+  });
+  await assert.rejects(
+    new HttpApiLivestockWriteRepository(offlineApi).create({
+      farmId: '11111111-1111-4111-8111-111111111111', displayCode: 'ID-1', name: 'Ternak Fiktif', species: 'cattle', sex: 'unknown',
+    }),
+    { code: 'SERVICE_UNAVAILABLE' },
+  );
+  assert.equal(calls, 1, 'network failure cannot return an optimistic local result or trigger an automatic retry');
 });
 
 test('livestock page and detail preserve opaque cursor and decimal weight strings', async () => {
