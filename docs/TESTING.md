@@ -1,6 +1,6 @@
 # Strategi pengujian VetLink
 
-Status QA per 20 Oktober 2026: tahap aktif memakai frontend lokal tanpa autentikasi/backend jaringan; Pilih Peran membuka persona fiktif. Implementasi FE-23 tersedia dan `npm run check` lulus typecheck, lint, serta 126 tes domain/repository. Pemeriksaan ini belum mencakup build atau interaksi Android; QA FE-23 tertunda pada perangkat fisik. Backend BE-00–08, BE-10–12, dan BE-15 memiliki route executable; BE-09 dan BE-13/14 belum mulai, BE-16/17 tetap menunggu, dan mobile belum terhubung ke API. Pemeriksaan Android terdahulu bukan bukti integrasi backend. Interaksi fitur pada perangkat, viewport kecil/font besar, dan pembandingan visual 390 × 844 tetap tertunda; tidak ada pemanggilan Figma MCP baru.
+Status QA per 16 November 2026: frontend masih memakai data lokal persisten tanpa integrasi API dan FE-03 autentikasi tetap ditunda. BE-00–12 dan BE-15 kini memiliki route executable; BE-09 lulus migrasi, seed, dan smoke domain pada PostgreSQL 17 lokal terisolasi. BE-13/14 belum mulai, BE-16/17 menunggu. APK Android preview sudah dibangun dan dipasang lewat USB pada 20 Oktober, tetapi QA interaksi/visual pada perangkat, ukuran kecil, serta font besar belum terbukti. Tidak ada pemanggilan Figma MCP baru.
 
 ## Level pengujian
 
@@ -78,6 +78,16 @@ Pemeriksaan dijalankan dari `apps/api` dengan Node `24.10.0` / npm `11.6.0`; `.n
 - `npm run db:seed` — **Lulus**; destination payout fiktif termasking dan fixture lain tersedia melalui seed non-destruktif.
 - `npm run api:smoke` — **Lulus**. Smoke memeriksa earning dibuat sekali setelah konsultasi completed dan pembayaran succeeded (gross Rp400.000 − komisi snapshot Rp17.501 = net Rp382.499); earning pending tidak masuk available dan settlement pending tidak memberi kredit. Settlement succeeded memindahkan saldo sekali meskipun diulang. Withdrawal Rp200.000 mengunci saldo reserved; dua pengajuan Rp100.000 bersamaan menghasilkan satu sukses dan satu penolakan, sehingga saldo tidak overspend. Kegagalan pengajuan melepas reservasi satu kali; pending adapter mempertahankan reservasi; payout paid tidak mendebit available lagi; payout gagal melepas reservasi sekali. Smoke juga memeriksa akses pemilik/role, detail dan cursor, key/payload idempotency, serta saldo nol.
 - Suite smoke menjalankan fixture fiktif dan melakukan cleanup. Tidak ada script `npm test` atau lint terpisah pada manifest; tidak ada UI/Android test, provider payout produksi, secret, transaksi finansial nyata, callback payout publik, atau deployment.
+
+## Bukti BE-09 (16 November 2026)
+
+Pemeriksaan dijalankan dari `apps/api` dengan PostgreSQL 17 lokal terisolasi pada port 55432, tanpa Docker, provider eksternal, atau data produksi. Database uji dibuat baru dengan fixture fiktif; role uji diberi hak superuser hanya untuk teardown smoke yang memakai `session_replication_role`. Node `24.10.0` masih di bawah permintaan `.nvmrc` `24.15.0`.
+
+- `npm run check` — **Lulus**: typecheck dan `nest build`.
+- `npm run db:migrate` — **Lulus**: 16 migrasi, termasuk `20261020_000016_care_coordination.sql`.
+- `npm run db:seed` — **Lulus**: fixture akun, tujuan pencairan termasking, dan katalog fiktif.
+- `npm run api:smoke` — **Lulus** pada database uji bersih: scope owner/role, reservasi slot follow-up, kepemilikan laporan, kegagalan lalu retry delivery reminder, pemisahan pengiriman dari care completion, tepat satu HealthEvent, actor/recipient notifikasi, serta skenario domain BE-03–08/10–12/15. Smoke juga memeriksa health live/ready, OpenAPI/auth, rate limit, dan respons 503.
+- Dua kesalahan ditemukan dan diperbaiki selama pemeriksaan: alias SQL akses follow-up `f.f.farmer_id`, serta ekspektasi jumlah HealthEvent lama yang belum menghitung care event BE-09. Percobaan smoke sebelum perbaikan gagal; hasil lulus di atas memakai build dan database uji setelah perbaikan.
 
 ## Bukti BE-03 (19 Oktober 2026)
 

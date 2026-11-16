@@ -136,6 +136,7 @@ const healthy = await startServer(await availablePort(), {
   MEDIA_IMAGE_MAX_BYTES: String(10 * 1024 * 1024),
   MEDIA_VIDEO_MAX_BYTES: String(50 * 1024 * 1024),
   CHAT_DELIVERY_TEST_FAIL_FIRST_ATTEMPT: 'true',
+  REMINDER_DELIVERY_TEST_FAIL_FIRST_ATTEMPT: 'true',
 });
 try {
   const liveResponse = await fetch(`${healthy.baseUrl}/v1/health/live`);
@@ -205,6 +206,15 @@ try {
   assert.ok(openApi.paths['/v1/consultations/{consultationId}/schedule-proposals/{proposalId}/respond']?.post);
   assert.ok(openApi.paths['/v1/consultations/{consultationId}/visit/depart']?.post);
   assert.ok(openApi.paths['/v1/consultations/{consultationId}/complete']?.post);
+  assert.ok(openApi.paths['/v1/consultations/{consultationId}/follow-ups']?.get);
+  assert.ok(openApi.paths['/v1/consultations/{consultationId}/follow-ups']?.post);
+  assert.ok(openApi.paths['/v1/follow-ups/{followUpId}']?.patch);
+  assert.ok(openApi.paths['/v1/follow-ups/{followUpId}/progress-reports']?.get);
+  assert.ok(openApi.paths['/v1/follow-ups/{followUpId}/progress-reports']?.post);
+  assert.ok(openApi.paths['/v1/reminders']?.get);
+  assert.ok(openApi.paths['/v1/reminders']?.post);
+  assert.ok(openApi.paths['/v1/reminders/{reminderId}']?.patch);
+  assert.ok(openApi.paths['/v1/reminders/{reminderId}/complete']?.post);
   assert.ok(openApi.paths['/v1/attachments/uploads']?.post);
   assert.ok(openApi.paths['/v1/attachments/{id}/commit']?.post);
   assert.ok(openApi.paths['/v1/attachments/{id}/content']?.get);
@@ -1151,6 +1161,147 @@ try {
       assert.equal((await database.query('SELECT status FROM consultations WHERE id=$1', [consultationId])).rows[0].status, 'in_progress');
       assert.equal((await sendJson(healthy.baseUrl, notePath, farmer.accessToken, 'GET')).status, 200);
       assert.equal((await sendJson(healthy.baseUrl, notePath, vet.accessToken, 'PUT', { expectedVersion: 3, assessment: 'Tidak dapat mengubah final' })).status, 409);
+
+      const followUpsPath = `/v1/consultations/${consultationId}/follow-ups`;
+      const invalidFollowUp = await sendJson(healthy.baseUrl, followUpsPath, vet.accessToken, 'POST', {
+        startsAt: new Date(`${localDate}T18:00:00+07:00`).toISOString(),
+        endsAt: new Date(`${localDate}T22:30:00+07:00`).toISOString(), reason: 'Jadwal pemeriksaan ulang fiktif',
+      }, { 'idempotency-key': `be09-invalid-${randomUUID()}` });
+      assert.equal(invalidFollowUp.status, 422);
+      assert.equal((await sendJson(healthy.baseUrl, followUpsPath, farmer.accessToken, 'POST', {
+        startsAt: new Date(`${localDate}T18:00:00+07:00`).toISOString(),
+        endsAt: new Date(`${localDate}T18:30:00+07:00`).toISOString(), reason: 'Pemeriksaan ulang fiktif',
+      }, { 'idempotency-key': `be09-role-${randomUUID()}` })).status, 403);
+      const followUpStart = new Date(`${localDate}T18:00:00+07:00`).toISOString();
+      const followUpEnd = new Date(`${localDate}T18:30:00+07:00`).toISOString();
+      const followUpBody = { startsAt: followUpStart, endsAt: followUpEnd, reason: 'Pemeriksaan ulang ternak fiktif.' };
+      const followUpKey = `be09-follow-${randomUUID()}`;
+      const followUpResponse = await sendJson(healthy.baseUrl, followUpsPath, vet.accessToken, 'POST', followUpBody, { 'idempotency-key': followUpKey });
+      assert.equal(followUpResponse.status, 201, await followUpResponse.clone().text());
+      const followUp = await followUpResponse.json();
+      assert.equal(followUp.status, 'scheduled');
+      assert.equal(followUp.kind, 'recheck');
+      assert.equal(followUp.timezone, 'Asia/Jakarta');
+      const followUpReplay = await sendJson(healthy.baseUrl, followUpsPath, vet.accessToken, 'POST', followUpBody, { 'idempotency-key': followUpKey });
+      assert.equal(followUpReplay.status, 201);
+      assert.equal((await followUpReplay.json()).id, followUp.id);
+      assert.equal((await sendJson(healthy.baseUrl, followUpsPath, vet.accessToken, 'POST', {
+        ...followUpBody, reason: 'Isi jadwal berbeda.',
+      }, { 'idempotency-key': followUpKey })).status, 409);
+      const overlappingFollowUp = await sendJson(healthy.baseUrl, followUpsPath, vet.accessToken, 'POST', {
+        startsAt: new Date(`${localDate}T18:15:00+07:00`).toISOString(),
+        endsAt: new Date(`${localDate}T18:45:00+07:00`).toISOString(), reason: 'Jadwal bertumpuk fiktif',
+      }, { 'idempotency-key': `be09-overlap-${randomUUID()}` });
+      assert.equal(overlappingFollowUp.status, 409);
+      assert.equal((await sendJson(healthy.baseUrl, followUpsPath, outsider.accessToken, 'GET')).status, 404);
+      const followUpPage = await sendJson(healthy.baseUrl, followUpsPath, vet.accessToken, 'GET');
+      assert.ok((await followUpPage.json()).items.some((item) => item.id === followUp.id));
+      const slotsAfterFollowUp = await (await sendJson(healthy.baseUrl,
+        `/v1/vets/${vet.user.id}/slots?dateFrom=${localDate}&dateTo=${localDate}&service=chat`, farmer.accessToken, 'GET')).json();
+      assert.ok(!slotsAfterFollowUp.some((slot) => new Date(slot.startsAt).toISOString() === followUpStart));
+      const followUpScheduleFrom = new Date(`${localDate}T00:00:00+07:00`).toISOString();
+      const followUpScheduleTo = new Date(`${localDate}T23:59:00+07:00`).toISOString();
+      const vetScheduleWithFollowUp = await (await sendJson(healthy.baseUrl,
+        `/v1/me/vet/schedule?from=${encodeURIComponent(followUpScheduleFrom)}&to=${encodeURIComponent(followUpScheduleTo)}`, vet.accessToken, 'GET')).json();
+      assert.ok(vetScheduleWithFollowUp.followUps.some((item) => item.id === followUp.id));
+      const collidingBlockedTime = await sendJson(healthy.baseUrl, '/v1/me/vet/blocked-times', vet.accessToken, 'POST', {
+        startsAt: new Date(`${localDate}T18:15:00+07:00`).toISOString(),
+        endsAt: new Date(`${localDate}T18:45:00+07:00`).toISOString(), reason: 'Blokir konflik follow-up fiktif',
+      });
+      assert.equal(collidingBlockedTime.status, 409);
+
+      const progressReportPath = `/v1/follow-ups/${followUp.id}/progress-reports`;
+      const reportKey = `be09-report-${randomUUID()}`;
+      const reportBody = { text: 'Perkembangan ternak fiktif sudah dicatat.' };
+      const reportResponse = await sendJson(healthy.baseUrl, progressReportPath, farmer.accessToken, 'POST', reportBody, { 'idempotency-key': reportKey });
+      assert.equal(reportResponse.status, 201, await reportResponse.clone().text());
+      const report = await reportResponse.json();
+      assert.equal(report.farmerId, farmer.user.id);
+      assert.equal(report.vetId, vet.user.id);
+      assert.equal(report.viewedAt, null);
+      const reportReplay = await sendJson(healthy.baseUrl, progressReportPath, farmer.accessToken, 'POST', reportBody, { 'idempotency-key': reportKey });
+      assert.equal((await reportReplay.json()).id, report.id);
+      assert.equal((await sendJson(healthy.baseUrl, progressReportPath, farmer.accessToken, 'POST', {
+        text: 'Laporan yang berbeda.',
+      }, { 'idempotency-key': reportKey })).status, 409);
+      assert.equal((await sendJson(healthy.baseUrl, progressReportPath, vet.accessToken, 'POST', reportBody, { 'idempotency-key': `be09-vet-report-${randomUUID()}` })).status, 403);
+      assert.equal((await sendJson(healthy.baseUrl, progressReportPath, outsider.accessToken, 'GET')).status, 404);
+      const farmerReports = await (await sendJson(healthy.baseUrl, progressReportPath, farmer.accessToken, 'GET')).json();
+      assert.equal(farmerReports.items.find((item) => item.id === report.id).viewedAt, null);
+      const vetReports = await (await sendJson(healthy.baseUrl, progressReportPath, vet.accessToken, 'GET')).json();
+      assert.ok(vetReports.items.find((item) => item.id === report.id).viewedAt);
+      assert.equal((await database.query('SELECT status FROM follow_ups WHERE id=$1', [followUp.id])).rows[0].status, 'scheduled');
+
+      const reminderDueAt = new Date(Date.now() + 3 * 24 * 60 * 60_000).toISOString();
+      const reminderBody = {
+        consultationId, followUpId: followUp.id, kind: 'care', dueAt: reminderDueAt,
+        instructions: 'Perawatan kandang fiktif tanpa dosis obat.',
+      };
+      const reminderKey = `be09-reminder-${randomUUID()}`;
+      const reminderResponse = await sendJson(healthy.baseUrl, '/v1/reminders', vet.accessToken, 'POST', reminderBody, { 'idempotency-key': reminderKey });
+      assert.equal(reminderResponse.status, 201, await reminderResponse.clone().text());
+      const reminderOperation = await reminderResponse.json();
+      let reminder = reminderOperation;
+      assert.equal(reminder.kind, 'care');
+      assert.equal(reminder.careStatus, 'scheduled');
+      assert.equal(reminder.deliveryStatus, 'failed');
+      assert.equal(reminder.deliveryOutcome.status, 'failed');
+      const reminderReplay = await sendJson(healthy.baseUrl, '/v1/reminders', vet.accessToken, 'POST', reminderBody, { 'idempotency-key': reminderKey });
+      assert.equal((await reminderReplay.json()).id, reminder.id);
+      assert.equal((await sendJson(healthy.baseUrl, '/v1/reminders', vet.accessToken, 'POST', {
+        ...reminderBody, instructions: 'Isi reminder berbeda.',
+      }, { 'idempotency-key': reminderKey })).status, 409);
+      const reminderRead = await sendJson(healthy.baseUrl, '/v1/reminders', farmer.accessToken, 'GET');
+      assert.ok((await reminderRead.json()).items.some((item) => item.id === reminder.id));
+      const wrongOwnerCompletion = await sendJson(healthy.baseUrl, `/v1/reminders/${reminder.id}/complete`, outsider.accessToken, 'POST',
+        { confirmation: true }, { 'idempotency-key': `be09-outsider-care-${randomUUID()}` });
+      assert.equal(wrongOwnerCompletion.status, 404);
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/reminders/${reminder.id}/complete`, vet.accessToken, 'POST',
+        { confirmation: true }, { 'idempotency-key': `be09-vet-care-${randomUUID()}` })).status, 403);
+      const retryDeliveryKey = `be09-delivery-retry-${randomUUID()}`;
+      const deliveryRetry = await sendJson(healthy.baseUrl, `/v1/reminders/${reminder.id}`, vet.accessToken, 'PATCH',
+        { action: 'retry_delivery' }, { 'idempotency-key': retryDeliveryKey });
+      assert.equal(deliveryRetry.status, 200, await deliveryRetry.clone().text());
+      reminder = await deliveryRetry.json();
+      assert.equal(reminder.deliveryStatus, 'sent');
+      assert.equal(reminder.careStatus, 'scheduled');
+      assert.equal(reminder.deliveryAttempt, 2);
+      assert.equal(reminder.deliveryOutcome.status, 'succeeded');
+      const deliveryReplay = await sendJson(healthy.baseUrl, `/v1/reminders/${reminder.id}`, vet.accessToken, 'PATCH',
+        { action: 'retry_delivery' }, { 'idempotency-key': retryDeliveryKey });
+      assert.equal((await deliveryReplay.json()).deliveryAttempt, 2);
+      const unconfirmedCare = await sendJson(healthy.baseUrl, `/v1/reminders/${reminder.id}/complete`, farmer.accessToken, 'POST',
+        { confirmation: false }, { 'idempotency-key': `be09-care-unconfirmed-${randomUUID()}` });
+      assert.equal(unconfirmedCare.status, 422);
+      const careCompleteKey = `be09-care-${randomUUID()}`;
+      const careCompletedResponse = await sendJson(healthy.baseUrl, `/v1/reminders/${reminder.id}/complete`, farmer.accessToken, 'POST',
+        { confirmation: true }, { 'idempotency-key': careCompleteKey });
+      assert.equal(careCompletedResponse.status, 200, await careCompletedResponse.clone().text());
+      const careCompleted = await careCompletedResponse.json();
+      assert.equal(careCompleted.reminder.careStatus, 'done');
+      assert.equal(careCompleted.reminder.deliveryStatus, 'sent');
+      const careReplay = await sendJson(healthy.baseUrl, `/v1/reminders/${reminder.id}/complete`, farmer.accessToken, 'POST',
+        { confirmation: true }, { 'idempotency-key': careCompleteKey });
+      assert.equal((await careReplay.json()).healthEventId, careCompleted.healthEventId);
+      assert.equal((await database.query("SELECT count(*)::int AS count FROM health_events WHERE provenance='reminder' AND source_key=$1", [`reminder:${reminder.id}`])).rows[0].count, 1);
+      const careTimeline = await sendJson(healthy.baseUrl, `/v1/livestock/${animalId}/health-events`, farmer.accessToken, 'GET');
+      assert.equal(careTimeline.status, 200);
+      assert.equal((await careTimeline.json()).filter((event) => event.description === reminderBody.instructions).length, 1);
+      assert.equal((await database.query('SELECT status FROM follow_ups WHERE id=$1', [followUp.id])).rows[0].status, 'scheduled');
+      for (const [eventId, actorId, recipientId, type] of [
+        [`follow-up-scheduled:${followUp.id}`, vet.user.id, farmer.user.id, 'follow_up_scheduled'],
+        [`progress-report-submitted:${report.id}`, farmer.user.id, vet.user.id, 'progress_report_submitted'],
+        [`reminder-created:${reminder.id}`, vet.user.id, farmer.user.id, 'reminder_created'],
+        [`care-completed:${reminder.id}`, farmer.user.id, vet.user.id, 'care_completed'],
+      ]) {
+        const notification = await database.query('SELECT actor_id,recipient_id,type FROM notifications WHERE event_id=$1', [eventId]);
+        assert.deepEqual(notification.rows[0], { actor_id: actorId, recipient_id: recipientId, type });
+      }
+      const cancelFollowUp = await sendJson(healthy.baseUrl, `/v1/follow-ups/${followUp.id}`, farmer.accessToken, 'PATCH',
+        { action: 'cancel', expectedVersion: followUp.version }, { 'idempotency-key': `be09-cancel-${randomUUID()}` });
+      assert.equal(cancelFollowUp.status, 200, await cancelFollowUp.clone().text());
+      assert.equal((await cancelFollowUp.json()).status, 'cancelled');
+
       const recommendationPath = `/v1/consultations/${consultationId}/recommendation`;
       const emptyRecommendation = await sendJson(healthy.baseUrl, `${recommendationPath}/send`, vet.accessToken, 'POST', { expectedVersion: 1 });
       assert.equal(emptyRecommendation.status, 422);
@@ -1187,11 +1338,11 @@ try {
       assert.equal((await sendJson(healthy.baseUrl, '/v1/orders', vet.accessToken, 'GET')).status, 403);
       const hiddenDraftTimeline = await sendJson(healthy.baseUrl, `/v1/livestock/${animalId}/health-events`, farmer.accessToken, 'GET');
       assert.equal(hiddenDraftTimeline.status, 200);
-      assert.equal((await hiddenDraftTimeline.json()).length, 2);
+      assert.equal((await hiddenDraftTimeline.json()).length, 3);
       const finalTimeline = await sendJson(healthy.baseUrl, `/v1/livestock/${animalId}/health-events`, vet.accessToken, 'GET');
       assert.equal(finalTimeline.status, 200);
       const finalEvents = await finalTimeline.json();
-      assert.equal(finalEvents.length, 2);
+      assert.equal(finalEvents.length, 3);
       assert.ok(finalEvents.some((event) => event.description === 'Penilaian fiktif akhir'));
       assert.ok(finalEvents.every((event) => !('attachments' in event)));
 
@@ -1330,7 +1481,7 @@ try {
       assert.equal(completeChat.status, 200, await completeChat.clone().text());
       assert.equal((await completeChat.json()).consultation.status, 'completed');
 
-      console.log('BE-03/04/05/06/07/08/10/11/12/15 smoke: owner/role scope; catalog, commerce and shipment; verified access, visit/completion; earning net/settlement/idempotency; withdrawal reserve/race/payout/failure/destination; chat/media lulus.');
+      console.log('BE-03/04/05/06/07/08/09/10/11/12/15 smoke: owner/role scope; follow-up slot reservation, report ownership, reminder delivery/care completion, one HealthEvent and notification actor/recipient; catalog, commerce/shipment, earnings/withdrawals, chat/media lulus.');
     } finally {
       if (failedStorageServer) await stopServer(failedStorageServer.child);
       // Smoke teardown is a fixture reset; it must remove immutable final-note rows
@@ -1357,6 +1508,13 @@ try {
         await database.query("DELETE FROM payments WHERE payable_type='order' AND payable_id = ANY($1::uuid[])", [allOrderIds]);
         await database.query('DELETE FROM recommendation_items WHERE recommendation_id IN (SELECT id FROM recommendations WHERE consultation_id = ANY($1::uuid[]))', [allConsultationIds]);
         await database.query('DELETE FROM recommendations WHERE consultation_id = ANY($1::uuid[])', [allConsultationIds]);
+        await database.query('DELETE FROM progress_report_attachments WHERE report_id IN (SELECT id FROM progress_reports WHERE consultation_id = ANY($1::uuid[]))', [allConsultationIds]);
+        await database.query('DELETE FROM care_coordination_operations WHERE actor_id = ANY($1::uuid[])', [actors]);
+        await database.query('DELETE FROM reminder_delivery_attempts WHERE reminder_id IN (SELECT id FROM reminders WHERE farmer_id = ANY($1::uuid[]))', [actors]);
+        await database.query('DELETE FROM progress_reports WHERE consultation_id = ANY($1::uuid[])', [allConsultationIds]);
+        await database.query('DELETE FROM notifications WHERE actor_id = ANY($1::uuid[]) OR recipient_id = ANY($1::uuid[])', [actors]);
+        await database.query('DELETE FROM reminders WHERE farmer_id = ANY($1::uuid[])', [actors]);
+        await database.query('DELETE FROM follow_ups WHERE consultation_id = ANY($1::uuid[])', [allConsultationIds]);
         await database.query('DELETE FROM message_attachments WHERE consultation_id = ANY($1::uuid[])', [allConsultationIds]);
         await database.query('DELETE FROM consultation_messages WHERE consultation_id = ANY($1::uuid[])', [allConsultationIds]);
         await database.query('DELETE FROM attachments WHERE consultation_id = ANY($1::uuid[])', [allConsultationIds]);
