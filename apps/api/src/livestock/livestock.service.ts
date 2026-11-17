@@ -37,6 +37,8 @@ interface PatientProjectionRow {
   ownerName: string;
   lastServiceAt: Date | string;
   serviceCount: number;
+  latestServiceType: 'chat' | 'visit';
+  latestServiceStatus: string;
 }
 
 interface LivestockCursor {
@@ -128,11 +130,23 @@ export class LivestockService {
   async patients(p: AuthenticatedPrincipal) {
     this.requireVet(p);
     const result = await this.db.query<PatientProjectionRow>(`SELECT l.id,l.display_code AS "displayCode",l.name,l.species,l.breed,l.sex,l.birth_date AS "birthDate",l.estimated_age_months AS "estimatedAgeMonths",l.weight_kg AS "weightKg",l.farm_id AS "farmId",l.farmer_id AS "farmerId",u.full_name AS "ownerName",
-      MAX(COALESCE(c.completion_at,c.starts_at,c.updated_at)) AS "lastServiceAt",COUNT(c.id)::int AS "serviceCount"
+      MAX(COALESCE(c.completion_at,c.starts_at,c.updated_at)) AS "lastServiceAt",COUNT(c.id)::int AS "serviceCount",
+      latest.service_type AS "latestServiceType",latest.service_status AS "latestServiceStatus"
       FROM livestock l JOIN consultations c ON c.animal_id=l.id AND c.farmer_id=l.farmer_id
       JOIN users u ON u.id=l.farmer_id
+      JOIN LATERAL (
+        SELECT c2.service_type,
+          CASE WHEN c2.status='scheduled' AND v2.stage IN ('en_route','arrived','examining')
+            THEN v2.stage::text ELSE c2.status::text END AS service_status
+        FROM consultations c2 LEFT JOIN consultation_visits v2 ON v2.consultation_id=c2.id
+        WHERE c2.animal_id=l.id AND c2.farmer_id=l.farmer_id AND c2.vet_id=$1
+          AND c2.status NOT IN ('draft','awaiting_payment')
+        ORDER BY CASE WHEN c2.status='in_progress' OR v2.stage IN ('en_route','arrived','examining') THEN 3
+          WHEN c2.status IN ('requested','scheduled') THEN 2 ELSE 1 END DESC,
+          c2.starts_at DESC,c2.id ASC LIMIT 1
+      ) latest ON true
       WHERE c.vet_id=$1 AND c.status NOT IN ('draft','awaiting_payment')
-      GROUP BY l.id,u.id ORDER BY l.name,l.id`,[p.userId]);
+      GROUP BY l.id,u.id,latest.service_type,latest.service_status ORDER BY l.name,l.id`,[p.userId]);
     return result.rows.map((row) => ({
       ...row,
       lastServiceAt: row.lastServiceAt instanceof Date ? row.lastServiceAt.toISOString() : new Date(row.lastServiceAt).toISOString(),

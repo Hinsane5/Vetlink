@@ -893,7 +893,7 @@ test('BE-03 care write preserves server doctor denial without fabricating a resu
   assert.equal(calls, 1);
 });
 
-test('BE-16 patients adapter parses assigned patient metrics without inventing absent UI fields', async () => {
+test('BE-16 patients adapter parses assigned patient metrics and latest service without inventing photo', async () => {
   const patient = apiPatientFixture('cccccccc-cccc-4ccc-8ccc-cccccccccccc');
   const requests = [];
   const api = new ApiClient('http://localhost:3000', new MemoryServerSessionStore({ ...tokenSet(), activeRole: 'vet' }), async (url, init) => {
@@ -908,7 +908,8 @@ test('BE-16 patients adapter parses assigned patient metrics without inventing a
   assert.equal(patients[0].weightKg, '850.50');
   assert.equal(patients[0].ownerName, 'Peternak Fiktif');
   assert.equal(patients[0].serviceCount, 2);
-  assert.equal(Object.hasOwn(patients[0], 'latestServiceType'), false);
+  assert.equal(patients[0].latestServiceType, 'visit');
+  assert.equal(patients[0].latestServiceStatus, 'arrived');
   assert.equal(Object.hasOwn(patients[0], 'photo'), false);
   assert.equal(requests[0].url, 'http://localhost:3000/v1/patients');
   assert.equal(requests[0].init.method, 'GET');
@@ -943,6 +944,7 @@ test('BE-03 health, care, and patient adapters reject malformed actual service p
   for (const invalid of [
     { ownerName: '' }, { lastServiceAt: '2026-11-17T10:15:00' },
     { serviceCount: 0 }, { serviceCount: 1.5 },
+    { latestServiceType: 'unknown' }, { latestServiceStatus: 'awaiting_payment' },
   ]) {
     const api = new ApiClient('http://localhost:3000', new MemoryServerSessionStore(tokenSet()), async () => response(200, [
       { ...apiPatientFixture('abababab-abab-4bab-8bab-abababababab'), ...invalid },
@@ -1089,6 +1091,7 @@ function apiPatientFixture(id) {
     birthDate: '2024-03-01', estimatedAgeMonths: 32, weightKg: '850.50',
     farmId: 'abababab-abab-4bab-8bab-abababababab', farmerId: 'bcbcbcbc-bcbc-4bcb-8bcb-bcbcbcbcbcbc',
     ownerName: 'Peternak Fiktif', lastServiceAt: '2026-11-17T10:15:00.000Z', serviceCount: 2,
+    latestServiceType: 'visit', latestServiceStatus: 'arrived',
   };
 }
 

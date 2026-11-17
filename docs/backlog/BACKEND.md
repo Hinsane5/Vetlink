@@ -38,6 +38,8 @@ BE-05/06/08 diimplementasikan sebagai slice kontrak bertahap: schema consultatio
 
 BE-17 bukan izin deploy atau menjalankan transaksi uang nyata. Implementasi provider memerlukan keputusan komersial/refund/commission/retention yang belum disepakati. Tooling reviewer/catalog internal tetap terpisah dari fitur dokter mobile.
 
+Follow-up BE-16 pasien: `PatientResponseDto` kini menambahkan jenis/status layanan terkait yang terscope ke Dokter; kontrak 8/8 dan smoke PostgreSQL lokal terisolasi lulus. Foto privat, wiring mobile, dan QA fisik tetap gate. Bukti di [Testing](../TESTING.md#be-16fe-25-jenis-dan-status-layanan-pasien--17-november-2026).
+
 ## Kriteria integrasi lintas mobile/backend
 
 - OpenAPI v1 dan domain error menjadi kontrak; perubahan breaking dibahas dan dipetakan ke adapter mobile.

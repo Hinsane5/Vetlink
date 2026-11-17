@@ -15,6 +15,9 @@ export interface ApiPatientRecord {
   ownerName: string;
   lastServiceAt: string;
   serviceCount: number;
+  latestServiceType: 'chat' | 'visit';
+  latestServiceStatus: 'requested' | 'scheduled' | 'reschedule_pending' | 'in_progress'
+    | 'en_route' | 'arrived' | 'examining' | 'completed' | 'rejected' | 'cancelled';
 }
 
 /** The backend limits this list to the authenticated veterinarian's assigned patients. */

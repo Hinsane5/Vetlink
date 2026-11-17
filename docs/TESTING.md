@@ -947,3 +947,15 @@ Cluster smoke telah dihentikan. Direktori data sementara `/tmp/vetlink-be16-pati
 | `npm ci --no-audit --no-fund` di `apps/mobile` | **Lulus**, 762 paket dari lockfile; npm mencatat peringatan deprecation `uuid@7.0.3` dan `eslint@9.39.5`. |
 | `npm run check` setelah instalasi | **Lulus**: typecheck, Expo lint, kompilasi tes domain, 169/169 tes (0 gagal). |
 | Batas QA | Tes memakai fake HTTP; tidak ada API runtime, Android/perangkat, emulator, Figma MCP, provider, deployment, atau transaksi nyata pada slice ini. |
+
+## BE-16/FE-25 jenis dan status layanan pasien — 17 November 2026
+
+`GET /v1/patients` kini menambah `latestServiceType` dan `latestServiceStatus` dari konsultasi yang ditugaskan kepada Dokter pada bearer. Query mengecualikan `draft`/`awaiting_payment`, memprioritaskan layanan berjalan dan terjadwal, lalu mengambil tahap kunjungan yang tersimpan bila status konsultasi masih `scheduled`. Adapter mobile memvalidasi kedua enum dan tidak membuat status lokal. Foto privat tetap belum termasuk respons; `App.tsx` tetap memakai SQLite.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm run check` di `apps/mobile` | **Lulus**: typecheck, Expo lint, 169/169 tes domain/adapter. Tes pasien memeriksa jenis/status yang benar dan menolak enum tak dikenal atau `awaiting_payment`. |
+| `npm ci --no-audit --no-fund` di `apps/api` | **Lulus**, 253 paket; peringatan engine karena Node 24.10.0 di bawah minimum 24.15.0. |
+| `npm run check` dan `npm run api:contract` di `apps/api` | **Lulus**: typecheck, Nest build, kontrak OpenAPI 8/8. |
+| `npm run db:migrate`, `npm run db:seed`, `npm run api:smoke` di `apps/api` | **Lulus** pada database uji baru `vetlink_patient_status_local` di PostgreSQL 17 lokal loopback port 55432; 18 migrasi dan fixture fiktif. Smoke dijalankan dua kali; run kedua menegaskan konsultasi draft/menunggu pembayaran tidak mengganti status request pasien yang terlihat. Cluster dihentikan setelahnya; database uji tidak dipakai runtime. |
+| QA perangkat dan integrasi | Belum dijalankan: Android fisik, wiring API mobile, dua perangkat, foto/media privat, emulator, Figma MCP, provider, deployment, dan transaksi nyata. |

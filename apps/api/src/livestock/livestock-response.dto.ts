@@ -19,6 +19,8 @@ export class PatientResponseDto {
   @ApiProperty({ maxLength: 120, description: 'Nama tampilan pemilik; tidak menyertakan email atau kontak.' }) ownerName!: string;
   @ApiProperty({ type: String, format: 'date-time', description: 'Waktu terbaru dari konsultasi Dokter yang ditugaskan.' }) lastServiceAt!: string;
   @ApiProperty({ type: 'integer', minimum: 1, description: 'Jumlah konsultasi Dokter yang ditugaskan selain draft dan awaiting_payment.' }) serviceCount!: number;
+  @ApiProperty({ enum: ['chat', 'visit'], description: 'Jenis layanan terkait yang diprioritaskan untuk label pasien.' }) latestServiceType!: 'chat' | 'visit';
+  @ApiProperty({ enum: ['requested', 'scheduled', 'reschedule_pending', 'in_progress', 'en_route', 'arrived', 'examining', 'completed', 'rejected', 'cancelled'], description: 'Status konsultasi atau tahap kunjungan terkait yang diprioritaskan.' }) latestServiceStatus!: string;
 }
 
 /** Public timeline projection; drafts and private actor/note metadata are excluded. */

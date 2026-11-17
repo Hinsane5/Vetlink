@@ -317,7 +317,7 @@ test('BE-16 patient and health event responses describe the runtime projections'
   };
 
   const patients = arrayItem('/v1/patients', 'get', '200', 'PatientResponseDto');
-  const patientFields = ['id', 'displayCode', 'name', 'species', 'breed', 'sex', 'birthDate', 'estimatedAgeMonths', 'weightKg', 'farmId', 'farmerId', 'ownerName', 'lastServiceAt', 'serviceCount'];
+  const patientFields = ['id', 'displayCode', 'name', 'species', 'breed', 'sex', 'birthDate', 'estimatedAgeMonths', 'weightKg', 'farmId', 'farmerId', 'ownerName', 'lastServiceAt', 'serviceCount', 'latestServiceType', 'latestServiceStatus'];
   assert.deepEqual(Object.keys(patients.properties).sort(), [...patientFields].sort());
   assert.deepEqual([...patients.required].sort(), [...patientFields].sort());
   assert.equal(patients.properties.id.format, 'uuid');
@@ -329,6 +329,9 @@ test('BE-16 patient and health event responses describe the runtime projections'
   assert.equal(patients.properties.lastServiceAt.format, 'date-time');
   assert.equal(patients.properties.serviceCount.type, 'integer');
   assert.equal(patients.properties.serviceCount.minimum, 1);
+  assert.deepEqual(patients.properties.latestServiceType.enum, ['chat', 'visit']);
+  assert.ok(patients.properties.latestServiceStatus.enum.includes('arrived'));
+  assert.ok(patients.properties.latestServiceStatus.enum.includes('completed'));
   assert.equal(patients.properties.email, undefined);
   assert.equal(patients.properties.phone, undefined);
   assert.ok(paths['/v1/patients'].get.responses['200'].description.includes('draft dan awaiting_payment'));

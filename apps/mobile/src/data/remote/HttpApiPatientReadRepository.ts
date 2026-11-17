@@ -5,6 +5,8 @@ import { invalidResponse, isCalendarDate, isIsoTimestampWithTimezone, isNonEmpty
 
 const WEIGHT_PATTERN = /^\d+(?:\.\d{1,2})?$/;
 const MAX_WEIGHT_KG = 999999.99;
+const SERVICE_TYPES = ['chat', 'visit'] as const;
+const SERVICE_STATUSES = ['requested', 'scheduled', 'reschedule_pending', 'in_progress', 'en_route', 'arrived', 'examining', 'completed', 'rejected', 'cancelled'] as const;
 
 /** Parses the assigned-patient array documented by PatientResponseDto BE-16. */
 export class HttpApiPatientReadRepository implements PatientReadRepository {
@@ -32,7 +34,9 @@ function parseApiPatientRecord(value: unknown): ApiPatientRecord {
     || !isNonEmptyText(value.ownerName, 120)
     || !isIsoTimestampWithTimezone(value.lastServiceAt)
     || typeof value.serviceCount !== 'number'
-    || !Number.isSafeInteger(value.serviceCount) || value.serviceCount < 1) {
+    || !Number.isSafeInteger(value.serviceCount) || value.serviceCount < 1
+    || typeof value.latestServiceType !== 'string' || !(SERVICE_TYPES as readonly string[]).includes(value.latestServiceType)
+    || typeof value.latestServiceStatus !== 'string' || !(SERVICE_STATUSES as readonly string[]).includes(value.latestServiceStatus)) {
     throw invalidResponse('Row pasien server tidak sesuai PatientResponseDto BE-16.');
   }
   return {
@@ -50,6 +54,8 @@ function parseApiPatientRecord(value: unknown): ApiPatientRecord {
     ownerName: value.ownerName,
     lastServiceAt: value.lastServiceAt,
     serviceCount: value.serviceCount,
+    latestServiceType: value.latestServiceType as ApiPatientRecord['latestServiceType'],
+    latestServiceStatus: value.latestServiceStatus as ApiPatientRecord['latestServiceStatus'],
   };
 }
 

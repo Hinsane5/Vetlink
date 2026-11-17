@@ -1431,11 +1431,16 @@ try {
       assert.equal(vetPatientList.status, 200);
       const vetPatients = await vetPatientList.json();
       assert.deepEqual(vetPatients.map((item) => item.id).sort(), [animalId, createdAnimal.id].sort());
-      const expectedPatientFields = ['id', 'displayCode', 'name', 'species', 'breed', 'sex', 'birthDate', 'estimatedAgeMonths', 'weightKg', 'farmId', 'farmerId', 'ownerName', 'lastServiceAt', 'serviceCount'].sort();
+      const expectedPatientFields = ['id', 'displayCode', 'name', 'species', 'breed', 'sex', 'birthDate', 'estimatedAgeMonths', 'weightKg', 'farmId', 'farmerId', 'ownerName', 'lastServiceAt', 'serviceCount', 'latestServiceType', 'latestServiceStatus'].sort();
       assert.ok(vetPatients.every((item) => JSON.stringify(Object.keys(item).sort()) === JSON.stringify(expectedPatientFields)));
       assert.ok(vetPatients.every((item) => item.ownerName === 'Peternak Fiktif BE-07'));
       assert.ok(vetPatients.every((item) => Number.isInteger(item.serviceCount) && item.serviceCount > 0));
       assert.ok(vetPatients.every((item) => Number.isFinite(Date.parse(item.lastServiceAt))));
+      assert.ok(vetPatients.every((item) => ['chat', 'visit'].includes(item.latestServiceType)));
+      assert.ok(vetPatients.every((item) => ['requested', 'scheduled', 'reschedule_pending', 'in_progress', 'en_route', 'arrived', 'examining', 'completed', 'rejected', 'cancelled'].includes(item.latestServiceStatus)));
+      const newlyAssignedPatient = vetPatients.find((item) => item.id === createdAnimal.id);
+      assert.equal(newlyAssignedPatient.latestServiceType, 'chat');
+      assert.equal(newlyAssignedPatient.latestServiceStatus, 'requested', 'Draft and awaiting-payment consultations must not replace the visible service.');
       assert.ok(vetPatients.every((item) => item.weightKg === null || typeof item.weightKg === 'string'));
       const expectedPatientFacts = await database.query(`SELECT animal_id,COUNT(*)::int AS service_count,
         MAX(COALESCE(completion_at,starts_at,updated_at)) AS last_service_at
