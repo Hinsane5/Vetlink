@@ -990,4 +990,15 @@ Adapter baru membaca row availability BE-04 yang memakai snake_case untuk kolom 
 | `npm run check` di `apps/mobile` | **Lulus**: typecheck, Expo lint tanpa warning proyek, kompilasi tes domain, dan 180/180 tes. Node masih memberi `ExperimentalWarning` SQLite. |
 | Lima tes baru | Fake HTTP memeriksa GET availability/kalender/blok, PUT allowlist dan versi, POST/PUT/DELETE blok, status hasil tersimpan, tarif dan rentang invalid, serta satu upaya saja saat POST tidak pasti. Tidak menghubungi API/PostgreSQL runtime. |
 | Integrasi dan QA | Adapter hanya diekspos factory; UI tetap SQLite. Perangkat fisik, Android build/emulator, Figma MCP, deployment, provider produksi, secret, dan transaksi nyata tidak digunakan. FE-25 dan QA Android/visual masih gate. |
+
+## FE-25 lanjutan — catatan klinis dan rekomendasi API BE-08 (17 November 2026)
+
+Adapter note/rekomendasi memvalidasi consultation UUID, versi, field draft dan item recommendation, lalu membaca respons BE-08 yang memakai draft sintetis atau row PostgreSQL snake_case. Final note tidak diubah menjadi status selesai. Hasil send recommendation tidak memiliki item; adapter menandai `items: null` agar caller GET ulang. Semua write menunggu hasil server, tanpa status sukses lokal ketika transport belum pasti.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm run typecheck` di `apps/mobile` | **Lulus** setelah port/adapter dibuat. |
+| `npm run check` di `apps/mobile` | **Lulus**: typecheck, Expo lint tanpa warning proyek, kompilasi tes domain, 183/183 tes. Node masih memberi `ExperimentalWarning` SQLite. |
+| Tiga tes baru | Fake HTTP memeriksa GET/PUT/POST note dan recommendation, draft sintetis, row final, payload allowlist, item tanpa ID pada save, item tidak tersedia pada send, validasi versi/bounds, respons invalid, dan satu upaya pada transport gagal. Tidak menghubungi backend runtime. |
+| Integrasi dan QA | Adapter hanya diekspos factory; UI tetap SQLite. Perangkat fisik, Android build/emulator, Figma MCP, deployment, provider produksi, secret, dan transaksi nyata tidak digunakan. FE-25 dan QA Android/visual masih gate. |
 | QA perangkat dan integrasi | Belum dijalankan: Android fisik, wiring API mobile, dua perangkat, foto/media privat, emulator, Figma MCP, provider, deployment, dan transaksi nyata. |
