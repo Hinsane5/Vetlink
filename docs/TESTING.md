@@ -936,3 +936,14 @@ BE-16 menambahkan `PatientResponseDto`, `LivestockHealthEventResponseDto`, dan `
 | Integrasi mobile dan cakupan tersisa | `PatientSnapshot` belum sepenuhnya tercakup: `latestServiceType`, `latestServiceStatus`, dan photo tidak ditambahkan. Adapter API tetap terpisah, `App.tsx` tetap memakai SQLite; tidak ada UI, Android/emulator, Figma MCP, provider/secret, deployment, atau transaksi finansial nyata pada slice ini. |
 
 Cluster smoke telah dihentikan. Direktori data sementara `/tmp/vetlink-be16-patient-contract.dBra6g` masih tersimpan di host dan tidak dipakai sebagai runtime.
+
+## FE-25 sinkronisasi adapter pasien BE-16 — 17 November 2026
+
+`HttpApiPatientReadRepository` kini mensyaratkan dan meneruskan `ownerName`, `lastServiceAt`, dan `serviceCount` dari `PatientResponseDto`. Tes fake HTTP memastikan ketiga nilai dipertahankan serta menolak nama kosong, timestamp tanpa zona, jumlah nol/pecahan, dan berat yang bukan decimal string. Adapter tetap belum dipasang ke UI: respons belum menyediakan jenis/status layanan terbaru dan foto yang dipakai `PatientSnapshot`.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm run check` percobaan pertama di `apps/mobile` | **Berhenti** sebelum typecheck: `tsc: command not found` karena dependensi checkout utama belum terpasang. |
+| `npm ci --no-audit --no-fund` di `apps/mobile` | **Lulus**, 762 paket dari lockfile; npm mencatat peringatan deprecation `uuid@7.0.3` dan `eslint@9.39.5`. |
+| `npm run check` setelah instalasi | **Lulus**: typecheck, Expo lint, kompilasi tes domain, 169/169 tes (0 gagal). |
+| Batas QA | Tes memakai fake HTTP; tidak ada API runtime, Android/perangkat, emulator, Figma MCP, provider, deployment, atau transaksi nyata pada slice ini. |

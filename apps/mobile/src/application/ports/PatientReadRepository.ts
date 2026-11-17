@@ -1,4 +1,4 @@
-/** Exact compact row returned by the BE-03 patients service query. */
+/** PatientResponseDto returned by the BE-16 assigned-patient projection. */
 export interface ApiPatientRecord {
   id: string;
   displayCode: string;
@@ -12,6 +12,9 @@ export interface ApiPatientRecord {
   weightKg: string | null;
   farmId: string;
   farmerId: string;
+  ownerName: string;
+  lastServiceAt: string;
+  serviceCount: number;
 }
 
 /** The backend limits this list to the authenticated veterinarian's assigned patients. */

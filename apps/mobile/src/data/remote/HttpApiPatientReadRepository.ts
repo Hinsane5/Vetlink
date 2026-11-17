@@ -1,12 +1,12 @@
 import type { ApiPatientRecord, PatientReadRepository } from '../../application/ports/PatientReadRepository';
 import { livestockSexes } from '../../domain/livestock';
 import { ApiClient } from './ApiClient';
-import { invalidResponse, isCalendarDate, isNonEmptyText, isRecord, isUuid } from './apiReadValidation';
+import { invalidResponse, isCalendarDate, isIsoTimestampWithTimezone, isNonEmptyText, isRecord, isUuid } from './apiReadValidation';
 
 const WEIGHT_PATTERN = /^\d+(?:\.\d{1,2})?$/;
 const MAX_WEIGHT_KG = 999999.99;
 
-/** Parses the compact raw-array projection returned by LivestockService.patients. */
+/** Parses the assigned-patient array documented by PatientResponseDto BE-16. */
 export class HttpApiPatientReadRepository implements PatientReadRepository {
   constructor(private readonly api: ApiClient) {}
 
@@ -28,8 +28,12 @@ function parseApiPatientRecord(value: unknown): ApiPatientRecord {
     || !(value.birthDate === null || isCalendarDate(value.birthDate))
     || !(value.estimatedAgeMonths === null
       || (Number.isSafeInteger(value.estimatedAgeMonths) && Number(value.estimatedAgeMonths) >= 0 && Number(value.estimatedAgeMonths) <= 1200))
-    || !(value.weightKg === null || isWeightDecimal(value.weightKg))) {
-    throw invalidResponse('Row pasien server tidak sesuai proyeksi aktual BE-03.');
+    || !(value.weightKg === null || isWeightDecimal(value.weightKg))
+    || !isNonEmptyText(value.ownerName, 120)
+    || !isIsoTimestampWithTimezone(value.lastServiceAt)
+    || typeof value.serviceCount !== 'number'
+    || !Number.isSafeInteger(value.serviceCount) || value.serviceCount < 1) {
+    throw invalidResponse('Row pasien server tidak sesuai PatientResponseDto BE-16.');
   }
   return {
     id: value.id,
@@ -43,6 +47,9 @@ function parseApiPatientRecord(value: unknown): ApiPatientRecord {
     weightKg: value.weightKg as string | null,
     farmId: value.farmId,
     farmerId: value.farmerId,
+    ownerName: value.ownerName,
+    lastServiceAt: value.lastServiceAt,
+    serviceCount: value.serviceCount,
   };
 }
 

@@ -893,7 +893,7 @@ test('BE-03 care write preserves server doctor denial without fabricating a resu
   assert.equal(calls, 1);
 });
 
-test('BE-03 patients adapter parses the actual compact service array without inventing UI metrics', async () => {
+test('BE-16 patients adapter parses assigned patient metrics without inventing absent UI fields', async () => {
   const patient = apiPatientFixture('cccccccc-cccc-4ccc-8ccc-cccccccccccc');
   const requests = [];
   const api = new ApiClient('http://localhost:3000', new MemoryServerSessionStore({ ...tokenSet(), activeRole: 'vet' }), async (url, init) => {
@@ -906,8 +906,10 @@ test('BE-03 patients adapter parses the actual compact service array without inv
 
   assert.deepEqual(patients, [patient]);
   assert.equal(patients[0].weightKg, '850.50');
-  assert.equal(Object.hasOwn(patients[0], 'ownerName'), false);
-  assert.equal(Object.hasOwn(patients[0], 'serviceCount'), false);
+  assert.equal(patients[0].ownerName, 'Peternak Fiktif');
+  assert.equal(patients[0].serviceCount, 2);
+  assert.equal(Object.hasOwn(patients[0], 'latestServiceType'), false);
+  assert.equal(Object.hasOwn(patients[0], 'photo'), false);
   assert.equal(requests[0].url, 'http://localhost:3000/v1/patients');
   assert.equal(requests[0].init.method, 'GET');
   assert.equal(requests[0].init.headers.Authorization, `Bearer ${'access-token-1'}`);
@@ -937,6 +939,16 @@ test('BE-03 health, care, and patient adapters reject malformed actual service p
   const invalidPatient = { ...apiPatientFixture('abababab-abab-4bab-8bab-abababababab'), weightKg: 850.5 };
   const patientApi = new ApiClient('http://localhost:3000', new MemoryServerSessionStore(tokenSet()), async () => response(200, [invalidPatient]));
   await assert.rejects(new HttpApiPatientReadRepository(patientApi).listPatients(), { code: 'API_RESPONSE_INVALID' });
+
+  for (const invalid of [
+    { ownerName: '' }, { lastServiceAt: '2026-11-17T10:15:00' },
+    { serviceCount: 0 }, { serviceCount: 1.5 },
+  ]) {
+    const api = new ApiClient('http://localhost:3000', new MemoryServerSessionStore(tokenSet()), async () => response(200, [
+      { ...apiPatientFixture('abababab-abab-4bab-8bab-abababababab'), ...invalid },
+    ]));
+    await assert.rejects(new HttpApiPatientReadRepository(api).listPatients(), { code: 'API_RESPONSE_INVALID' });
+  }
 
   const patientEnvelopeApi = new ApiClient('http://localhost:3000', new MemoryServerSessionStore(tokenSet()), async () => response(200, {
     items: [apiPatientFixture('abababab-abab-4bab-8bab-abababababab')],
@@ -1076,6 +1088,7 @@ function apiPatientFixture(id) {
     id, displayCode: 'SAPI-002', name: 'Sapi Fiktif', species: 'cattle', breed: null, sex: 'female',
     birthDate: '2024-03-01', estimatedAgeMonths: 32, weightKg: '850.50',
     farmId: 'abababab-abab-4bab-8bab-abababababab', farmerId: 'bcbcbcbc-bcbc-4bcb-8bcb-bcbcbcbcbcbc',
+    ownerName: 'Peternak Fiktif', lastServiceAt: '2026-11-17T10:15:00.000Z', serviceCount: 2,
   };
 }
 
