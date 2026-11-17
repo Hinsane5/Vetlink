@@ -1502,6 +1502,10 @@ try {
       assert.equal(requiredFailure.status, 422);
       const completeDraft = await sendJson(healthy.baseUrl, notePath, vet.accessToken, 'PUT', { expectedVersion: 1, complaint: 'Keluhan fiktif', findings: 'Temuan pemeriksaan fiktif', assessment: 'Penilaian fiktif akhir', actions: 'Tindakan fiktif', careInstructions: 'Instruksi perawatan fiktif' });
       assert.equal(completeDraft.status, 200);
+      const recommendationBeforeFinal = await sendJson(healthy.baseUrl, `/v1/consultations/${consultationId}/recommendation`, vet.accessToken,
+        'PUT', { expectedVersion: 1, items: [{ title: 'Item fiktif sebelum final' }] });
+      assert.equal(recommendationBeforeFinal.status, 422, await recommendationBeforeFinal.clone().text());
+      assert.equal((await recommendationBeforeFinal.json()).code, 'RULE_VIOLATION');
       const staleReview = await sendJson(healthy.baseUrl, `${notePath}/finalize`, vet.accessToken, 'POST', { expectedVersion: 1 });
       assert.equal(staleReview.status, 409);
       const finalizedNote = await sendJson(healthy.baseUrl, `${notePath}/finalize`, vet.accessToken, 'POST', { expectedVersion: 2 });

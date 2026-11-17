@@ -98,6 +98,7 @@ export class ClinicalService {
     return this.database.transaction(async client => {
       const context = await this.context(principal, consultationId, 'vet', client);
       if (context.status !== 'in_progress') throw new UnprocessableEntityException(error('RULE_VIOLATION', 'Rekomendasi hanya dapat disusun ketika layanan berlangsung.'));
+      await this.assertRecommendationContext(client, context);
       const old = await this.loadRecommendation(client, context);
       if (old?.status === 'sent') throw new ConflictException(error('IMMUTABLE', 'Rekomendasi terkirim hanya dapat dibaca.'));
       if ((old?.version ?? 1) !== input.expectedVersion) stale();
@@ -142,6 +143,7 @@ export class ClinicalService {
     return this.database.transaction(async client => {
       const context = await this.context(principal, consultationId, 'vet', client);
       if (context.status !== 'in_progress') throw new UnprocessableEntityException(error('RULE_VIOLATION', 'Rekomendasi hanya dapat dikirim ketika layanan berlangsung.'));
+      await this.assertRecommendationContext(client, context);
       const rec = await this.loadRecommendation(client, context);
       if (!rec) throw new UnprocessableEntityException(error('RULE_VIOLATION', 'Simpan setidaknya satu item sebelum mengirim rekomendasi.'));
       if (rec.status === 'sent') return { ...rec, alreadySent: true };
@@ -153,5 +155,22 @@ export class ClinicalService {
       const sent = await client.query(`UPDATE recommendations SET status='sent',sent_at=now(),version=version+1,updated_at=now() WHERE id=$1 RETURNING *`, [rec.id]);
       return { ...sent.rows[0], delivery };
     });
+  }
+
+  private async assertRecommendationContext(client: PoolClient, context: Context): Promise<void> {
+    const result = await client.query<{ verified: boolean; paid: boolean; final_note: boolean }>(
+      `SELECT v.verification_status='verified' AS verified,
+              EXISTS(SELECT 1 FROM payments p WHERE p.owner_id=c.farmer_id
+                AND p.payable_type='consultation' AND p.payable_id=c.id
+                AND p.status='succeeded' AND p.amount_idr=c.fee_snapshot_idr) AS paid,
+              EXISTS(SELECT 1 FROM clinical_notes n WHERE n.consultation_id=c.id
+                AND n.vet_id=c.vet_id AND n.animal_id=c.animal_id AND n.status='final') AS final_note
+       FROM consultations c JOIN vet_profiles v ON v.user_id=c.vet_id WHERE c.id=$1 AND c.vet_id=$2`,
+      [context.id, context.vet_id],
+    );
+    const guard = result.rows[0];
+    if (!guard?.verified) throw new ForbiddenException(error('ROLE_FORBIDDEN', 'Dokter harus terverifikasi untuk mengelola rekomendasi.'));
+    if (!guard.paid) throw new UnprocessableEntityException(error('RULE_VIOLATION', 'Pembayaran layanan yang sesuai diperlukan untuk rekomendasi.'));
+    if (!guard.final_note) throw new UnprocessableEntityException(error('RULE_VIOLATION', 'Catatan klinis final diperlukan sebelum mengelola rekomendasi.'));
   }
 }

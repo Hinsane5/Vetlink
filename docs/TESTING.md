@@ -991,6 +991,17 @@ Adapter baru membaca row availability BE-04 yang memakai snake_case untuk kolom 
 | Lima tes baru | Fake HTTP memeriksa GET availability/kalender/blok, PUT allowlist dan versi, POST/PUT/DELETE blok, status hasil tersimpan, tarif dan rentang invalid, serta satu upaya saja saat POST tidak pasti. Tidak menghubungi API/PostgreSQL runtime. |
 | Integrasi dan QA | Adapter hanya diekspos factory; UI tetap SQLite. Perangkat fisik, Android build/emulator, Figma MCP, deployment, provider produksi, secret, dan transaksi nyata tidak digunakan. FE-25 dan QA Android/visual masih gate. |
 
+## Guard BE-08 rekomendasi selaras FE-15 — 17 November 2026
+
+`ClinicalService.saveRecommendation` dan `sendRecommendation` kini memeriksa Dokter verified, pembayaran konsultasi `succeeded` dengan nominal yang cocok, dan catatan klinis final untuk konsultasi/Dokter/ternak yang sama dalam transaksi server. Guard tambahan menolak rekomendasi sebelum final; finalisasi sendiri tidak menyelesaikan layanan. Tidak ada checkout Dokter. Smoke memakai fixture fiktif.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm run check` di `apps/api` | **Lulus**: TypeScript typecheck dan Nest build. Node host 24.10.0 masih di bawah minimum manifest 24.15.0. |
+| `npm run api:contract` di `apps/api` | **Lulus**: 8/8 tes kontrak. |
+| `npm run db:migrate`, `npm run db:seed`, `npm run api:smoke` di `apps/api` | **Lulus** pada database uji baru `vetlink_clinical_guard`, PostgreSQL 17 lokal loopback port 55432. Smoke menolak save rekomendasi sebelum note final dengan 422 dan tetap meloloskan alur setelah final. Cluster dihentikan; `pg_isready` menyatakan port tidak merespons. Percobaan initdb pertama berhenti karena locale host invalid; ulang dengan `LC_ALL=C` berhasil. |
+| Integrasi/QA | Tidak ada perangkat Android, emulator, Figma MCP, provider produksi, deployment, atau transaksi finansial nyata. FE-25 runtime API dan QA fisik tetap gate. |
+
 ## FE-25 lanjutan — catatan klinis dan rekomendasi API BE-08 (17 November 2026)
 
 Adapter note/rekomendasi memvalidasi consultation UUID, versi, field draft dan item recommendation, lalu membaca respons BE-08 yang memakai draft sintetis atau row PostgreSQL snake_case. Final note tidak diubah menjadi status selesai. Hasil send recommendation tidak memiliki item; adapter menandai `items: null` agar caller GET ulang. Semua write menunggu hasil server, tanpa status sukses lokal ketika transport belum pasti.
