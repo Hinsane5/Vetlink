@@ -968,4 +968,15 @@ Adapter konsultasi menambah accept/reject, proposal/respons jadwal, start chat, 
 | `npm run check` di `apps/mobile` | **Lulus**: typecheck, Expo lint tanpa warning proyek, kompilasi tes domain, dan 172/172 tes. Run pertama mengeluarkan satu warning lint `no-empty-object-type`; tipe diperbaiki dan run ulang lulus. Node masih memberi `ExperimentalWarning` dari SQLite. |
 | Tes aksi baru | Tiga tes fake HTTP memeriksa sembilan route aksi, payload allowlist, versi, consent, field Visit, response action, replay yang menghilangkan field tambahan, satu upaya per pemanggilan, serta penolakan input/response salah. Tidak menghubungi server/PostgreSQL. |
 | Integrasi dan QA | `App.tsx` masih memakai SQLite. API runtime, dua perangkat fisik, Android build, emulator, Figma MCP, provider produksi, secret, deployment, dan uang nyata tidak digunakan pada slice ini. FE-25 tetap gate migrasi satu otoritas dan QA Android/visual. |
+
+## FE-25 lanjutan — pendapatan dan pencairan API BE-15 (17 November 2026)
+
+Adapter Flow D membaca ringkasan ledger, transaksi, tujuan pencairan, riwayat/detail withdrawal dari bearer Dokter; parser memeriksa jumlah integer rupiah aman, `gross − commission = net`, `amount − fee = netAmount`, UUID, status, timestamp, dan cursor paginasi. POST pencairan mengirim hanya jumlah dan ID tujuan bersama `Idempotency-Key` caller. Respons dicocokkan dengan pengajuan; transport tidak pasti tidak dicoba ulang otomatis dan tidak berubah menjadi sukses lokal. Tidak ada provider atau transaksi finansial nyata.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm run typecheck` di `apps/mobile` | **Lulus** setelah penyesuaian tipe query pada adapter. |
+| `npm run check` di `apps/mobile` | **Lulus**: typecheck, Expo lint tanpa warning proyek, kompilasi tes domain, dan 175/175 tes. Run pertama gagal karena file adapter baru belum dimasukkan ke `tsconfig.domain-tests.json`; setelah diperbaiki, run ulang lulus. Node masih memberi `ExperimentalWarning` SQLite. |
+| Tiga tes baru | Fake HTTP memeriksa route owner-scoped, saldo/total/withdrawal, integer rupiah, payload allowlist, retry manual key/payload yang sama setelah respons hilang, input tidak valid, dan respons dengan aritmetika uang salah. Tidak menghubungi backend/PostgreSQL. |
+| Integrasi dan QA | Adapter hanya tersedia dari `createApiAdapters`; `App.tsx` tetap SQLite. API runtime, perangkat fisik, Android build/emulator, Figma MCP, deployment, provider produksi, secret, dan transfer dana nyata tidak digunakan. FE-25 tetap gate migrasi satu otoritas dan QA Android. |
 | QA perangkat dan integrasi | Belum dijalankan: Android fisik, wiring API mobile, dua perangkat, foto/media privat, emulator, Figma MCP, provider, deployment, dan transaksi nyata. |
