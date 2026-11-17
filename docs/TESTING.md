@@ -1024,3 +1024,14 @@ Adapter note/rekomendasi memvalidasi consultation UUID, versi, field draft dan i
 | Tiga tes baru | Fake HTTP memeriksa GET/PUT/POST note dan recommendation, draft sintetis, row final, payload allowlist, item tanpa ID pada save, item tidak tersedia pada send, validasi versi/bounds, respons invalid, dan satu upaya pada transport gagal. Tidak menghubungi backend runtime. |
 | Integrasi dan QA | Adapter hanya diekspos factory; UI tetap SQLite. Perangkat fisik, Android build/emulator, Figma MCP, deployment, provider produksi, secret, dan transaksi nyata tidak digunakan. FE-25 dan QA Android/visual masih gate. |
 | QA perangkat dan integrasi | Belum dijalankan: Android fisik, wiring API mobile, dua perangkat, foto/media privat, emulator, Figma MCP, provider, deployment, dan transaksi nyata. |
+
+## FE-25 lanjutan — tindak lanjut dan laporan perkembangan API BE-09 (17 November 2026)
+
+Adapter FE-25 untuk FollowUp dan ProgressReport memakai port terpisah, `Idempotency-Key` caller, `expectedVersion` pada pembatalan, serta payload allowlist. Report tetap record terpisah dari status FollowUp. Hasil server divalidasi; tidak ada sukses lokal ketika transport belum pasti.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm run typecheck` di `apps/mobile` | **Lulus** setelah port/adapter dibuat. |
+| `npm run check` di `apps/mobile` | **Lulus**: typecheck, Expo lint, kompilasi tes domain, 189/189 tes. Node memberi `ExperimentalWarning` SQLite. |
+| Tiga tes baru | Fake HTTP memeriksa lima route baca/tulis, payload allowlist, key yang sama pada retry eksplisit setelah respons hilang, input invalid, serta respons server yang tidak cocok. Tidak menghubungi backend runtime. |
+| Integrasi dan QA | Adapter hanya diekspos factory; UI tetap SQLite. Pengingat, wiring API runtime, dan QA perangkat/visual masih gate FE-25. Android build, emulator, Figma MCP, provider, deployment, dan transaksi nyata tidak dijalankan. |

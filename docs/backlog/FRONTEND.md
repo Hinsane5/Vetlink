@@ -262,3 +262,7 @@ Port `LivestockHealthReadRepository`/`LivestockCareEventWriteRepository` dan ada
 ### Slice chat polling API BE-07 — 17 November 2026
 
 `ApiChatRepository`/`HttpApiChatRepository` membaca halaman pesan lama-ke-baru, mengirim teks dan ID lampiran committed, serta retry ID pesan tersimpan. POST mengirim `clientMessageId` UUID stabil dalam body sebagai dedupe BE-07; payload allowlist tidak mengirim sender/actor. Parser memeriksa status/attempt, waktu, ukuran lampiran integer aman, dan URL media privat `/v1/attachments/{id}/content`. Transport tidak pasti tidak diulang otomatis; caller membaca ulang atau mengirim payload dengan clientMessageId sama, sedangkan route retry memerlukan messageId tersimpan. Upload/commit media dan runtime UI API masih gate FE-25; SQLite tetap sumber aktif.
+
+### Slice tindak lanjut dan laporan perkembangan API BE-09 — 17 November 2026
+
+`ApiCareCoordinationRepository`/`HttpApiCareCoordinationRepository` membaca dan membuat FollowUp, membatalkan dengan `expectedVersion`, serta membaca dan membuat ProgressReport terpisah. POST/PATCH memakai `Idempotency-Key` caller yang stabil dan payload allowlist; status, akses, hubungan konsultasi/ternak, dan syarat catatan final diputuskan backend. Respons divalidasi sebagai record server sebelum sukses; transport tidak pasti tidak memicu retry otomatis. Adapter hanya diekspos factory, belum dipasang ke UI. Pengingat BE-09 dan migrasi runtime API tetap bagian FE-25 yang belum selesai; tidak dimulai pada checkpoint ini sesuai arahan untuk tidak menambah pekerjaan.

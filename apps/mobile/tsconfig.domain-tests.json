@@ -51,6 +51,7 @@
     "src/application/ports/ApiVetScheduleRepository.ts",
     "src/application/ports/ApiClinicalRepository.ts",
     "src/application/ports/ApiChatRepository.ts",
+    "src/application/ports/ApiCareCoordinationRepository.ts",
     "src/application/ports/ShippingQuoteProvider.ts",
     "src/domain/auth.ts",
     "src/domain/dashboard.ts",
@@ -89,6 +90,7 @@
     "src/data/remote/HttpApiEarningsRepository.ts",
     "src/data/remote/HttpApiVetScheduleRepository.ts",
     "src/data/remote/HttpApiClinicalRepository.ts",
-    "src/data/remote/HttpApiChatRepository.ts"
+    "src/data/remote/HttpApiChatRepository.ts",
+    "src/data/remote/HttpApiCareCoordinationRepository.ts"
   ]
 }
