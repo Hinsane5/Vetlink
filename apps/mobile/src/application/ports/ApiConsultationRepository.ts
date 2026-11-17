@@ -28,6 +28,19 @@ export interface ConsultationCreateInput {
   quoteId: string;
 }
 
+export interface ConsultationVersionInput { expectedVersion: number; }
+export interface ConsultationRejectInput extends ConsultationVersionInput { reason: string; }
+export interface ConsultationScheduleInput extends ConsultationVersionInput { startsAt: string; }
+export interface ConsultationScheduleDecisionInput extends ConsultationVersionInput {
+  decision: 'accept' | 'decline';
+  consent: boolean;
+}
+export interface ConsultationVisitTransitionInput extends ConsultationVersionInput { expectedVisitVersion: number; }
+export interface ConsultationCompleteInput extends ConsultationVersionInput {
+  confirmation: boolean;
+  expectedVisitVersion?: number;
+}
+
 /** Keep this same operation object intact when manually retrying an uncertain POST. */
 export interface IdempotentApiOperation<TPayload> {
   readonly idempotencyKey: string;
@@ -142,6 +155,12 @@ export interface ApiConsultationActionResult {
   consultation: ApiConsultationRecord;
 }
 
+/** Replay may omit action-specific fields; refresh detail/visit using the returned consultation ID. */
+export interface ApiConsultationScheduleActionResult extends ApiConsultationActionResult { proposalId?: string; }
+export interface ApiConsultationScheduleDecisionResult extends ApiConsultationActionResult { decision?: 'accept' | 'decline'; }
+export type ApiConsultationVisitActionState = Omit<ApiConsultationVisit, 'updatedAt'>;
+export interface ApiConsultationVisitActionResult extends ApiConsultationActionResult { visit?: ApiConsultationVisitActionState; }
+
 export type ConsultationListStatus = Exclude<ApiConsultationStatus, 'draft'>;
 
 export interface ConsultationListQuery {
@@ -167,4 +186,11 @@ export interface ApiConsultationRepository {
   list(query?: ConsultationListQuery): Promise<ApiConsultationListItem[]>;
   getById(consultationId: string): Promise<ApiConsultationDetail>;
   getVisit(consultationId: string): Promise<ApiConsultationVisit>;
+  accept(consultationId: string, operation: IdempotentApiOperation<ConsultationVersionInput>): Promise<ApiConsultationActionResult>;
+  reject(consultationId: string, operation: IdempotentApiOperation<ConsultationRejectInput>): Promise<ApiConsultationActionResult>;
+  proposeSchedule(consultationId: string, operation: IdempotentApiOperation<ConsultationScheduleInput>): Promise<ApiConsultationScheduleActionResult>;
+  respondScheduleProposal(consultationId: string, proposalId: string, operation: IdempotentApiOperation<ConsultationScheduleDecisionInput>): Promise<ApiConsultationScheduleDecisionResult>;
+  startChat(consultationId: string, operation: IdempotentApiOperation<ConsultationVersionInput>): Promise<ApiConsultationActionResult>;
+  advanceVisit(consultationId: string, action: 'depart' | 'arrive' | 'start-examination', operation: IdempotentApiOperation<ConsultationVisitTransitionInput>): Promise<ApiConsultationVisitActionResult>;
+  complete(consultationId: string, operation: IdempotentApiOperation<ConsultationCompleteInput>): Promise<ApiConsultationActionResult>;
 }

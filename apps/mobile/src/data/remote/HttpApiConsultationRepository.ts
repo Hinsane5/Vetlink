@@ -7,11 +7,20 @@ import type {
   ApiConsultationRecord,
   ApiConsultationRepository,
   ApiConsultationScheduleProposal,
+  ApiConsultationScheduleActionResult,
+  ApiConsultationScheduleDecisionResult,
   ApiConsultationVisit,
+  ApiConsultationVisitActionResult,
   ApiConsultationVisitAddressSnapshot,
   ConsultationCreateInput,
+  ConsultationCompleteInput,
   ConsultationListQuery,
   ConsultationQuoteInput,
+  ConsultationRejectInput,
+  ConsultationScheduleDecisionInput,
+  ConsultationScheduleInput,
+  ConsultationVersionInput,
+  ConsultationVisitTransitionInput,
   IdempotentApiOperation,
 } from '../../application/ports/ApiConsultationRepository';
 import type { DirectoryServiceType } from '../../domain/directory';
@@ -30,7 +39,7 @@ const PAYMENT_STATUSES = ['pending', 'succeeded', 'failed', 'expired'] as const;
 const DIGITS = /^\d+$/;
 const ADDRESS_DECIMAL = /^-?\d+(?:\.\d+)?$/;
 
-/** BE-05 quote/create and owner/assignment-scoped read adapter. */
+/** BE-05 owner/assignment-scoped adapter; server enforces transitions and roles. */
 export class HttpApiConsultationRepository implements ApiConsultationRepository {
   constructor(private readonly api: ApiClient) {}
 
@@ -67,6 +76,127 @@ export class HttpApiConsultationRepository implements ApiConsultationRepository 
     const id = validateResourceId(consultationId, 'konsultasi');
     return parseApiConsultationVisit(await this.api.request<unknown>(`/v1/consultations/${encodeURIComponent(id)}/visit`));
   }
+
+  async accept(id: string, operation: IdempotentApiOperation<ConsultationVersionInput>): Promise<ApiConsultationActionResult> {
+    return this.postAction(id, 'accept', operation, versionPayload);
+  }
+
+  async reject(id: string, operation: IdempotentApiOperation<ConsultationRejectInput>): Promise<ApiConsultationActionResult> {
+    return this.postAction(id, 'reject', operation, (input) => {
+      const body = versionPayload(input);
+      if (typeof input.reason !== 'string' || !input.reason.trim() || input.reason.length > 500) {
+        throw invalidQuery('Alasan penolakan harus berisi 1 sampai 500 karakter.');
+      }
+      return { ...body, reason: input.reason };
+    });
+  }
+
+  async proposeSchedule(id: string, operation: IdempotentApiOperation<ConsultationScheduleInput>): Promise<ApiConsultationScheduleActionResult> {
+    return this.postAction(id, 'schedule-proposals', operation, (input) => {
+      const body = versionPayload(input);
+      if (!isIsoTimestampWithTimezone(input.startsAt)) throw invalidQuery('Jadwal usulan harus memiliki zona waktu.');
+      return { ...body, startsAt: input.startsAt };
+    }, parseScheduleAction);
+  }
+
+  async respondScheduleProposal(id: string, proposalId: string, operation: IdempotentApiOperation<ConsultationScheduleDecisionInput>): Promise<ApiConsultationScheduleDecisionResult> {
+    const proposal = validateResourceId(proposalId, 'proposal');
+    return this.postAction(id, `schedule-proposals/${encodeURIComponent(proposal)}/respond`, operation, (input) => {
+      const body = versionPayload(input);
+      if (!isOneOf(input.decision, ['accept', 'decline']) || typeof input.consent !== 'boolean') {
+        throw invalidQuery('Keputusan jadwal atau nilai consent tidak valid.');
+      }
+      if (input.decision === 'accept' && !input.consent) throw invalidQuery('Persetujuan wajib untuk menerima jadwal.');
+      return { ...body, decision: input.decision, consent: input.consent };
+    }, parseScheduleDecision);
+  }
+
+  async startChat(id: string, operation: IdempotentApiOperation<ConsultationVersionInput>): Promise<ApiConsultationActionResult> {
+    return this.postAction(id, 'start', operation, versionPayload);
+  }
+
+  async advanceVisit(id: string, action: 'depart' | 'arrive' | 'start-examination', operation: IdempotentApiOperation<ConsultationVisitTransitionInput>): Promise<ApiConsultationVisitActionResult> {
+    if (!isOneOf(action, ['depart', 'arrive', 'start-examination'])) throw invalidQuery('Aksi kunjungan tidak valid.');
+    return this.postAction(id, `visit/${action}`, operation, (input) => {
+      const body = versionPayload(input);
+      if (!isPositiveSafeInteger(input.expectedVisitVersion)) throw invalidQuery('Versi kunjungan harus bilangan positif aman.');
+      return { ...body, expectedVisitVersion: input.expectedVisitVersion };
+    }, parseVisitAction);
+  }
+
+  async complete(id: string, operation: IdempotentApiOperation<ConsultationCompleteInput>): Promise<ApiConsultationActionResult> {
+    return this.postAction(id, 'complete', operation, (input) => {
+      const body = versionPayload(input);
+      if (input.confirmation !== true) throw invalidQuery('Penyelesaian memerlukan konfirmasi eksplisit.');
+      if (input.expectedVisitVersion !== undefined && !isPositiveSafeInteger(input.expectedVisitVersion)) {
+        throw invalidQuery('Versi kunjungan harus bilangan positif aman.');
+      }
+      return input.expectedVisitVersion === undefined
+        ? { ...body, confirmation: true }
+        : { ...body, confirmation: true, expectedVisitVersion: input.expectedVisitVersion };
+    });
+  }
+
+  private async postAction<TPayload, TResult = ApiConsultationActionResult>(
+    consultationId: string,
+    path: string,
+    operation: IdempotentApiOperation<TPayload>,
+    buildBody: (payload: TPayload) => Record<string, unknown>,
+    parse: (value: unknown) => TResult = parseApiConsultationActionResult as (value: unknown) => TResult,
+  ): Promise<TResult> {
+    const id = validateResourceId(consultationId, 'konsultasi');
+    const { key, payload } = validateOperation(operation);
+    const body = buildBody(payload);
+    return parse(await this.api.request<unknown>(`/v1/consultations/${encodeURIComponent(id)}/${path}`, {
+      method: 'POST', body, idempotencyKey: key,
+    }));
+  }
+}
+
+function versionPayload(input: ConsultationVersionInput): Record<string, unknown> {
+  if (!isRecord(input) || !isPositiveSafeInteger(input.expectedVersion)) {
+    throw invalidQuery('Versi konsultasi harus bilangan positif aman.');
+  }
+  return { expectedVersion: input.expectedVersion };
+}
+
+function parseScheduleAction(value: unknown): ApiConsultationScheduleActionResult {
+  const result = parseApiConsultationActionResult(value);
+  if (!isRecord(value) || (!result.replayed && !isUuid(value.proposalId))
+    || (value.proposalId !== undefined && !isUuid(value.proposalId))) {
+    throw invalidResponse('Hasil proposal jadwal tidak sesuai DTO BE-16.');
+  }
+  return value.proposalId === undefined ? result : { ...result, proposalId: value.proposalId as string };
+}
+
+function parseScheduleDecision(value: unknown): ApiConsultationScheduleDecisionResult {
+  const result = parseApiConsultationActionResult(value);
+  if (!isRecord(value) || (!result.replayed && !isOneOf(value.decision, ['accept', 'decline']))
+    || (value.decision !== undefined && !isOneOf(value.decision, ['accept', 'decline']))) {
+    throw invalidResponse('Hasil keputusan jadwal tidak sesuai DTO BE-16.');
+  }
+  return value.decision === undefined ? result : { ...result, decision: value.decision as 'accept' | 'decline' };
+}
+
+function parseVisitAction(value: unknown): ApiConsultationVisitActionResult {
+  const result = parseApiConsultationActionResult(value);
+  if (!isRecord(value) || (!result.replayed && !isRecord(value.visit))) {
+    throw invalidResponse('Hasil aksi kunjungan tidak memiliki visit sesuai DTO BE-16.');
+  }
+  if (value.visit === undefined) return result;
+  const visit = value.visit;
+  if (!isRecord(visit) || !isUuid(visit.consultationId) || visit.consultationId !== result.consultation.id
+    || !isVisitStage(visit.stage) || !isNullableTimestamp(visit.departureAt)
+    || !isNullableTimestamp(visit.arrivalAt) || !isNullableTimestamp(visit.examinationStartedAt)
+    || !isNullableTimestamp(visit.completedAt) || !isPositiveSafeInteger(visit.version)) {
+    throw invalidResponse('Visit aksi konsultasi tidak sesuai DTO BE-16.');
+  }
+  return { ...result, visit: {
+    consultationId: visit.consultationId, stage: visit.stage,
+    departureAt: visit.departureAt as string | null, arrivalAt: visit.arrivalAt as string | null,
+    examinationStartedAt: visit.examinationStartedAt as string | null, completedAt: visit.completedAt as string | null,
+    version: visit.version,
+  } };
 }
 
 function validateOperation<TPayload>(operation: IdempotentApiOperation<TPayload>): { key: string; payload: TPayload } {

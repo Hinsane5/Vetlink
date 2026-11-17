@@ -958,4 +958,14 @@ Cluster smoke telah dihentikan. Direktori data sementara `/tmp/vetlink-be16-pati
 | `npm ci --no-audit --no-fund` di `apps/api` | **Lulus**, 253 paket; peringatan engine karena Node 24.10.0 di bawah minimum 24.15.0. |
 | `npm run check` dan `npm run api:contract` di `apps/api` | **Lulus**: typecheck, Nest build, kontrak OpenAPI 8/8. |
 | `npm run db:migrate`, `npm run db:seed`, `npm run api:smoke` di `apps/api` | **Lulus** pada database uji baru `vetlink_patient_status_local` di PostgreSQL 17 lokal loopback port 55432; 18 migrasi dan fixture fiktif. Smoke dijalankan dua kali; run kedua menegaskan konsultasi draft/menunggu pembayaran tidak mengganti status request pasien yang terlihat. Cluster dihentikan setelahnya; database uji tidak dipakai runtime. |
+
+## FE-25 lanjutan — aksi konsultasi API BE-05 (17 November 2026)
+
+Adapter konsultasi menambah accept/reject, proposal/respons jadwal, start chat, Visit depart/arrive/start-examination, dan completion. Payload memakai allowlist dan `expectedVersion`; Visit memakai `expectedVisitVersion`; completion membutuhkan `confirmation: true`. `Idempotency-Key` tetap milik caller. Respons baru memerlukan field tambahan per action, sedangkan replay backend yang sudah tersimpan dapat hanya memuat `operationId`, `replayed`, dan Consultation. Adapter tidak mengubah status lokal atau melakukan retry otomatis pada hasil transport yang belum pasti.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm run check` di `apps/mobile` | **Lulus**: typecheck, Expo lint tanpa warning proyek, kompilasi tes domain, dan 172/172 tes. Run pertama mengeluarkan satu warning lint `no-empty-object-type`; tipe diperbaiki dan run ulang lulus. Node masih memberi `ExperimentalWarning` dari SQLite. |
+| Tes aksi baru | Tiga tes fake HTTP memeriksa sembilan route aksi, payload allowlist, versi, consent, field Visit, response action, replay yang menghilangkan field tambahan, satu upaya per pemanggilan, serta penolakan input/response salah. Tidak menghubungi server/PostgreSQL. |
+| Integrasi dan QA | `App.tsx` masih memakai SQLite. API runtime, dua perangkat fisik, Android build, emulator, Figma MCP, provider produksi, secret, deployment, dan uang nyata tidak digunakan pada slice ini. FE-25 tetap gate migrasi satu otoritas dan QA Android/visual. |
 | QA perangkat dan integrasi | Belum dijalankan: Android fisik, wiring API mobile, dua perangkat, foto/media privat, emulator, Figma MCP, provider, deployment, dan transaksi nyata. |

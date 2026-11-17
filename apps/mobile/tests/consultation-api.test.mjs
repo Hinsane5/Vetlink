@@ -12,6 +12,7 @@ const ids = {
   quote: '55555555-5555-4555-8555-555555555555',
   consultation: '66666666-6666-4666-8666-666666666666',
   action: '77777777-7777-4777-8777-777777777777',
+  proposal: '88888888-8888-4888-8888-888888888888',
 };
 
 test('consultation quote sends explicit visit context, idempotency key, and allowlisted fields', async () => {
@@ -216,6 +217,84 @@ test('quote and booking transport uncertainty never returns local success or ret
   await assert.rejects(repository.create({ idempotencyKey: 'booking:network:1', payload: { quoteId: ids.quote } }),
     (error) => error instanceof DomainError && error.code === 'SERVICE_UNAVAILABLE');
   assert.equal(calls, 2, 'one HTTP attempt per explicit call');
+});
+
+test('consultation action adapter sends BE-05 routes, versions, consent, and only allowlisted fields', async () => {
+  const calls = [];
+  const result = { operationId: ids.action, replayed: false, consultation: consultationFixture() };
+  const repository = new HttpApiConsultationRepository(apiClient(async (url, init) => {
+    calls.push({ url, key: init.headers['Idempotency-Key'], body: JSON.parse(init.body) });
+    if (url.endsWith('/schedule-proposals')) return response(200, { ...result, proposalId: ids.proposal });
+    if (url.endsWith('/respond')) return response(200, { ...result, decision: 'accept' });
+    if (url.includes('/visit/')) {
+      const { updatedAt, ...visit } = visitFixture();
+      return response(200, { ...result, visit });
+    }
+    return response(200, result);
+  }));
+  const op = (payload) => ({ idempotencyKey: 'consultation:action-1', payload: { ...payload, actorId: ids.vet, status: 'completed' } });
+
+  await repository.accept(ids.consultation, op({ expectedVersion: 1 }));
+  await repository.reject(ids.consultation, op({ expectedVersion: 2, reason: 'Alasan fiktif.' }));
+  const proposed = await repository.proposeSchedule(ids.consultation, op({ expectedVersion: 3, startsAt: '2026-11-19T10:00:00+07:00' }));
+  const decided = await repository.respondScheduleProposal(ids.consultation, ids.proposal, op({ expectedVersion: 4, decision: 'accept', consent: true }));
+  await repository.startChat(ids.consultation, op({ expectedVersion: 5 }));
+  const advanced = await repository.advanceVisit(ids.consultation, 'depart', op({ expectedVersion: 6, expectedVisitVersion: 1 }));
+  await repository.advanceVisit(ids.consultation, 'arrive', op({ expectedVersion: 6, expectedVisitVersion: 2 }));
+  await repository.advanceVisit(ids.consultation, 'start-examination', op({ expectedVersion: 6, expectedVisitVersion: 3 }));
+  await repository.complete(ids.consultation, op({ expectedVersion: 7, expectedVisitVersion: 4, confirmation: true }));
+
+  assert.equal(proposed.proposalId, ids.proposal);
+  assert.equal(decided.decision, 'accept');
+  assert.equal(advanced.visit.stage, 'completed');
+  assert.deepEqual(calls.map(({ url }) => url.replace(`http://localhost:3000/v1/consultations/${ids.consultation}/`, '')), [
+    'accept', 'reject', 'schedule-proposals', `schedule-proposals/${ids.proposal}/respond`,
+    'start', 'visit/depart', 'visit/arrive', 'visit/start-examination', 'complete',
+  ]);
+  assert.deepEqual(calls.map(({ body }) => body), [
+    { expectedVersion: 1 }, { expectedVersion: 2, reason: 'Alasan fiktif.' },
+    { expectedVersion: 3, startsAt: '2026-11-19T10:00:00+07:00' },
+    { expectedVersion: 4, decision: 'accept', consent: true }, { expectedVersion: 5 },
+    { expectedVersion: 6, expectedVisitVersion: 1 }, { expectedVersion: 6, expectedVisitVersion: 2 },
+    { expectedVersion: 6, expectedVisitVersion: 3 },
+    { expectedVersion: 7, confirmation: true, expectedVisitVersion: 4 },
+  ]);
+  assert.ok(calls.every(({ key }) => key === 'consultation:action-1'));
+});
+
+test('consultation action replay accepts omitted route extras and never retries uncertain POST automatically', async () => {
+  let calls = 0;
+  const repository = new HttpApiConsultationRepository(apiClient(async () => {
+    calls += 1;
+    if (calls === 1) throw new Error('response lost');
+    return response(200, { operationId: ids.action, replayed: true, consultation: consultationFixture() });
+  }));
+  const operation = Object.freeze({ idempotencyKey: 'consultation:replay-1', payload: Object.freeze({ expectedVersion: 3, startsAt: '2026-11-19T10:00:00Z' }) });
+  await assert.rejects(repository.proposeSchedule(ids.consultation, operation), { code: 'SERVICE_UNAVAILABLE' });
+  assert.equal(calls, 1);
+  const replay = await repository.proposeSchedule(ids.consultation, operation);
+  assert.equal(replay.replayed, true);
+  assert.equal(replay.proposalId, undefined);
+  assert.equal(calls, 2);
+});
+
+test('consultation action adapter rejects invalid input and action-specific response before success', async () => {
+  let calls = 0;
+  const repository = new HttpApiConsultationRepository(apiClient(async () => {
+    calls += 1;
+    return response(200, { operationId: ids.action, replayed: false, consultation: consultationFixture() });
+  }));
+  const op = (payload) => ({ idempotencyKey: 'consultation:invalid-1', payload });
+  await assert.rejects(repository.accept('VL-001', op({ expectedVersion: 1 })), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.accept(ids.consultation, op({ expectedVersion: 0 })), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.reject(ids.consultation, op({ expectedVersion: 1, reason: ' ' })), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.proposeSchedule(ids.consultation, op({ expectedVersion: 1, startsAt: '2026-11-19T10:00:00' })), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.respondScheduleProposal(ids.consultation, ids.proposal, op({ expectedVersion: 1, decision: 'accept', consent: false })), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.advanceVisit(ids.consultation, 'depart', op({ expectedVersion: 1, expectedVisitVersion: 0 })), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.complete(ids.consultation, op({ expectedVersion: 1, confirmation: false })), { code: 'VALIDATION_FAILED' });
+  assert.equal(calls, 0);
+  await assert.rejects(repository.proposeSchedule(ids.consultation, op({ expectedVersion: 1, startsAt: '2026-11-19T10:00:00Z' })), { code: 'API_RESPONSE_INVALID' });
+  await assert.rejects(repository.advanceVisit(ids.consultation, 'depart', op({ expectedVersion: 1, expectedVisitVersion: 1 })), { code: 'API_RESPONSE_INVALID' });
 });
 
 function quoteFixture(overrides = {}) {
