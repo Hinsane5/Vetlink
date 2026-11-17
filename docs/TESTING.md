@@ -991,6 +991,17 @@ Adapter baru membaca row availability BE-04 yang memakai snake_case untuk kolom 
 | Lima tes baru | Fake HTTP memeriksa GET availability/kalender/blok, PUT allowlist dan versi, POST/PUT/DELETE blok, status hasil tersimpan, tarif dan rentang invalid, serta satu upaya saja saat POST tidak pasti. Tidak menghubungi API/PostgreSQL runtime. |
 | Integrasi dan QA | Adapter hanya diekspos factory; UI tetap SQLite. Perangkat fisik, Android build/emulator, Figma MCP, deployment, provider produksi, secret, dan transaksi nyata tidak digunakan. FE-25 dan QA Android/visual masih gate. |
 
+## FE-25 lanjutan — chat polling API BE-07 (17 November 2026)
+
+Adapter pesan membaca halaman dengan cursor, mengirim pesan dengan `clientMessageId` stabil, dan retry pesan tersimpan melalui messageId. Parser memeriksa jumlah lampiran, MIME, ukuran safe integer, URL media privat, status delivery, dan timestamp. Kegagalan transport POST tidak dicoba ulang otomatis dan tidak ditampilkan sebagai pesan terkirim. Upload/commit berkas privat belum termasuk slice ini.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm run typecheck` di `apps/mobile` | **Lulus** setelah port/adapter dibuat. |
+| `npm run check` di `apps/mobile` | **Lulus**: typecheck, Expo lint tanpa warning proyek, kompilasi tes domain, 186/186 tes. Node masih memberi `ExperimentalWarning` SQLite. |
+| Tiga tes baru | Fake HTTP memeriksa GET halaman, POST allowlist dan clientMessageId, retry ID record yang sama, input invalid, URL media publik ditolak, serta satu upaya pada transport gagal. Tidak menghubungi backend runtime. |
+| Integrasi dan QA | Adapter hanya diekspos factory; UI tetap SQLite. Upload/commit media, perangkat fisik, Android build/emulator, Figma MCP, deployment, provider produksi, secret, dan transaksi nyata tidak digunakan. FE-25 dan QA Android/visual masih gate. |
+
 ## Guard BE-08 rekomendasi selaras FE-15 — 17 November 2026
 
 `ClinicalService.saveRecommendation` dan `sendRecommendation` kini memeriksa Dokter verified, pembayaran konsultasi `succeeded` dengan nominal yang cocok, dan catatan klinis final untuk konsultasi/Dokter/ternak yang sama dalam transaksi server. Guard tambahan menolak rekomendasi sebelum final; finalisasi sendiri tidak menyelesaikan layanan. Tidak ada checkout Dokter. Smoke memakai fixture fiktif.

@@ -258,3 +258,7 @@ Port `LivestockHealthReadRepository`/`LivestockCareEventWriteRepository` dan ada
 ### Slice catatan klinis dan rekomendasi API BE-08 — 17 November 2026
 
 `ApiClinicalRepository`/`HttpApiClinicalRepository` membaca, menyimpan draft, dan memfinalkan catatan klinis serta membaca, menyimpan, dan mengirim rekomendasi pada konsultasi UUID. Payload hanya berisi versi dan field DTO BE-08; role, assignment, status layanan, final immutable, serta syarat pengiriman ditegakkan backend. Respons GET catatan/rekomendasi tanpa record dapat berupa draft sintetis; respons tersimpan berupa row PostgreSQL snake_case. Hasil kirim rekomendasi tidak mengembalikan item, sehingga adapter menandainya belum dimuat dan caller harus GET ulang. Kegagalan transport tidak otomatis diulang atau menjadi sukses lokal. Runtime tetap SQLite dan FE-25 **Sedang dikerjakan**.
+
+### Slice chat polling API BE-07 — 17 November 2026
+
+`ApiChatRepository`/`HttpApiChatRepository` membaca halaman pesan lama-ke-baru, mengirim teks dan ID lampiran committed, serta retry ID pesan tersimpan. POST mengirim `clientMessageId` UUID stabil dalam body sebagai dedupe BE-07; payload allowlist tidak mengirim sender/actor. Parser memeriksa status/attempt, waktu, ukuran lampiran integer aman, dan URL media privat `/v1/attachments/{id}/content`. Transport tidak pasti tidak diulang otomatis; caller membaca ulang atau mengirim payload dengan clientMessageId sama, sedangkan route retry memerlukan messageId tersimpan. Upload/commit media dan runtime UI API masih gate FE-25; SQLite tetap sumber aktif.
