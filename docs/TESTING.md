@@ -979,4 +979,15 @@ Adapter Flow D membaca ringkasan ledger, transaksi, tujuan pencairan, riwayat/de
 | `npm run check` di `apps/mobile` | **Lulus**: typecheck, Expo lint tanpa warning proyek, kompilasi tes domain, dan 175/175 tes. Run pertama gagal karena file adapter baru belum dimasukkan ke `tsconfig.domain-tests.json`; setelah diperbaiki, run ulang lulus. Node masih memberi `ExperimentalWarning` SQLite. |
 | Tiga tes baru | Fake HTTP memeriksa route owner-scoped, saldo/total/withdrawal, integer rupiah, payload allowlist, retry manual key/payload yang sama setelah respons hilang, input tidak valid, dan respons dengan aritmetika uang salah. Tidak menghubungi backend/PostgreSQL. |
 | Integrasi dan QA | Adapter hanya tersedia dari `createApiAdapters`; `App.tsx` tetap SQLite. API runtime, perangkat fisik, Android build/emulator, Figma MCP, deployment, provider produksi, secret, dan transfer dana nyata tidak digunakan. FE-25 tetap gate migrasi satu otoritas dan QA Android. |
+
+## FE-25 lanjutan — availability, kalender, dan blok waktu API BE-04 (17 November 2026)
+
+Adapter baru membaca row availability BE-04 yang memakai snake_case untuk kolom tabel, membaca kalender appointment/follow-up/blok, dan menyediakan PUT availability serta POST/PUT/DELETE blok waktu. Input menggunakan allowlist, versi positif, tarif integer rupiah aman, timezone IANA, waktu ISO berzona, dan aturan weekday valid. Respons baru diproyeksikan setelah server mengembalikan data tersimpan. POST blok tidak menyediakan idempotensi BE-04; bila hasil transport belum diketahui, aplikasi harus membaca daftar blok sebelum tindakan berikutnya.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm run typecheck` di `apps/mobile` | **Lulus** setelah port/adapter awal dibuat. |
+| `npm run check` di `apps/mobile` | **Lulus**: typecheck, Expo lint tanpa warning proyek, kompilasi tes domain, dan 180/180 tes. Node masih memberi `ExperimentalWarning` SQLite. |
+| Lima tes baru | Fake HTTP memeriksa GET availability/kalender/blok, PUT allowlist dan versi, POST/PUT/DELETE blok, status hasil tersimpan, tarif dan rentang invalid, serta satu upaya saja saat POST tidak pasti. Tidak menghubungi API/PostgreSQL runtime. |
+| Integrasi dan QA | Adapter hanya diekspos factory; UI tetap SQLite. Perangkat fisik, Android build/emulator, Figma MCP, deployment, provider produksi, secret, dan transaksi nyata tidak digunakan. FE-25 dan QA Android/visual masih gate. |
 | QA perangkat dan integrasi | Belum dijalankan: Android fisik, wiring API mobile, dua perangkat, foto/media privat, emulator, Figma MCP, provider, deployment, dan transaksi nyata. |
