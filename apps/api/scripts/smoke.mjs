@@ -1019,7 +1019,13 @@ try {
       assert.equal((await getConsultation(visitConsultationId)).status, 'in_progress');
       const timelineAfterFinal = await sendJson(healthy.baseUrl, `/v1/livestock/${animalId}/health-events`, farmer.accessToken, 'GET');
       assert.equal(timelineAfterFinal.status, 200);
-      assert.ok((await timelineAfterFinal.json()).some((event) => event.description === 'Penilaian klinis fiktif'));
+      const timelineAfterFinalEvents = await timelineAfterFinal.json();
+      const finalizedTimelineEvent = timelineAfterFinalEvents.find((event) => event.description === 'Penilaian klinis fiktif');
+      assert.ok(finalizedTimelineEvent);
+      assert.equal(timelineAfterFinalEvents.filter((event) => event.description === 'Penilaian klinis fiktif').length, 1);
+      assert.equal(finalizedTimelineEvent.kind, 'examination');
+      assert.equal(finalizedTimelineEvent.provenance, 'clinical_note');
+      assert.deepEqual(Object.keys(finalizedTimelineEvent).sort(), ['id', 'kind', 'occurredAt', 'description', 'provenance', 'createdAt'].sort());
       const beforeCompleteEarnings = await (await sendJson(healthy.baseUrl, '/v1/me/vet/earnings', vet.accessToken, 'GET')).json();
       assert.equal(beforeCompleteEarnings.transactions.some((entry) => entry.consultationId === visitConsultationId), false);
       const unconfirmedComplete = await sendJson(healthy.baseUrl, `/v1/consultations/${visitConsultationId}/complete`, vet.accessToken, 'POST',
@@ -1403,6 +1409,16 @@ try {
       const vetSchedule=await sendJson(healthy.baseUrl,`/v1/me/vet/schedule?from=${encodeURIComponent(scheduleFrom)}&to=${encodeURIComponent(scheduleTo)}`,vet.accessToken,'GET');
       assert.equal(vetSchedule.status,200);
       assert.deepEqual((await vetSchedule.json()).appointments.map(item=>item.id).sort(),[consultationId,unpaidConsultationId].sort());
+      for (const status of ['draft', 'awaiting_payment']) {
+        const hiddenPatientConsultationId = randomUUID();
+        consultationIds.push(hiddenPatientConsultationId);
+        await database.query(`INSERT INTO consultations
+          (id, display_code, farmer_id, vet_id, animal_id, service_type, complaint, status,
+           starts_at, ends_at, fee_snapshot_idr, commission_snapshot_idr)
+          VALUES ($1, $2, $3, $4, $5, 'chat', 'Booking fiktif tersembunyi', $6,
+                  now() + interval '5 hours', now() + interval '6 hours', 1000, 0)`,
+        [hiddenPatientConsultationId, `BE16-${hiddenPatientConsultationId}`, farmer.user.id, vet.user.id, createdAnimal.id, status]);
+      }
       const farmTakeover = await sendJson(healthy.baseUrl, '/v1/livestock', outsider.accessToken, 'POST', {
         farmId, displayCode: 'TAKE-001', name: 'Tidak boleh', species: 'sapi', sex: 'female',
       });
@@ -1415,6 +1431,21 @@ try {
       assert.equal(vetPatientList.status, 200);
       const vetPatients = await vetPatientList.json();
       assert.deepEqual(vetPatients.map((item) => item.id).sort(), [animalId, createdAnimal.id].sort());
+      const expectedPatientFields = ['id', 'displayCode', 'name', 'species', 'breed', 'sex', 'birthDate', 'estimatedAgeMonths', 'weightKg', 'farmId', 'farmerId', 'ownerName', 'lastServiceAt', 'serviceCount'].sort();
+      assert.ok(vetPatients.every((item) => JSON.stringify(Object.keys(item).sort()) === JSON.stringify(expectedPatientFields)));
+      assert.ok(vetPatients.every((item) => item.ownerName === 'Peternak Fiktif BE-07'));
+      assert.ok(vetPatients.every((item) => Number.isInteger(item.serviceCount) && item.serviceCount > 0));
+      assert.ok(vetPatients.every((item) => Number.isFinite(Date.parse(item.lastServiceAt))));
+      assert.ok(vetPatients.every((item) => item.weightKg === null || typeof item.weightKg === 'string'));
+      const expectedPatientFacts = await database.query(`SELECT animal_id,COUNT(*)::int AS service_count,
+        MAX(COALESCE(completion_at,starts_at,updated_at)) AS last_service_at
+        FROM consultations WHERE vet_id=$1 AND status NOT IN ('draft','awaiting_payment') GROUP BY animal_id`, [vet.user.id]);
+      for (const patient of vetPatients) {
+        const fact = expectedPatientFacts.rows.find((item) => item.animal_id === patient.id);
+        assert.ok(fact, `Patient ${patient.id} must be backed by an assigned non-draft, non-awaiting-payment consultation.`);
+        assert.equal(patient.serviceCount, fact.service_count);
+        assert.equal(Date.parse(patient.lastServiceAt), fact.last_service_at.getTime());
+      }
       const vetLivestockPageOneResponse = await sendJson(healthy.baseUrl,'/v1/livestock/page?limit=1',vet.accessToken,'GET');
       assert.equal(vetLivestockPageOneResponse.status,200);
       const vetLivestockPageOne = await vetLivestockPageOneResponse.json();
@@ -1439,9 +1470,19 @@ try {
       const careBody = { kind: 'care', occurredAt: new Date().toISOString(), description: 'Catatan perawatan fiktif', sourceKey: `be03-${randomUUID()}` };
       const careFirst = await sendJson(healthy.baseUrl, `/v1/livestock/${createdAnimal.id}/care-events`, farmer.accessToken, 'POST', careBody);
       assert.equal(careFirst.status, 201);
+      const careFirstBody = await careFirst.json();
+      assert.deepEqual(Object.keys(careFirstBody).sort(), ['id', 'kind', 'occurredAt', 'description', 'provenance'].sort());
+      assert.equal(careFirstBody.provenance, 'farmer_report');
+      assert.equal('sourceKey' in careFirstBody, false);
+      assert.equal('createdAt' in careFirstBody, false);
       const careAgain = await sendJson(healthy.baseUrl, `/v1/livestock/${createdAnimal.id}/care-events`, farmer.accessToken, 'POST', careBody);
       assert.equal(careAgain.status, 201);
-      assert.equal((await careAgain.json()).id, (await careFirst.json()).id);
+      const careAgainBody = await careAgain.json();
+      assert.equal(careAgainBody.id, careFirstBody.id);
+      assert.deepEqual(Object.keys(careAgainBody).sort(), ['id', 'kind', 'occurredAt', 'description', 'provenance'].sort());
+      const careConflict = await sendJson(healthy.baseUrl, `/v1/livestock/${createdAnimal.id}/care-events`, farmer.accessToken,
+        'POST', { ...careBody, description: 'Payload laporan yang berbeda' });
+      assert.equal(careConflict.status, 409);
 
       const notePath = `/v1/consultations/${consultationId}/note`;
       assert.equal((await sendJson(healthy.baseUrl, notePath, farmer.accessToken, 'GET')).status, 404);
@@ -1754,6 +1795,9 @@ try {
       assert.equal(finalEvents.length, 3);
       assert.ok(finalEvents.some((event) => event.description === 'Penilaian fiktif akhir'));
       assert.ok(finalEvents.every((event) => !('attachments' in event)));
+      assert.ok(finalEvents.every((event) => JSON.stringify(Object.keys(event).sort()) === JSON.stringify(['id', 'kind', 'occurredAt', 'description', 'provenance', 'createdAt'].sort())));
+      assert.equal(finalEvents.filter((event) => event.description === 'Penilaian fiktif akhir' && event.provenance === 'clinical_note').length, 1);
+      assert.ok(finalEvents.every((event) => !('actorId' in event) && !('findings' in event) && !('careInstructions' in event)));
 
       const messagesPath = `/v1/consultations/${consultationId}/messages`;
       const ownerList = await sendJson(healthy.baseUrl, `${messagesPath}?limit=2`, farmer.accessToken, 'GET');

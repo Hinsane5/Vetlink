@@ -895,7 +895,7 @@ FE-25 tetap **Sedang dikerjakan**. Adapter write mematuhi sesi server tetapi bel
 
 `LivestockHealthReadRepository`/`LivestockCareEventWriteRepository` dan `HttpApiLivestockHealthRepository` menambahkan GET timeline dan POST laporan perawatan BE-03. Timeline diparse dari array aktual dengan UUID, kind, provenance, `occurredAt`, dan `createdAt`; POST mengirim body allowlist dan menunggu row tersimpan dari server. `sourceKey` + payload sama bisa diulang untuk mengambil hasil server yang sama; payload berbeda mengembalikan konflik. Kegagalan transport tidak diulang otomatis dan tidak menghasilkan hasil sukses lokal. Kontrol owner, Dokter/Peternak, serta assignment tetap di bearer dan backend.
 
-`PatientReadRepository`/`HttpApiPatientReadRepository` membaca array compact hasil query service yang aktual dan mempertahankan decimal berat sebagai string. Responsnya belum setara dengan `PatientSnapshot` dan belum memiliki schema OpenAPI di controller; adapter hanya menyimpan model API terpisah sampai kontrak response UI pasien ditetapkan. `createApiAdapters` mengekspos repository, tetapi `App.tsx` tetap memakai SQLite. Bukti perintah ada pada tabel berikut.
+`PatientReadRepository`/`HttpApiPatientReadRepository` membaca array compact hasil query service yang aktual dan mempertahankan decimal berat sebagai string. Pada checkpoint adapter ini, response belum memiliki schema OpenAPI; follow-up kontrak BE-16 kemudian menambahkan DTO dan tiga field additive yang dicatat pada section setelah bukti ini. Adapter mobile tetap menyimpan model API terpisah dan belum menghubungkan response tersebut ke `PatientSnapshot`. `createApiAdapters` mengekspos repository, tetapi `App.tsx` tetap memakai SQLite. Bukti perintah ada pada tabel berikut.
 
 | Pemeriksaan | Hasil dan batas bukti |
 | --- | --- |
@@ -903,9 +903,9 @@ FE-25 tetap **Sedang dikerjakan**. Adapter write mematuhi sesi server tetapi bel
 | `npm run check` di `apps/mobile` | **Lulus**: typecheck, Expo lint, kompilasi tes domain, dan 162/162 tes (0 gagal). Tujuh tes adapter baru memeriksa parsing timeline/pasien, validasi body, provenance, penolakan dokter, retry dan transport tidak pasti. |
 | `git diff --check` | **Lulus** setelah kode dan dokumentasi ditambahkan. |
 | Tes baru FE-25 | Fixture HTTP lokal memeriksa array timeline dan `createdAt`, provenance catatan final/laporan/reminder, payload POST tanpa identitas client, bounds UUID/kind/timestamp/deskripsi/sourceKey, retry sourceKey/payload yang sama setelah response hilang, konflik payload berbeda, penolakan Dokter 403, serta parse pasien compact. Tes ini tidak menghubungi backend runtime. |
-| Shape gap dan QA | Timeline tidak mengembalikan actor/metadata note/attachment; hasil POST tidak memiliki `createdAt`; daftar pasien tidak memiliki `PatientSnapshot` fields dan tidak memiliki response DTO OpenAPI. Tidak ada wiring UI/SQLite API dual-write, API smoke, Android build/emulator, Figma MCP, provider, secret, deployment, atau transaksi uang nyata. QA dua perangkat tetap gate. |
+| Shape gap dan QA pada checkpoint adapter | Timeline tidak mengembalikan actor/metadata note/attachment; hasil POST tidak memiliki `createdAt`; adapter daftar pasien masih compact dan belum memetakan `PatientSnapshot`. DTO OpenAPI dan field additive backend ditambahkan pada follow-up di bawah. Tidak ada wiring UI/SQLite API dual-write, API smoke, Android build/emulator, Figma MCP, provider, secret, deployment, atau transaksi uang nyata pada checkpoint adapter. QA dua perangkat tetap gate. |
 
-FE-25 tetap **Sedang dikerjakan**. Adapter tidak dipakai layar; gate list pasien dan proyeksi riwayat klinis perlu keputusan kontrak sebelum pemetaan UI, sedangkan migrasi runtime tetap menunggu perpindahan satu otoritas baca/tulis dan QA integrasi.
+FE-25 tetap **Sedang dikerjakan**. Adapter tidak dipakai layar; kontrak pasien backend kini tersedia tetapi proyeksi `PatientSnapshot` belum lengkap. Migrasi runtime tetap menunggu perpindahan satu otoritas baca/tulis dan QA integrasi.
 
 ## FE-25 lanjutan — consultation API BE-05 Flow A/B (17 November 2026)
 
@@ -919,3 +919,20 @@ Slice ini menambahkan port/adapter konsultasi API untuk `POST /v1/consultation-q
 | Integrasi dan QA | Tes memakai fake HTTP lokal dan fixture sepenuhnya fiktif. API/PostgreSQL runtime, wiring `App.tsx`, Android build/emulator, Figma MCP, perangkat fisik, provider, secret, deployment, dan transaksi finansial nyata tidak dijalankan. BE-05 actions/transition, pembayaran, completion dan integrasi dua perangkat tetap di luar slice ini. |
 
 FE-25 tetap **Sedang dikerjakan**. Rincian payload, response, idempotency, dan batas runtime ada pada [handover API](MOBILE_API_HANDOVER.md); perpindahan runtime memerlukan integrasi terkoordinasi agar hanya ada satu otoritas baca/tulis.
+
+FE-25 tetap **Sedang dikerjakan**. Kontrak backend untuk pasien dan timeline kini tersedia; adapter belum memetakan seluruh field pasien ke `PatientSnapshot` dan belum dipakai layar. Migrasi runtime tetap menunggu perpindahan satu otoritas baca/tulis dan QA integrasi.
+
+## Kontrak respons pasien dan kesehatan BE-03 FE-25 — 17 November 2026
+
+BE-16 menambahkan `PatientResponseDto`, `LivestockHealthEventResponseDto`, dan `CareEventResponseDto` agar OpenAPI menggambarkan array pasien, timeline kesehatan, serta hasil POST care-event yang benar-benar dikembalikan service. Daftar pasien menambah `ownerName`, `lastServiceAt`, dan `serviceCount` dari konsultasi yang ditugaskan ke Dokter pada bearer; `draft` dan `awaiting_payment` tidak dihitung atau membuka pasien. Timeline tetap memuat catatan final immutable saja, sedangkan care-event tetap laporan Peternak dengan `sourceKey` sebagai identitas retry di request.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm ci --no-audit --no-fund` di `apps/api` | **Lulus**, 253 paket terpasang. Runtime Node `24.10.0` di bawah engine manifest `>=24.15.0`; npm mencatat peringatan engine. |
+| `npm run check` di `apps/api` | **Lulus**: TypeScript typecheck dan Nest build. |
+| `npm run api:contract` di `apps/api` | **Lulus**, 8/8. Tes baru memeriksa array dan field wajib response pasien/timeline/care-event, bentuk request `CareEventDto`, batas `sourceKey`, enum provenance/kind, dan tidak adanya email, actor, detail note, attachment, atau source key pada response. |
+| `npm run api:smoke` di `apps/api` | **Lulus** pada cluster PostgreSQL 17.4 baru, database `vetlink_be16_patient_contract`, loopback port `55432`; 18 migrasi dan fixture seed diterapkan. Smoke memeriksa exact response fields, ownerName, agregat konsultasi assigned tanpa draft/awaiting-payment, retry care-event dengan sourceKey yang sama dan 409 untuk payload berbeda, serta satu projection untuk catatan final. Server dan cluster dihentikan sesudah pemeriksaan; server di port 5432 tidak dipakai. |
+| `git diff --check` | **Lulus** setelah kode dan dokumentasi diperbarui. |
+| Integrasi mobile dan cakupan tersisa | `PatientSnapshot` belum sepenuhnya tercakup: `latestServiceType`, `latestServiceStatus`, dan photo tidak ditambahkan. Adapter API tetap terpisah, `App.tsx` tetap memakai SQLite; tidak ada UI, Android/emulator, Figma MCP, provider/secret, deployment, atau transaksi finansial nyata pada slice ini. |
+
+Cluster smoke telah dihentikan. Direktori data sementara `/tmp/vetlink-be16-patient-contract.dBra6g` masih tersimpan di host dan tidak dipakai sebagai runtime.

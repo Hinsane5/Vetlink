@@ -306,6 +306,73 @@ test('BE-16 read DTOs describe Farm, address, livestock, directory and slots', (
   assert.ok(paths['/v1/vets/page'].get.parameters.some((parameter) => parameter.name === 'service'));
 });
 
+test('BE-16 patient and health event responses describe the runtime projections', () => {
+  const paths = openApi.paths;
+  const schemas = openApi.components.schemas;
+  const arrayItem = (path, method, status, schemaName) => {
+    const schema = paths[path]?.[method]?.responses?.[status]?.content?.['application/json']?.schema;
+    assert.equal(schema?.type, 'array', `${method.toUpperCase()} ${path} must keep its array response`);
+    assert.equal(schema.items.$ref, `#/components/schemas/${schemaName}`);
+    return schemas[schemaName];
+  };
+
+  const patients = arrayItem('/v1/patients', 'get', '200', 'PatientResponseDto');
+  const patientFields = ['id', 'displayCode', 'name', 'species', 'breed', 'sex', 'birthDate', 'estimatedAgeMonths', 'weightKg', 'farmId', 'farmerId', 'ownerName', 'lastServiceAt', 'serviceCount'];
+  assert.deepEqual(Object.keys(patients.properties).sort(), [...patientFields].sort());
+  assert.deepEqual([...patients.required].sort(), [...patientFields].sort());
+  assert.equal(patients.properties.id.format, 'uuid');
+  assert.equal(patients.properties.birthDate.format, 'date');
+  assert.equal(patients.properties.weightKg.type, 'string');
+  assert.equal(patients.properties.weightKg.nullable, true);
+  assert.equal(patients.properties.ownerName.type, 'string');
+  assert.equal(patients.properties.ownerName.maxLength, 120);
+  assert.equal(patients.properties.lastServiceAt.format, 'date-time');
+  assert.equal(patients.properties.serviceCount.type, 'integer');
+  assert.equal(patients.properties.serviceCount.minimum, 1);
+  assert.equal(patients.properties.email, undefined);
+  assert.equal(patients.properties.phone, undefined);
+  assert.ok(paths['/v1/patients'].get.responses['200'].description.includes('draft dan awaiting_payment'));
+  assert.ok(paths['/v1/patients'].get.security?.some((entry) => entry.bearer !== undefined));
+
+  const timeline = arrayItem('/v1/livestock/{id}/health-events', 'get', '200', 'LivestockHealthEventResponseDto');
+  const timelineFields = ['id', 'kind', 'occurredAt', 'description', 'provenance', 'createdAt'];
+  assert.deepEqual(Object.keys(timeline.properties).sort(), [...timelineFields].sort());
+  assert.deepEqual([...timeline.required].sort(), [...timelineFields].sort());
+  assert.deepEqual(timeline.properties.kind.enum, ['examination', 'disease', 'vaccine', 'medication', 'care']);
+  assert.deepEqual(timeline.properties.provenance.enum, ['farmer_report', 'clinical_note', 'reminder']);
+  assert.equal(timeline.properties.description.minLength, 1);
+  assert.equal(timeline.properties.description.maxLength, 2000);
+  assert.equal(timeline.properties.occurredAt.format, 'date-time');
+  assert.equal(timeline.properties.createdAt.format, 'date-time');
+  assert.equal(timeline.properties.actorId, undefined);
+  assert.equal(timeline.properties.findings, undefined);
+  assert.equal(timeline.properties.attachments, undefined);
+  assert.ok(paths['/v1/livestock/{id}/health-events'].get.responses['200'].description.includes('tanpa draft'));
+
+  const careResponse = paths['/v1/livestock/{id}/care-events'].post.responses['201'].content['application/json'].schema;
+  assert.equal(careResponse.$ref, '#/components/schemas/CareEventResponseDto');
+  const care = schemas.CareEventResponseDto;
+  const careFields = ['id', 'kind', 'occurredAt', 'description', 'provenance'];
+  assert.deepEqual(Object.keys(care.properties).sort(), [...careFields].sort());
+  assert.deepEqual([...care.required].sort(), [...careFields].sort());
+  assert.deepEqual(care.properties.kind.enum, ['disease', 'vaccine', 'medication', 'care']);
+  assert.deepEqual(care.properties.provenance.enum, ['farmer_report']);
+  assert.equal(care.properties.description.minLength, 1);
+  assert.equal(care.properties.description.maxLength, 2000);
+  assert.equal(care.properties.sourceKey, undefined);
+  assert.equal(care.properties.actorId, undefined);
+  assert.equal(care.properties.createdAt, undefined);
+
+  const careOperation = paths['/v1/livestock/{id}/care-events'].post;
+  const careRequestRef = careOperation.requestBody.content['application/json'].schema.$ref;
+  assert.equal(careRequestRef, '#/components/schemas/CareEventDto');
+  const sourceKey = schemas.CareEventDto.properties.sourceKey;
+  assert.equal(sourceKey.minLength, 8);
+  assert.equal(sourceKey.maxLength, 128);
+  assert.equal(careOperation.parameters?.some((parameter) => parameter.$ref === '#/components/parameters/IdempotencyKey'), false,
+    'sourceKey in the body remains the idempotency identity for care-event retries.');
+});
+
 test('BE-05 consultation success responses describe the service projections', () => {
   const paths = openApi.paths;
   const schemas = openApi.components.schemas;
