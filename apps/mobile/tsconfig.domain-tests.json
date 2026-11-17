@@ -46,6 +46,7 @@
     "src/application/ports/ServerAuthRepository.ts",
     "src/application/ports/CommerceRepository.ts",
     "src/application/ports/ProfileRepository.ts",
+    "src/application/ports/ApiConsultationRepository.ts",
     "src/application/ports/ShippingQuoteProvider.ts",
     "src/domain/auth.ts",
     "src/domain/dashboard.ts",
@@ -79,6 +80,7 @@
     "src/data/remote/HttpApiLivestockWriteRepository.ts",
     "src/data/remote/HttpApiLivestockHealthRepository.ts",
     "src/data/remote/HttpApiPatientReadRepository.ts",
-    "src/data/remote/HttpApiVetDirectoryReadRepository.ts"
+    "src/data/remote/HttpApiVetDirectoryReadRepository.ts",
+    "src/data/remote/HttpApiConsultationRepository.ts"
   ]
 }

@@ -906,3 +906,16 @@ FE-25 tetap **Sedang dikerjakan**. Adapter write mematuhi sesi server tetapi bel
 | Shape gap dan QA | Timeline tidak mengembalikan actor/metadata note/attachment; hasil POST tidak memiliki `createdAt`; daftar pasien tidak memiliki `PatientSnapshot` fields dan tidak memiliki response DTO OpenAPI. Tidak ada wiring UI/SQLite API dual-write, API smoke, Android build/emulator, Figma MCP, provider, secret, deployment, atau transaksi uang nyata. QA dua perangkat tetap gate. |
 
 FE-25 tetap **Sedang dikerjakan**. Adapter tidak dipakai layar; gate list pasien dan proyeksi riwayat klinis perlu keputusan kontrak sebelum pemetaan UI, sedangkan migrasi runtime tetap menunggu perpindahan satu otoritas baca/tulis dan QA integrasi.
+
+## FE-25 lanjutan — consultation API BE-05 Flow A/B (17 November 2026)
+
+Slice ini menambahkan port/adapter konsultasi API untuk `POST /v1/consultation-quotes`, `POST /v1/consultations`, `GET /v1/consultations`, `GET /v1/consultations/{id}`, dan `GET /v1/consultations/{id}/visit`. Request POST memakai allowlist, UUID ID server, timestamp ISO dengan zona waktu, keluhan 1–4.000 karakter, alamat eksplisit untuk visit, dan `Idempotency-Key`; adapter memvalidasi response DTO termasuk alias waktu per route serta fee/komisi integer rupiah aman. Retry yang diminta caller memakai operasi key/payload yang sama; transport tidak pasti tidak diulang otomatis dan tidak menghasilkan hasil lokal. `createApiAdapters` mengekspos repository secara terpisah; `App.tsx` tetap memakai SQLite tanpa dual-write.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm ci --no-audit --no-fund` di `apps/mobile` | **Lulus**, 762 paket dipasang dari lockfile; npm mencatat deprecation pada `uuid@7.0.3` dan `eslint@9.39.5`. Percobaan check pertama sebelumnya berhenti sebelum typecheck karena `tsc` belum tersedia. |
+| `npm run check` di `apps/mobile` | **Lulus** setelah instalasi: typecheck, Expo lint, kompilasi `tsconfig.domain-tests.json`, dan 169/169 tes domain/repository (0 gagal). Tujuh tes fake HTTP baru memeriksa allowlist quote/booking, alamat visit, IDR safe integer, key/payload retry, tidak ada auto retry/sukses lokal, UUID/timestamp/bounds, response DTO, dan alias completedAt/completionAt/visitCompletedAt. |
+| `git diff --check` | **Lulus** setelah perubahan kode dan dokumen. |
+| Integrasi dan QA | Tes memakai fake HTTP lokal dan fixture sepenuhnya fiktif. API/PostgreSQL runtime, wiring `App.tsx`, Android build/emulator, Figma MCP, perangkat fisik, provider, secret, deployment, dan transaksi finansial nyata tidak dijalankan. BE-05 actions/transition, pembayaran, completion dan integrasi dua perangkat tetap di luar slice ini. |
+
+FE-25 tetap **Sedang dikerjakan**. Rincian payload, response, idempotency, dan batas runtime ada pada [handover API](MOBILE_API_HANDOVER.md); perpindahan runtime memerlukan integrasi terkoordinasi agar hanya ada satu otoritas baca/tulis.

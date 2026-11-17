@@ -3,6 +3,7 @@ import { DomainError } from '../../domain/errors';
 export const MAX_OPAQUE_CURSOR_LENGTH = 512;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const UTC_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,3})?(?:Z|\+00:00)$/;
+const ISO_TIMESTAMP_WITH_ZONE_PATTERN = /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,9})?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 export interface ReadPage<T> {
@@ -29,6 +30,13 @@ export function isDecimalString(value: unknown, pattern: RegExp): value is strin
 
 export function isUtcTimestamp(value: unknown): value is string {
   if (typeof value !== 'string' || !UTC_TIMESTAMP_PATTERN.test(value)) return false;
+  const date = value.slice(0, 10);
+  return isCalendarDate(date) && Number.isFinite(Date.parse(value));
+}
+
+/** ISO-8601 date-time with an explicit Z or numeric timezone offset. */
+export function isIsoTimestampWithTimezone(value: unknown): value is string {
+  if (typeof value !== 'string' || !ISO_TIMESTAMP_WITH_ZONE_PATTERN.test(value)) return false;
   const date = value.slice(0, 10);
   return isCalendarDate(date) && Number.isFinite(Date.parse(value));
 }

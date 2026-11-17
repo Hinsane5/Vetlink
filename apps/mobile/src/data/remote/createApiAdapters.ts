@@ -13,6 +13,7 @@ import { HttpApiLivestockWriteRepository } from './HttpApiLivestockWriteReposito
 import { HttpApiLivestockHealthRepository } from './HttpApiLivestockHealthRepository';
 import { HttpApiPatientReadRepository } from './HttpApiPatientReadRepository';
 import { HttpApiVetDirectoryReadRepository } from './HttpApiVetDirectoryReadRepository';
+import { HttpApiConsultationRepository } from './HttpApiConsultationRepository';
 
 /** Build API-only services from an explicitly configured development base URL. */
 export function createApiAdapters(baseUrl: string) {
@@ -29,5 +30,6 @@ export function createApiAdapters(baseUrl: string) {
     livestockHealth: new HttpApiLivestockHealthRepository(api),
     patients: new HttpApiPatientReadRepository(api),
     vets: new HttpApiVetDirectoryReadRepository(api),
+    consultations: new HttpApiConsultationRepository(api),
   };
 }
