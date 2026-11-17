@@ -22,6 +22,23 @@ interface LivestockRow {
   cursor_created_at?: string;
 }
 
+interface PatientProjectionRow {
+  id: string;
+  displayCode: string;
+  name: string;
+  species: string;
+  breed: string | null;
+  sex: 'female' | 'male' | 'unknown';
+  birthDate: string | null;
+  estimatedAgeMonths: number | null;
+  weightKg: string | null;
+  farmId: string;
+  farmerId: string;
+  ownerName: string;
+  lastServiceAt: Date | string;
+  serviceCount: number;
+}
+
 interface LivestockCursor {
   createdAt: string;
   id: string;
@@ -110,9 +127,16 @@ export class LivestockService {
 
   async patients(p: AuthenticatedPrincipal) {
     this.requireVet(p);
-    return (await this.db.query(`SELECT DISTINCT l.id,l.display_code AS "displayCode",l.name,l.species,l.breed,l.sex,l.birth_date AS "birthDate",l.estimated_age_months AS "estimatedAgeMonths",l.weight_kg AS "weightKg",l.farm_id AS "farmId",l.farmer_id AS "farmerId"
+    const result = await this.db.query<PatientProjectionRow>(`SELECT l.id,l.display_code AS "displayCode",l.name,l.species,l.breed,l.sex,l.birth_date AS "birthDate",l.estimated_age_months AS "estimatedAgeMonths",l.weight_kg AS "weightKg",l.farm_id AS "farmId",l.farmer_id AS "farmerId",u.full_name AS "ownerName",
+      MAX(COALESCE(c.completion_at,c.starts_at,c.updated_at)) AS "lastServiceAt",COUNT(c.id)::int AS "serviceCount"
       FROM livestock l JOIN consultations c ON c.animal_id=l.id AND c.farmer_id=l.farmer_id
-      WHERE c.vet_id=$1 AND c.status NOT IN ('draft','awaiting_payment') ORDER BY l.name,l.id`,[p.userId])).rows;
+      JOIN users u ON u.id=l.farmer_id
+      WHERE c.vet_id=$1 AND c.status NOT IN ('draft','awaiting_payment')
+      GROUP BY l.id,u.id ORDER BY l.name,l.id`,[p.userId]);
+    return result.rows.map((row) => ({
+      ...row,
+      lastServiceAt: row.lastServiceAt instanceof Date ? row.lastServiceAt.toISOString() : new Date(row.lastServiceAt).toISOString(),
+    }));
   }
 
   async get(p: AuthenticatedPrincipal,id: string) {
