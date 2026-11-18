@@ -23,6 +23,7 @@ import { HttpApiCommerceRepository } from './HttpApiCommerceRepository';
 import { HttpApiNotificationsRepository } from './HttpApiNotificationsRepository';
 import { HttpApiReviewRepository } from './HttpApiReviewRepository';
 import { HttpApiProfileRepository } from './HttpApiProfileRepository';
+import { HttpApiMediaRepository } from './HttpApiMediaRepository';
 
 /** Build API-only services from an explicitly configured development base URL. */
 export function createApiAdapters(baseUrl: string) {
@@ -44,6 +45,7 @@ export function createApiAdapters(baseUrl: string) {
     vetSchedule: new HttpApiVetScheduleRepository(api),
     clinical: new HttpApiClinicalRepository(api),
     chat: new HttpApiChatRepository(api),
+    media: new HttpApiMediaRepository(api),
     careCoordination: new HttpApiCareCoordinationRepository(api),
     commerce: new HttpApiCommerceRepository(api),
     notifications: new HttpApiNotificationsRepository(api),

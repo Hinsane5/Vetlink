@@ -56,6 +56,7 @@
     "src/application/ports/ApiNotificationsRepository.ts",
     "src/application/ports/ApiReviewRepository.ts",
     "src/application/ports/ApiProfileRepository.ts",
+    "src/application/ports/ApiMediaRepository.ts",
     "src/application/ports/ShippingQuoteProvider.ts",
     "src/domain/auth.ts",
     "src/domain/dashboard.ts",
@@ -99,6 +100,7 @@
     "src/data/remote/HttpApiCommerceRepository.ts",
     "src/data/remote/HttpApiNotificationsRepository.ts",
     "src/data/remote/HttpApiReviewRepository.ts",
-    "src/data/remote/HttpApiProfileRepository.ts"
+    "src/data/remote/HttpApiProfileRepository.ts",
+    "src/data/remote/HttpApiMediaRepository.ts"
   ]
 }

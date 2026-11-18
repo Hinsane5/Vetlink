@@ -1091,3 +1091,12 @@ Adapter profil menormalkan respons raw profil/submission dan memakai payload PAT
 | `npm run check` di `apps/api` | **Lulus**: TypeScript typecheck dan Nest build. |
 | `npm run api:contract` di `apps/api` | **Lulus**: 9/9 tes, termasuk metadata role khusus pada GET/PATCH `/me/farmer` dan `/me/vet`. |
 | Integrasi/QA | Smoke PostgreSQL tidak diulang untuk guard ini. Upload multipart, wiring API UI, Android build/QA perangkat, emulator, Figma MCP, provider produksi, deployment, dan transaksi nyata tidak dijalankan. |
+
+## FE-25 — media privat BE-07 (18 November 2026)
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm run typecheck` di `apps/mobile` | **Lulus**. |
+| `npm run check` di `apps/mobile` | **Lulus**: typecheck, Expo lint, kompilasi tes domain, 208/208 tes. Node memberi `ExperimentalWarning` SQLite. |
+| Tiga tes media baru | Fake HTTP memeriksa FormData, bearer, `Idempotency-Key`, commit eksplisit, unduhan privat, byte count, validasi berkas, dan kegagalan jaringan. Tidak membuktikan transfer file Android atau server hidup. |
+| Integrasi/QA | Runtime masih SQLite; API media belum dipasang ke UI. Build Android, emulator, Figma MCP, QA perangkat, provider produksi, dan transaksi nyata tidak dijalankan. |
