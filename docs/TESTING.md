@@ -1100,3 +1100,11 @@ Adapter profil menormalkan respons raw profil/submission dan memakai payload PAT
 | `npm run check` di `apps/mobile` | **Lulus**: typecheck, Expo lint, kompilasi tes domain, 208/208 tes. Node memberi `ExperimentalWarning` SQLite. |
 | Tiga tes media baru | Fake HTTP memeriksa FormData, bearer, `Idempotency-Key`, commit eksplisit, unduhan privat, byte count, validasi berkas, dan kegagalan jaringan. Tidak membuktikan transfer file Android atau server hidup. |
 | Integrasi/QA | Runtime masih SQLite; API media belum dipasang ke UI. Build Android, emulator, Figma MCP, QA perangkat, provider produksi, dan transaksi nyata tidak dijalankan. |
+
+## FE-25 — dokumen profesi BE-02 (18 November 2026)
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm run check` di `apps/mobile` | **Lulus**: typecheck, Expo lint, kompilasi tes domain, 209/209 tes. Node memberi `ExperimentalWarning` SQLite. |
+| Tes upload dokumen | Fake HTTP memeriksa route, bearer, FormData satu file, tanpa `Content-Type` dan tanpa key idempoten, MIME/ukuran, serta kegagalan transport. Tidak membuktikan transfer Android atau penyimpanan backend. |
+| Integrasi/QA | UI tetap SQLite. Build Android, emulator, Figma MCP, QA perangkat, provider produksi, dan transaksi nyata tidak dijalankan. |

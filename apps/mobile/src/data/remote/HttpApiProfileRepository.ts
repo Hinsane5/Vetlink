@@ -1,4 +1,4 @@
-import type { ApiFarmerProfile, ApiProfileRepository, ApiVerificationSubmission, ApiVetProfile } from '../../application/ports/ApiProfileRepository';
+import type { ApiFarmerProfile, ApiProfessionalDocument, ApiProfessionalDocumentFile, ApiProfileRepository, ApiVerificationSubmission, ApiVetProfile } from '../../application/ports/ApiProfileRepository';
 import { ApiClient } from './ApiClient';
 import { invalidQuery, invalidResponse, isIsoTimestampWithTimezone, isNonEmptyText, isRecord, isUuid } from './apiReadValidation';
 
@@ -40,6 +40,23 @@ export class HttpApiProfileRepository implements ApiProfileRepository {
     const value = await this.api.request<unknown>('/v1/me/vet/verification');
     if (!Array.isArray(value)) throw invalidResponse('Riwayat verifikasi tidak sesuai kontrak BE-02.');
     return value.map((item: unknown) => parseSubmission(item, false));
+  }
+
+  async uploadProfessionalDocument(file: ApiProfessionalDocumentFile): Promise<ApiProfessionalDocument> {
+    if (!isRecord(file) || typeof file.uri !== 'string' || !/^(file|content):\/\//.test(file.uri)
+      || !isNonEmptyText(file.filename, 255)
+      || !['application/pdf', 'image/jpeg', 'image/png', 'image/webp'].includes(file.mimeType)
+      || !Number.isSafeInteger(file.byteSize) || file.byteSize < 1 || file.byteSize > 10 * 1024 * 1024) {
+      throw invalidQuery('Dokumen profesi tidak sesuai jenis atau batas ukuran BE-02.');
+    }
+    const form = new FormData();
+    form.append('file', { uri: file.uri, name: file.filename, type: file.mimeType } as unknown as Blob);
+    const value = await this.api.uploadMultipart<unknown>('/v1/me/vet/professional-documents', form);
+    if (!isRecord(value) || !isUuid(value.id) || !isNonEmptyText(value.filename, 255)
+      || value.mimeType !== file.mimeType || value.byteSize !== file.byteSize) {
+      throw invalidResponse('Dokumen profesi belum tersimpan sesuai kontrak BE-02.');
+    }
+    return { id: value.id, filename: value.filename, mimeType: value.mimeType as ApiProfessionalDocument['mimeType'], byteSize: value.byteSize };
   }
 
   async submitVerification(documentIds: string[]): Promise<ApiVerificationSubmission> {

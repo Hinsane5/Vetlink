@@ -61,6 +61,29 @@ test('profile adapter rejects identity mismatch, invalid payload and forged veri
   await assert.rejects(forged.submitVerification([id.document]), { code: 'API_RESPONSE_INVALID' });
 });
 
+test('professional document upload uses one private multipart request and validates saved metadata', async () => {
+  const previous = globalThis.FormData;
+  globalThis.FormData = class { fields = []; append(...args) { this.fields.push(args); } };
+  try {
+    const calls = [];
+    const repository = new HttpApiProfileRepository(apiClient(async (url, init) => {
+      calls.push({ url, init });
+      return response(201, { id: id.document, filename: 'fiktif.pdf', mimeType: 'application/pdf', byteSize: 4 });
+    }));
+    const file = { uri: 'file:///fictional/fiktif.pdf', filename: 'fiktif.pdf', mimeType: 'application/pdf', byteSize: 4 };
+    assert.equal((await repository.uploadProfessionalDocument(file)).id, id.document);
+    assert.equal(calls[0].url.endsWith('/me/vet/professional-documents'), true);
+    assert.equal(calls[0].init.headers.Authorization, 'Bearer access-token-1');
+    assert.equal(calls[0].init.headers['Content-Type'], undefined);
+    assert.equal(calls[0].init.headers['Idempotency-Key'], undefined);
+    assert.deepEqual(calls[0].init.body.fields.map(([name]) => name), ['file']);
+    await assert.rejects(repository.uploadProfessionalDocument({ ...file, byteSize: 11 * 1024 * 1024 }), { code: 'VALIDATION_FAILED' });
+    assert.equal(calls.length, 1);
+    const uncertain = new HttpApiProfileRepository(apiClient(async () => { throw new Error('lost response'); }));
+    await assert.rejects(uncertain.uploadProfessionalDocument(file), { code: 'SERVICE_UNAVAILABLE' });
+  } finally { globalThis.FormData = previous; }
+});
+
 function apiClient(fetcher) {
   return new ApiClient('http://localhost:3000', {
     async read() { return { accessToken: 'access-token-1', refreshToken: 'refresh-token-1', sessionId: 'session-1' }; },
