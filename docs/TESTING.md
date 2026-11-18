@@ -1046,3 +1046,14 @@ Adapter care coordination kini membaca/membuat Reminder, mengulang delivery deng
 | `npm run check` di `apps/mobile` | **Lulus**: typecheck, Expo lint, kompilasi tes domain, 192/192 tes. Node memberi `ExperimentalWarning` SQLite. |
 | Tiga tes baru | Fake HTTP memeriksa GET/POST/PATCH/complete, allowlist payload, pemisahan status pengiriman/perawatan, konfirmasi eksplisit, respons invalid, dan satu upaya pada transport gagal. Tidak menghubungi backend runtime. |
 | Integrasi dan QA | Adapter diekspos factory; UI tetap SQLite. Integrasi API end-to-end dan QA perangkat/visual masih gate FE-25. Android build, emulator, Figma MCP, provider produksi, deployment, dan transaksi finansial nyata tidak dijalankan. |
+
+## FE-25 lanjutan — keranjang dan order API BE-11/12 (18 November 2026)
+
+Adapter commerce memakai DTO server untuk cart, quote, order, dan shipment. Validasi jumlah rupiah, ID, versi, status, serta snapshot dilakukan sebelum hasil digunakan; POST order memakai key caller yang stabil dan tidak diulang otomatis. Semua request berjalan melalui sesi API Peternak, sedangkan UI tetap SQLite.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm run typecheck` di `apps/mobile` | **Lulus** setelah port/adapter dibuat. |
+| `npm run check` di `apps/mobile` | **Lulus**: typecheck, Expo lint, kompilasi tes domain, 196/196 tes. Node memberi `ExperimentalWarning` SQLite. |
+| Empat tes baru | Fake HTTP memeriksa versi dan allowlist cart, quote/order server, retry order eksplisit dengan key/payload sama setelah respons hilang, daftar/detail/timeline, input invalid, total palsu, dan status order baru. Tidak menghubungi PostgreSQL runtime. |
+| Integrasi dan QA | Adapter tersedia di factory; UI tetap SQLite. Migrasi API satu otoritas dan QA dua perangkat fisik tetap gate FE-25/BE-16. Android build, emulator, Figma MCP, deployment, provider produksi, dan transaksi uang nyata tidak dijalankan. |
