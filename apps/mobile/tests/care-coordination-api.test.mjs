@@ -11,6 +11,8 @@ const id = {
   animal: '55555555-5555-4555-8555-555555555555',
   report: '66666666-6666-4666-8666-666666666666',
   operation: '77777777-7777-4777-8777-777777777777',
+  reminder: '88888888-8888-4888-8888-888888888888',
+  healthEvent: '99999999-9999-4999-8999-999999999999',
 };
 const key = 'care-operation-1';
 const at = '2026-11-17T10:00:00.000Z';
@@ -26,6 +28,12 @@ const report = {
   submittedAt: at, viewedAt: null,
 };
 const operated = (value, replayed = false) => ({ ...value, operationId: id.operation, replayed });
+const reminder = {
+  id: id.reminder, animalId: id.animal, consultationId: id.consultation, followUpId: id.followUp,
+  ownerId: id.farmer, createdBy: id.vet, kind: 'care', dueAt: '2026-11-19T09:00:00.000Z',
+  instructions: 'Perawatan fiktif', careStatus: 'scheduled', deliveryStatus: 'failed', completedAt: null,
+  deliveryAttempt: 1, version: 2, createdAt: at, updatedAt: at,
+};
 
 test('follow-up read, create, and cancellation use BE-09 routes and allowlisted payloads', async () => {
   const calls = [];
@@ -85,6 +93,67 @@ test('care adapter rejects invalid input and mismatched server responses before 
   const wrongReport = new HttpApiCareCoordinationRepository(apiClient(async () => response(200, operated({ ...report, followUpId: id.consultation }))));
   await assert.rejects(wrongReport.createProgressReport(id.followUp, { idempotencyKey: key,
     payload: { text: report.text } }), { code: 'API_RESPONSE_INVALID' });
+});
+
+test('reminder read, create, and delivery retry preserve separate care and delivery states', async () => {
+  const calls = [];
+  const repository = new HttpApiCareCoordinationRepository(apiClient(async (url, init) => {
+    calls.push({ url, init });
+    if (init.method === 'GET') return response(200, { items: [reminder] });
+    if (init.method === 'POST') return response(201, operated(reminder));
+    return response(200, operated({ ...reminder, deliveryStatus: 'sent', deliveryAttempt: 2, version: 3 }));
+  }));
+  assert.equal((await repository.listReminders())[0].careStatus, 'scheduled');
+  const result = await repository.createReminder({ idempotencyKey: key, payload: {
+    animalId: id.animal, consultationId: id.consultation, followUpId: id.followUp,
+    kind: 'care', dueAt: reminder.dueAt, instructions: reminder.instructions, ownerId: id.farmer,
+  } });
+  assert.equal(result.deliveryStatus, 'failed');
+  const retried = await repository.retryReminderDelivery(id.reminder, key);
+  assert.equal(retried.deliveryStatus, 'sent');
+  assert.equal(retried.careStatus, 'scheduled');
+  assert.deepEqual(JSON.parse(calls[1].init.body), {
+    animalId: id.animal, consultationId: id.consultation, followUpId: id.followUp,
+    kind: 'care', dueAt: reminder.dueAt, instructions: reminder.instructions,
+  });
+  assert.deepEqual(JSON.parse(calls[2].init.body), { action: 'retry_delivery' });
+  assert.ok(calls[2].url.endsWith(`/v1/reminders/${id.reminder}`));
+});
+
+test('care completion requires explicit confirmation and a persisted done reminder with one event ID', async () => {
+  const calls = [];
+  const repository = new HttpApiCareCoordinationRepository(apiClient(async (url, init) => {
+    calls.push({ url, init });
+    return response(200, operated({
+      reminder: { ...reminder, careStatus: 'done', completedAt: at, version: 3 }, healthEventId: id.healthEvent,
+    }, true));
+  }));
+  await assert.rejects(repository.completeCare(id.reminder, { idempotencyKey: key,
+    payload: { confirmation: false } }), { code: 'VALIDATION_FAILED' });
+  assert.equal(calls.length, 0);
+  const result = await repository.completeCare(id.reminder, { idempotencyKey: key,
+    payload: { confirmation: true, deliveryStatus: 'sent' } });
+  assert.equal(result.healthEventId, id.healthEvent);
+  assert.equal(result.replayed, true);
+  assert.equal(result.reminder.deliveryStatus, 'failed');
+  assert.deepEqual(JSON.parse(calls[0].init.body), { confirmation: true });
+});
+
+test('reminder mutations reject bad inputs, malformed delivery, and uncertain transport without success', async () => {
+  let calls = 0;
+  const repository = new HttpApiCareCoordinationRepository(apiClient(async () => { calls += 1; throw new Error('response lost'); }));
+  await assert.rejects(repository.createReminder({ idempotencyKey: key, payload: {
+    kind: 'care', dueAt: reminder.dueAt, instructions: reminder.instructions,
+  } }), { code: 'VALIDATION_FAILED' });
+  await assert.rejects(repository.retryReminderDelivery('bad-id', key), { code: 'VALIDATION_FAILED' });
+  assert.equal(calls, 0);
+  await assert.rejects(repository.createReminder({ idempotencyKey: key, payload: {
+    animalId: id.animal, kind: 'care', dueAt: reminder.dueAt, instructions: reminder.instructions,
+  } }), { code: 'SERVICE_UNAVAILABLE' });
+  assert.equal(calls, 1);
+  const malformed = new HttpApiCareCoordinationRepository(apiClient(async () => response(200,
+    operated({ ...reminder, deliveryStatus: 'sent', careStatus: 'done', completedAt: null }))));
+  await assert.rejects(malformed.retryReminderDelivery(id.reminder, key), { code: 'API_RESPONSE_INVALID' });
 });
 
 function apiClient(fetcher) {

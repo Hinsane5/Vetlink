@@ -1,4 +1,4 @@
-import type { ApiCareCoordinationRepository, ApiFollowUp, ApiProgressReport, CareApiOperation } from '../../application/ports/ApiCareCoordinationRepository';
+import type { ApiCareCompletion, ApiCareCoordinationRepository, ApiFollowUp, ApiProgressReport, ApiReminder, CareApiOperation } from '../../application/ports/ApiCareCoordinationRepository';
 import { ApiClient } from './ApiClient';
 import { invalidQuery, invalidResponse, isIsoTimestampWithTimezone, isNonEmptyText, isRecord, isUuid } from './apiReadValidation';
 
@@ -62,6 +62,61 @@ export class HttpApiCareCoordinationRepository implements ApiCareCoordinationRep
     }), followUpId, true);
     return result;
   }
+
+  async listReminders(): Promise<ApiReminder[]> {
+    const value = await this.api.request<unknown>('/v1/reminders');
+    if (!isRecord(value) || !Array.isArray(value.items)) throw invalidResponse('Daftar pengingat tidak sesuai kontrak BE-09.');
+    return value.items.map((item: unknown) => parseReminder(item));
+  }
+
+  async createReminder(operation: CareApiOperation<{ animalId?: string; consultationId?: string; followUpId?: string; kind: 'care' | 'follow_up'; dueAt: string; instructions: string }>): Promise<ApiReminder> {
+    const { key, payload } = validateOperation(operation);
+    for (const id of [payload.animalId, payload.consultationId, payload.followUpId]) {
+      if (id !== undefined && !isUuid(id)) throw invalidQuery('ID pengingat harus UUID server.');
+    }
+    if (payload.animalId === undefined && payload.consultationId === undefined && payload.followUpId === undefined)
+      throw invalidQuery('Pengingat memerlukan konteks ternak, layanan, atau tindak lanjut.');
+    if (payload.kind !== 'care' && payload.kind !== 'follow_up') throw invalidQuery('Jenis pengingat tidak valid.');
+    if (!isIsoTimestampWithTimezone(payload.dueAt) || !isNonEmptyText(payload.instructions, 500)
+      || payload.instructions.trim().length < 3) throw invalidQuery('Waktu atau instruksi pengingat tidak valid.');
+    const body = { ...(payload.animalId === undefined ? {} : { animalId: payload.animalId }),
+      ...(payload.consultationId === undefined ? {} : { consultationId: payload.consultationId }),
+      ...(payload.followUpId === undefined ? {} : { followUpId: payload.followUpId }),
+      kind: payload.kind, dueAt: payload.dueAt, instructions: payload.instructions };
+    const result = parseReminder(await this.api.request<unknown>('/v1/reminders', {
+      method: 'POST', idempotencyKey: key, body,
+    }), true);
+    if ((payload.animalId !== undefined && result.animalId !== payload.animalId)
+      || (payload.consultationId !== undefined && result.consultationId !== payload.consultationId)
+      || (payload.followUpId !== undefined && result.followUpId !== payload.followUpId)
+      || result.kind !== payload.kind) throw invalidResponse('Pengingat tersimpan tidak cocok dengan permintaan.');
+    return result;
+  }
+
+  async retryReminderDelivery(reminderId: string, idempotencyKey: string): Promise<ApiReminder> {
+    const id = resourceId(reminderId);
+    const key = operationKey(idempotencyKey);
+    const result = parseReminder(await this.api.request<unknown>(`/v1/reminders/${id}`, {
+      method: 'PATCH', idempotencyKey: key, body: { action: 'retry_delivery' },
+    }), true);
+    if (result.id !== reminderId) throw invalidResponse('Hasil pengiriman pengingat tidak sesuai ID.');
+    return result;
+  }
+
+  async completeCare(reminderId: string, operation: CareApiOperation<{ confirmation: true }>): Promise<ApiCareCompletion> {
+    const id = resourceId(reminderId);
+    const { key, payload } = validateOperation(operation);
+    if (payload.confirmation !== true) throw invalidQuery('Konfirmasi perawatan wajib diberikan.');
+    const value = await this.api.request<unknown>(`/v1/reminders/${id}/complete`, {
+      method: 'POST', idempotencyKey: key, body: { confirmation: true },
+    });
+    if (!isRecord(value) || !isUuid(value.healthEventId)) throw invalidResponse('Konfirmasi perawatan tidak sesuai kontrak BE-09.');
+    const reminder = parseReminder(value.reminder);
+    if (reminder.id !== reminderId || reminder.kind !== 'care' || reminder.careStatus !== 'done'
+      || reminder.completedAt === null) throw invalidResponse('Perawatan belum tercatat selesai.');
+    const { operationId, replayed } = parseOperation(value, true);
+    return { reminder, healthEventId: value.healthEventId, operationId: operationId!, replayed: replayed! };
+  }
 }
 
 function resourceId(value: string): string {
@@ -71,10 +126,14 @@ function resourceId(value: string): string {
 function positiveVersion(value: unknown): value is number { return Number.isSafeInteger(value) && Number(value) >= 1; }
 
 function validateOperation<T>(operation: CareApiOperation<T>): { key: string; payload: T & Record<string, unknown> } {
-  if (!isRecord(operation) || !isRecord(operation.payload)
-    || typeof operation.idempotencyKey !== 'string' || operation.idempotencyKey.trim().length < 8
-    || operation.idempotencyKey.trim().length > 128) throw invalidQuery('Operasi care memerlukan Idempotency-Key 8–128 karakter.');
-  return { key: operation.idempotencyKey, payload: operation.payload as T & Record<string, unknown> };
+  if (!isRecord(operation) || !isRecord(operation.payload)) throw invalidQuery('Operasi care memerlukan payload.');
+  return { key: operationKey(operation.idempotencyKey), payload: operation.payload as T & Record<string, unknown> };
+}
+
+function operationKey(value: unknown): string {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{7,127}$/.test(value))
+    throw invalidQuery('Idempotency-Key care harus 8–128 karakter alfanumerik, hubung, atau garis bawah.');
+  return value;
 }
 
 function parseOperation(value: Record<string, unknown>, required: boolean): { operationId?: string; replayed?: boolean } {
@@ -121,4 +180,37 @@ function parseReport(value: unknown, followUpId: string, operation = false): Api
     farmerId: value.farmerId, vetId: value.vetId, animalId: value.animalId,
     text: value.text, attachmentIds: value.attachmentIds, submittedAt: value.submittedAt,
     viewedAt: value.viewedAt as string | null, ...parseOperation(value, operation) };
+}
+
+function parseReminder(value: unknown, operation = false): ApiReminder {
+  if (!isRecord(value) || !isUuid(value.id) || !isUuid(value.animalId)
+    || !(value.consultationId === null || isUuid(value.consultationId))
+    || !(value.followUpId === null || isUuid(value.followUpId))
+    || !isUuid(value.ownerId) || !isUuid(value.createdBy)
+    || (value.kind !== 'care' && value.kind !== 'follow_up')
+    || !isIsoTimestampWithTimezone(value.dueAt)
+    || !isNonEmptyText(value.instructions, 500)
+    || (value.careStatus !== 'scheduled' && value.careStatus !== 'done')
+    || (value.deliveryStatus !== 'pending' && value.deliveryStatus !== 'sent' && value.deliveryStatus !== 'failed')
+    || !(value.completedAt === null || isIsoTimestampWithTimezone(value.completedAt))
+    || (value.careStatus === 'done' && value.completedAt === null)
+    || (value.careStatus === 'scheduled' && value.completedAt !== null)
+    || !positiveVersion(value.deliveryAttempt) || !positiveVersion(value.version)
+    || !isIsoTimestampWithTimezone(value.createdAt) || !isIsoTimestampWithTimezone(value.updatedAt))
+    throw invalidResponse('Pengingat tidak sesuai kontrak BE-09.');
+  let deliveryOutcome: ApiReminder['deliveryOutcome'];
+  if (value.deliveryOutcome !== undefined) {
+    const outcome = value.deliveryOutcome;
+    if (!isRecord(outcome) || !isUuid(outcome.operationId)
+      || (outcome.status !== 'pending' && outcome.status !== 'succeeded' && outcome.status !== 'failed')
+      || !isIsoTimestampWithTimezone(outcome.occurredAt)) throw invalidResponse('Hasil pengiriman pengingat tidak valid.');
+    deliveryOutcome = { operationId: outcome.operationId, status: outcome.status, occurredAt: outcome.occurredAt };
+  }
+  return { id: value.id, animalId: value.animalId, consultationId: value.consultationId as string | null,
+    followUpId: value.followUpId as string | null, ownerId: value.ownerId, createdBy: value.createdBy,
+    kind: value.kind, dueAt: value.dueAt, instructions: value.instructions,
+    careStatus: value.careStatus, deliveryStatus: value.deliveryStatus,
+    completedAt: value.completedAt as string | null, deliveryAttempt: value.deliveryAttempt,
+    version: value.version, createdAt: value.createdAt, updatedAt: value.updatedAt,
+    ...(deliveryOutcome === undefined ? {} : { deliveryOutcome }), ...parseOperation(value, operation) };
 }

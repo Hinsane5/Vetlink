@@ -33,6 +33,35 @@ export interface ApiProgressReport {
   replayed?: boolean;
 }
 
+export interface ApiReminder {
+  id: string;
+  animalId: string;
+  consultationId: string | null;
+  followUpId: string | null;
+  ownerId: string;
+  createdBy: string;
+  kind: 'care' | 'follow_up';
+  dueAt: string;
+  instructions: string;
+  careStatus: 'scheduled' | 'done';
+  deliveryStatus: 'pending' | 'sent' | 'failed';
+  completedAt: string | null;
+  deliveryAttempt: number;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  deliveryOutcome?: { operationId: string; status: 'pending' | 'succeeded' | 'failed'; occurredAt: string };
+  operationId?: string;
+  replayed?: boolean;
+}
+
+export interface ApiCareCompletion {
+  reminder: ApiReminder;
+  healthEventId: string;
+  operationId: string;
+  replayed: boolean;
+}
+
 export interface CareApiOperation<T> {
   idempotencyKey: string;
   payload: T;
@@ -44,4 +73,8 @@ export interface ApiCareCoordinationRepository {
   cancelFollowUp(followUpId: string, operation: CareApiOperation<{ expectedVersion: number }>): Promise<ApiFollowUp>;
   listProgressReports(followUpId: string): Promise<ApiProgressReport[]>;
   createProgressReport(followUpId: string, operation: CareApiOperation<{ text: string; attachmentIds?: string[] }>): Promise<ApiProgressReport>;
+  listReminders(): Promise<ApiReminder[]>;
+  createReminder(operation: CareApiOperation<{ animalId?: string; consultationId?: string; followUpId?: string; kind: 'care' | 'follow_up'; dueAt: string; instructions: string }>): Promise<ApiReminder>;
+  retryReminderDelivery(reminderId: string, idempotencyKey: string): Promise<ApiReminder>;
+  completeCare(reminderId: string, operation: CareApiOperation<{ confirmation: true }>): Promise<ApiCareCompletion>;
 }

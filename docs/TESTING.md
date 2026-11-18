@@ -1035,3 +1035,14 @@ Adapter FE-25 untuk FollowUp dan ProgressReport memakai port terpisah, `Idempote
 | `npm run check` di `apps/mobile` | **Lulus**: typecheck, Expo lint, kompilasi tes domain, 189/189 tes. Node memberi `ExperimentalWarning` SQLite. |
 | Tiga tes baru | Fake HTTP memeriksa lima route baca/tulis, payload allowlist, key yang sama pada retry eksplisit setelah respons hilang, input invalid, serta respons server yang tidak cocok. Tidak menghubungi backend runtime. |
 | Integrasi dan QA | Adapter hanya diekspos factory; UI tetap SQLite. Pengingat, wiring API runtime, dan QA perangkat/visual masih gate FE-25. Android build, emulator, Figma MCP, provider, deployment, dan transaksi nyata tidak dijalankan. |
+
+## FE-25 lanjutan — pengingat dan konfirmasi perawatan API BE-09 (18 November 2026)
+
+Adapter care coordination kini membaca/membuat Reminder, mengulang delivery dengan key eksplisit, dan mengirim konfirmasi Peternak. Parser menolak respons `careStatus=done` tanpa `completedAt`, memisahkan `deliveryStatus` dari `careStatus`, serta mensyaratkan `healthEventId` pada completion. Payload tidak mengirim identitas actor/owner.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm run typecheck` di `apps/mobile` | **Lulus** setelah metode pengingat ditambahkan. |
+| `npm run check` di `apps/mobile` | **Lulus**: typecheck, Expo lint, kompilasi tes domain, 192/192 tes. Node memberi `ExperimentalWarning` SQLite. |
+| Tiga tes baru | Fake HTTP memeriksa GET/POST/PATCH/complete, allowlist payload, pemisahan status pengiriman/perawatan, konfirmasi eksplisit, respons invalid, dan satu upaya pada transport gagal. Tidak menghubungi backend runtime. |
+| Integrasi dan QA | Adapter diekspos factory; UI tetap SQLite. Integrasi API end-to-end dan QA perangkat/visual masih gate FE-25. Android build, emulator, Figma MCP, provider produksi, deployment, dan transaksi finansial nyata tidak dijalankan. |
