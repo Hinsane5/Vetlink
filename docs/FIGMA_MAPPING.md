@@ -1,5 +1,7 @@
 # Pemetaan Figma → aplikasi
 
+Pembaruan mode API FE-25, 18 November 2026: daftar/tambah Ternak pada Farm terpilih memakai tokens/komponen FE-01 dan konteks node Ternak Peternak `12:1889`, `12:1980`, `12:2032` dari inventaris lokal. Layar mode API belum dibandingkan ulang dengan desain Figma atau screenshot Android 390 × 844; inspeksi visual dan font besar tetap gate. Tidak ada panggilan Figma MCP baru.
+
 Sumber: [VetLink prototype](https://www.figma.com/design/f1WBeG5S1OGXlPXyVEHjuW/Untitled), key `f1WBeG5S1OGXlPXyVEHjuW`, halaman `01 · VetLink / Prototype` (`0:1`). Inspeksi MCP: 5 Oktober 2026. Tidak ada page Peternak/Dokter terpisah: kedua area berada dalam page yang sama.
 
 Metadata menemukan 97 top-level frame layar 390 × 844 dan component set Dokter `93:7181` dengan 283 variants. Jumlah frame/variant bukan jumlah route. [Inventory](reference/figma/inventory.json) mencatat ID/nama/dimensi; [sample prototype links](reference/figma/prototype-links.json) mencatat koneksi pilihan; [design specs](reference/figma/design-specs.json) mencatat tokens dan navigasi utama.

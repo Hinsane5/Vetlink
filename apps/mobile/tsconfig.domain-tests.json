@@ -28,6 +28,7 @@
     "src/application/ApiPaymentOperationJournal.ts",
     "src/application/ServerAuthService.ts",
     "src/application/ServerFarmService.ts",
+    "src/application/ServerLivestockService.ts",
     "src/data/local/sqlite/seed.ts",
     "src/data/local/sqlite/migrations.ts",
     "src/application/vetPatientAccess.ts",

@@ -3,21 +3,28 @@ import { BackHandler, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Te
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createApiAdapters } from '../../data/remote/createApiAdapters';
 import { ServerFarmService } from '../../application/ServerFarmService';
+import { ServerLivestockService } from '../../application/ServerLivestockService';
 import type { ApiFarmRecord } from '../../application/ports/FarmReadRepository';
 import type { AccountRole, SessionSnapshot } from '../../domain/auth';
+import { DomainError } from '../../domain/errors';
 import { Button } from '../components/Button';
 import { ConfirmationDialog } from '../components/ConfirmationDialog';
 import { LoadingState } from '../components/Feedback';
 import { TextField } from '../components/TextField';
+import { ServerLivestockSection } from '../livestock/ServerLivestockSection';
 import { colors, fonts, spacing, typeScale } from '../theme/tokens';
 
 type Screen = 'loading' | 'roles' | 'login' | 'register' | 'home';
 
 /** Server mode never opens the local fixture store or writes to SQLite. */
 export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
-  const { auth, farms } = useMemo(() => {
+  const { auth, farms, livestock } = useMemo(() => {
     const adapters = createApiAdapters(baseUrl);
-    return { auth: adapters.auth, farms: new ServerFarmService(adapters.farms, adapters.farmWrites) };
+    return {
+      auth: adapters.auth,
+      farms: new ServerFarmService(adapters.farms, adapters.farmWrites),
+      livestock: new ServerLivestockService(adapters.farms, adapters.livestock, adapters.livestockWrites),
+    };
   }, [baseUrl]);
   const insets = useSafeAreaInsets();
   const [screen, setScreen] = useState<Screen>('loading');
@@ -32,9 +39,13 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
   const [error, setError] = useState('');
   const [farmList, setFarmList] = useState<ApiFarmRecord[]>([]);
   const [farmName, setFarmName] = useState('');
+  const [selectedFarmId, setSelectedFarmId] = useState<string | null>(null);
   const [farmsBusy, setFarmsBusy] = useState(false);
   const [farmsLoaded, setFarmsLoaded] = useState(false);
+  const [farmLoadFailed, setFarmLoadFailed] = useState(false);
+  const [farmWriteUncertain, setFarmWriteUncertain] = useState(false);
   const farmCreateInFlight = useRef(false);
+  const livestockBackHandler = useRef<(() => boolean) | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -61,7 +72,8 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
         setScreen('roles');
         return true;
       }
-      return screen === 'home';
+      if (screen === 'home') return livestockBackHandler.current?.() ?? true;
+      return false;
     });
     return () => subscription.remove();
   }, [screen]);
@@ -72,25 +84,51 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
     }
     let mounted = true;
     farms.list(session.activeRole).then(
-      (records) => { if (mounted) { setFarmList(records); setFarmsLoaded(true); setFarmsBusy(false); } },
-      (cause) => { if (mounted) { setError(messageFor(cause)); setFarmsLoaded(true); setFarmsBusy(false); } },
+      (records) => { if (mounted) { setFarmList(records); setFarmsLoaded(true); setFarmLoadFailed(false); setFarmsBusy(false); } },
+      (cause) => { if (mounted) { setError(messageFor(cause)); setFarmsLoaded(true); setFarmLoadFailed(true); setFarmsBusy(false); } },
     );
     return () => { mounted = false; };
   }, [farms, session]);
 
   const createFarm = async () => {
-    if (!session || farmCreateInFlight.current) return;
+    if (!session || farmCreateInFlight.current || farmsBusy || !farmsLoaded || farmLoadFailed || farmWriteUncertain) return;
     farmCreateInFlight.current = true;
     setFarmsBusy(true);
     setError('');
     try {
-      await farms.create(session.activeRole, farmName);
-      setFarmList(await farms.list(session.activeRole));
+      const created = await farms.create(session.activeRole, farmName);
+      setFarmList((current) => [...current.filter((farm) => farm.id !== created.id), created]);
+      setFarmsLoaded(true);
+      setFarmLoadFailed(false);
       setFarmName('');
     } catch (cause) {
       setError(messageFor(cause));
+      if (cause instanceof DomainError && cause.code === 'SERVICE_UNAVAILABLE') setFarmWriteUncertain(true);
     } finally {
       farmCreateInFlight.current = false;
+      setFarmsBusy(false);
+    }
+  };
+
+  const refreshFarms = async () => {
+    if (!session || !farmsLoaded || farmsBusy || farmCreateInFlight.current) return;
+    setFarmsBusy(true);
+    setError('');
+    try {
+      const records = await farms.list(session.activeRole);
+      setFarmList(records);
+      setFarmsLoaded(true);
+      setFarmLoadFailed(false);
+      if (farmWriteUncertain) {
+        if (records.some((farm) => farm.name === farmName.trim().replace(/\s+/g, ' '))) {
+          setFarmName('');
+          setError('Peternakan dengan nama itu ada dalam daftar. Periksa sebelum membuat lagi.');
+        }
+        setFarmWriteUncertain(false);
+      }
+    } catch (cause) {
+      setError(messageFor(cause));
+    } finally {
       setFarmsBusy(false);
     }
   };
@@ -109,6 +147,9 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
         : await auth.login({ email, password, role });
       setSession(next);
       setFarmsLoaded(false);
+      setFarmLoadFailed(false);
+      setFarmWriteUncertain(false);
+      setSelectedFarmId(null);
       setRole(next.activeRole);
       setPassword('');
       setConfirmation('');
@@ -130,6 +171,9 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
       setRole(next.activeRole);
       setFarmList([]);
       setFarmsLoaded(false);
+      setFarmLoadFailed(false);
+      setFarmWriteUncertain(false);
+      setSelectedFarmId(null);
     } catch (cause) {
       setError(messageFor(cause));
     } finally {
@@ -147,6 +191,9 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
       setSession(null);
       setFarmList([]);
       setFarmsLoaded(false);
+      setFarmLoadFailed(false);
+      setFarmWriteUncertain(false);
+      setSelectedFarmId(null);
       setPassword('');
       setScreen('roles');
     } catch (cause) {
@@ -155,6 +202,8 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
       setBusy(false);
     }
   };
+
+  const selectedFarm = farmList.find((farm) => farm.id === selectedFarmId) ?? null;
 
   if (screen === 'loading') return <View style={styles.loading}><LoadingState label="Memeriksa sesi…" /></View>;
 
@@ -185,10 +234,17 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
           {session.activeRole === 'farmer' && <>
             <Text style={styles.heading}>Peternakan saya</Text>
             {(!farmsLoaded || farmsBusy) && <LoadingState label="Memuat peternakan…" />}
-            {farmsLoaded && !farmsBusy && farmList.length === 0 && <Text style={styles.description}>Belum ada peternakan.</Text>}
-            {farmList.map((farm) => <View key={farm.id} style={styles.farmCard}><Text style={styles.farmName}>{farm.name}</Text><Text style={styles.description}>{farm.species.length ? farm.species.join(', ') : 'Jenis ternak belum diisi'}</Text></View>)}
+            {farmsLoaded && !farmsBusy && !farmLoadFailed && farmList.length === 0 && <Text style={styles.description}>Belum ada peternakan.</Text>}
+            {farmList.map((farm) => <View key={farm.id} style={styles.farmCard}>
+              <Text style={styles.farmName}>{farm.name}</Text>
+              <Text style={styles.description}>{farm.species.length ? farm.species.join(', ') : 'Semua jenis ternak'}</Text>
+              <Button label={selectedFarmId === farm.id ? 'Peternakan dipilih' : `Pilih ${farm.name}`} role="farmer" variant="secondary" selected={selectedFarmId === farm.id} disabled={farmsBusy} onPress={() => setSelectedFarmId(farm.id)} />
+            </View>)}
             <TextField label="Nama peternakan baru" value={farmName} onChangeText={setFarmName} />
-            <Button label="Tambah peternakan" role="farmer" onPress={createFarm} loading={farmsBusy} />
+            {farmWriteUncertain ? <Text style={styles.description}>Muat ulang peternakan sebelum mencoba menyimpan lagi.</Text> : null}
+            <Button label="Tambah peternakan" role="farmer" onPress={createFarm} loading={farmsBusy} disabled={!farmsLoaded || farmLoadFailed || farmWriteUncertain} />
+            <Button label="Muat ulang peternakan" role="farmer" variant="secondary" onPress={refreshFarms} disabled={!farmsLoaded || farmsBusy} />
+            {selectedFarm ? <ServerLivestockSection key={selectedFarm.id} service={livestock} farm={selectedFarm} userId={session.userId} backHandlerRef={livestockBackHandler} /> : null}
           </>}
           {session.activeRole === 'vet' && <Text style={styles.description}>Data layanan belum tersedia di tampilan ini.</Text>}
           {session.roles.length > 1 && session.roles.map((availableRole) => <Button key={availableRole} label={`Ganti Peran: ${availableRole === 'farmer' ? 'Peternak' : 'Dokter Hewan'}`} role={availableRole} variant="secondary" disabled={busy || availableRole === session.activeRole} onPress={() => switchRole(availableRole)} />)}
