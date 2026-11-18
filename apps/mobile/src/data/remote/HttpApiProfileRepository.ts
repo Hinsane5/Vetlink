@@ -42,7 +42,7 @@ export class HttpApiProfileRepository implements ApiProfileRepository {
     return value.map((item: unknown) => parseSubmission(item, false));
   }
 
-  async uploadProfessionalDocument(file: ApiProfessionalDocumentFile): Promise<ApiProfessionalDocument> {
+  async uploadProfessionalDocument(file: ApiProfessionalDocumentFile, idempotencyKey: string): Promise<ApiProfessionalDocument> {
     if (!isRecord(file) || typeof file.uri !== 'string' || !/^(file|content):\/\//.test(file.uri)
       || !isNonEmptyText(file.filename, 255)
       || !['application/pdf', 'image/jpeg', 'image/png', 'image/webp'].includes(file.mimeType)
@@ -51,7 +51,7 @@ export class HttpApiProfileRepository implements ApiProfileRepository {
     }
     const form = new FormData();
     form.append('file', { uri: file.uri, name: file.filename, type: file.mimeType } as unknown as Blob);
-    const value = await this.api.uploadMultipart<unknown>('/v1/me/vet/professional-documents', form);
+    const value = await this.api.uploadMultipart<unknown>('/v1/me/vet/professional-documents', form, idempotencyKey);
     if (!isRecord(value) || !isUuid(value.id) || !isNonEmptyText(value.filename, 255)
       || value.mimeType !== file.mimeType || value.byteSize !== file.byteSize) {
       throw invalidResponse('Dokumen profesi belum tersimpan sesuai kontrak BE-02.');

@@ -291,4 +291,4 @@ Adapter yang sama kini membaca/membuat pengingat, mencoba ulang pengiriman, dan 
 
 ### Slice dokumen verifikasi Dokter API BE-02 — 18 November 2026
 
-Port profil kini menerima unggah file lokal PDF/JPEG/PNG/WebP maksimal 10 MiB dan memeriksa metadata dokumen hasil server. Multipart tidak memasang `Content-Type` manual; tidak ada `Idempotency-Key` untuk route BE-02, sehingga kegagalan jaringan tidak dicoba ulang otomatis. Satu tes fake HTTP baru membawa `npm run check` ke 209/209 lulus. UI API, transfer Android fisik, dan recovery dokumen hasil respons hilang masih gate FE-25. Runtime tetap SQLite.
+Port profil kini menerima unggah file lokal PDF/JPEG/PNG/WebP maksimal 10 MiB dan memeriksa metadata dokumen hasil server. Multipart tidak memasang `Content-Type` manual dan kini mengirim `Idempotency-Key` stabil ke route BE-02. Backend menyimpan fingerprint dan unique key per Dokter; retry berkas sama mengembalikan ID sama, sedangkan key sama dengan isi berbeda ditolak. Satu tes fake HTTP membawa `npm run check` ke 209/209 lulus; smoke PostgreSQL lokal dan kontrak API memeriksa deduplikasi. UI API dan transfer Android fisik masih gate FE-25. Runtime tetap SQLite.

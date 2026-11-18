@@ -6,6 +6,7 @@ import { after, before, test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { ConsultationService } from '../dist/consultation/consultation.service.js';
 import { ProfileController } from '../dist/profile/profile.controller.js';
+import { ProfileService } from '../dist/profile/profile.service.js';
 import { AUTH_ROLES_KEY } from '../dist/auth/auth.decorators.js';
 
 const methods = ['get', 'post', 'put', 'patch', 'delete'];
@@ -38,6 +39,7 @@ const idempotentOperations = [
   ['patch', '/v1/reminders/{reminderId}'],
   ['post', '/v1/reminders/{reminderId}/complete'],
   ['post', '/v1/attachments/uploads'],
+  ['post', '/v1/me/vet/professional-documents'],
   ['post', '/v1/payments'],
   ['post', '/v1/me/vet/withdrawals'],
   ['post', '/v1/orders'],
@@ -527,4 +529,38 @@ test('profile routes require the role named by their path', () => {
   for (const method of ['getVetProfile', 'patchVetProfile']) {
     assert.deepEqual(Reflect.getMetadata(AUTH_ROLES_KEY, ProfileController.prototype[method]), ['vet']);
   }
+  for (const method of ['upload', 'submit', 'verification']) {
+    assert.deepEqual(Reflect.getMetadata(AUTH_ROLES_KEY, ProfileController.prototype[method]), ['vet']);
+  }
+});
+
+test('professional document upload replays the same key and rejects changed bytes', async () => {
+  const upload = openApi.paths['/v1/me/vet/professional-documents'].post;
+  const documentSchema = schemaProperties(openApi, upload.responses['201'].content['application/json'].schema.$ref);
+  assert.deepEqual(Object.keys(documentSchema).sort(), ['byteSize', 'filename', 'id', 'mimeType']);
+  const rows = new Map();
+  let stores = 0;
+  const db = { async query(sql, values) {
+    if (sql.startsWith('SELECT id,filename')) return { rows: rows.has(values[1]) ? [rows.get(values[1])] : [] };
+    if (sql.includes('INSERT INTO professional_documents')) {
+      const row = { id: '11111111-1111-4111-8111-111111111111', filename: values[1], mimeType: values[2],
+        byteSize: values[3], upload_fingerprint: values[7] };
+      rows.set(values[6], row);
+      return { rows: [row] };
+    }
+    throw new Error('Unexpected query');
+  } };
+  const storage = { async store() { stores += 1; return { status: 'succeeded', value: undefined }; },
+    async remove() { return { status: 'succeeded', value: undefined }; } };
+  const service = new ProfileService(db, storage);
+  const actor = { userId: '22222222-2222-4222-8222-222222222222', activeRole: 'vet' };
+  const file = { originalname: 'fiktif.pdf', mimetype: 'application/pdf', buffer: Buffer.from('%PDF-fiktif'), size: 11 };
+  await assert.rejects(service.uploadDocument(actor, file), { status: 422 });
+  const first = await service.uploadDocument(actor, file, 'document-key-001');
+  const replay = await service.uploadDocument(actor, file, 'document-key-001');
+  assert.deepEqual(replay, first);
+  assert.equal(stores, 1);
+  const other = { ...file, buffer: Buffer.from('%PDF-berbeda'), size: 12 };
+  await assert.rejects(service.uploadDocument(actor, other, 'document-key-001'), { status: 409 });
+  assert.equal(stores, 1);
 });

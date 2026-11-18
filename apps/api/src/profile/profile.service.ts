@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException, UnprocessableEntityException, Inject } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException, UnprocessableEntityException, Inject } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import type { OpenPrivateMedia } from '../communication/media-storage.js';
@@ -9,6 +9,7 @@ import type { AuthenticatedPrincipal } from '../auth/auth.types.js';
 type AddressInput = { label: string; recipientName: string; phone: string; addressLine: string; city: string; province: string; postalCode: string; latitude?: number; longitude?: number };
 type FarmInput = { name: string; species?: string[]; timezone?: string; location?: Record<string, unknown>; visitAddressId?: string };
 type IncomingFile = { originalname: string; mimetype: string; buffer: Buffer; size: number };
+type DocumentRow = { id: string; filename: string; mimeType: string; byteSize: number; upload_fingerprint: string };
 
 @Injectable()
 export class ProfileService {
@@ -72,12 +73,42 @@ export class ProfileService {
     SELECT $1,$2,$3,$4,$5,$6 WHERE $6::uuid IS NULL OR EXISTS(SELECT 1 FROM addresses WHERE id=$6 AND owner_id=$1) RETURNING *`,[p.userId,x.name,x.species??[],x.timezone??'Asia/Jakarta',x.location??null,x.visitAddressId??null]); if (!r.rows[0]) throw new NotFoundException({code:'RESOURCE_NOT_FOUND',message:'Alamat kunjungan bukan milik Peternak.'}); return this.farmResponse(r.rows[0]); }
   async patchFarm(p: AuthenticatedPrincipal, id: string, x: Partial<FarmInput>, version: number) { this.farmer(p); const r=await this.db.query(`UPDATE farms SET name=COALESCE($3,name), species=COALESCE($4,species),timezone=COALESCE($5,timezone),location=COALESCE($6,location),visit_address_id=COALESCE($8,visit_address_id),updated_at=now(),version=version+1 WHERE id=$1 AND owner_id=$2 AND version=$7 AND ($8::uuid IS NULL OR EXISTS(SELECT 1 FROM addresses WHERE id=$8 AND owner_id=$2)) RETURNING *`,[id,p.userId,x.name??null,x.species??null,x.timezone??null,x.location??null,version,x.visitAddressId??null]); if(!r.rows[0]) throw new NotFoundException({code:'RESOURCE_NOT_FOUND',message:'Farm/alamat tidak ditemukan atau versinya berubah.'}); return this.farmResponse(r.rows[0]); }
 
-  async uploadDocument(p: AuthenticatedPrincipal, file?: IncomingFile) {
-    this.vet(p); if (!file?.buffer?.length || file.size > 10 * 1024 * 1024) throw new UnprocessableEntityException({code:'VALIDATION_FAILED',message:'Dokumen kosong atau melewati batas 10 MiB.'});
+  async uploadDocument(p: AuthenticatedPrincipal, file?: IncomingFile, key?: string) {
+    this.vet(p);
+    if (!key || key.length < 8 || key.length > 128) throw new UnprocessableEntityException({code:'VALIDATION_FAILED',message:'Idempotency-Key harus sepanjang 8–128 karakter.'});
+    if (!file?.buffer?.length || file.size !== file.buffer.length || file.size > 10 * 1024 * 1024) throw new UnprocessableEntityException({code:'VALIDATION_FAILED',message:'Dokumen kosong atau melewati batas 10 MiB.'});
     const mime = this.detectMime(file.buffer); if (!mime || mime !== file.mimetype) throw new UnprocessableEntityException({code:'VALIDATION_FAILED',message:'Format dokumen tidak didukung.'});
-    const id=randomUUID(); const stored=await this.storage.store(id,file.buffer); if(stored.status!=='succeeded') throw new ServiceUnavailableException({code:stored.status==='failed'?stored.error.code:'SERVICE_UNAVAILABLE',message:stored.status==='failed'?stored.error.message:'Penyimpanan dokumen masih diproses.'});
-    try { const r=await this.db.query('INSERT INTO professional_documents(owner_id,filename,mime_type,byte_size,content_sha256,storage_key) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,filename,mime_type AS "mimeType",byte_size AS "byteSize"',[p.userId,file.originalname.slice(0,255),mime,file.size,createHash('sha256').update(file.buffer).digest('hex'),id]); return r.rows[0]; }
-    catch { await this.storage.remove(id); throw new ServiceUnavailableException({code:'SERVICE_UNAVAILABLE',message:'Metadata dokumen tidak dapat disimpan.'}); }
+    const filename = file.originalname.slice(0, 255);
+    if (!filename.trim()) throw new UnprocessableEntityException({code:'VALIDATION_FAILED',message:'Nama dokumen tidak valid.'});
+    const contentSha256 = createHash('sha256').update(file.buffer).digest('hex');
+    const fingerprint = createHash('sha256').update(JSON.stringify([filename, mime, file.size, contentSha256])).digest('hex');
+    const existing = await this.db.query<DocumentRow>('SELECT id,filename,mime_type AS "mimeType",byte_size AS "byteSize",upload_fingerprint FROM professional_documents WHERE owner_id=$1 AND upload_key=$2', [p.userId,key]);
+    if (existing.rows[0]) return this.sameDocument(existing.rows[0], fingerprint);
+
+    const storageKey = randomUUID();
+    const stored = await this.storage.store(storageKey, file.buffer);
+    if (stored.status !== 'succeeded') throw new ServiceUnavailableException({code:stored.status==='failed'?stored.error.code:'SERVICE_UNAVAILABLE',message:stored.status==='failed'?stored.error.message:'Penyimpanan dokumen masih diproses.'});
+    let inserted: DocumentRow | undefined;
+    try {
+      const result = await this.db.query<DocumentRow>(`INSERT INTO professional_documents(owner_id,filename,mime_type,byte_size,content_sha256,storage_key,upload_key,upload_fingerprint)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8)
+        ON CONFLICT (owner_id,upload_key) DO NOTHING
+        RETURNING id,filename,mime_type AS "mimeType",byte_size AS "byteSize",upload_fingerprint`,
+      [p.userId,filename,mime,file.size,contentSha256,storageKey,key,fingerprint]);
+      inserted = result.rows[0];
+    } catch {
+      await this.storage.remove(storageKey);
+      throw new ServiceUnavailableException({code:'SERVICE_UNAVAILABLE',message:'Metadata dokumen tidak dapat disimpan; ulangi dengan key yang sama.'});
+    }
+    if (inserted) return this.sameDocument(inserted, fingerprint);
+    await this.storage.remove(storageKey);
+    const winner = await this.db.query<DocumentRow>('SELECT id,filename,mime_type AS "mimeType",byte_size AS "byteSize",upload_fingerprint FROM professional_documents WHERE owner_id=$1 AND upload_key=$2', [p.userId,key]);
+    if (!winner.rows[0]) throw new ServiceUnavailableException({code:'SERVICE_UNAVAILABLE',message:'Hasil unggah belum dapat dibaca; ulangi dengan key yang sama.'});
+    return this.sameDocument(winner.rows[0], fingerprint);
+  }
+  private sameDocument(row: DocumentRow, fingerprint: string) {
+    if (row.upload_fingerprint !== fingerprint) throw new ConflictException({code:'IDEMPOTENCY_CONFLICT',message:'Idempotency-Key sudah digunakan untuk dokumen berbeda.'});
+    return {id:row.id,filename:row.filename,mimeType:row.mimeType,byteSize:Number(row.byteSize)};
   }
   async submit(p: AuthenticatedPrincipal, ids: string[]) {
     this.vet(p); if(ids.length<1||ids.length>5||new Set(ids).size!==ids.length) throw new UnprocessableEntityException({code:'VALIDATION_FAILED',message:'Pilih 1 sampai 5 dokumen unik.'});

@@ -44,7 +44,7 @@ export interface ApiProfileRepository {
   getVet(): Promise<ApiVetProfile>;
   patchVet(input: { fullName?: string; professionalName?: string; registrationReference?: string }): Promise<ApiVetProfile>;
   listVerification(): Promise<ApiVerificationSubmission[]>;
-  /** No server dedupe key: inspect verification state before retrying an uncertain upload. */
-  uploadProfessionalDocument(file: ApiProfessionalDocumentFile): Promise<ApiProfessionalDocument>;
+  /** Reuse the same key and exact file after an uncertain response. */
+  uploadProfessionalDocument(file: ApiProfessionalDocumentFile, idempotencyKey: string): Promise<ApiProfessionalDocument>;
   submitVerification(documentIds: string[]): Promise<ApiVerificationSubmission>;
 }

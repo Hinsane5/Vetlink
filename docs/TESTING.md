@@ -1106,5 +1106,14 @@ Adapter profil menormalkan respons raw profil/submission dan memakai payload PAT
 | Pemeriksaan | Hasil dan batas bukti |
 | --- | --- |
 | `npm run check` di `apps/mobile` | **Lulus**: typecheck, Expo lint, kompilasi tes domain, 209/209 tes. Node memberi `ExperimentalWarning` SQLite. |
-| Tes upload dokumen | Fake HTTP memeriksa route, bearer, FormData satu file, tanpa `Content-Type` dan tanpa key idempoten, MIME/ukuran, serta kegagalan transport. Tidak membuktikan transfer Android atau penyimpanan backend. |
+| Tes upload dokumen | Fake HTTP memeriksa route, bearer, FormData satu file, tanpa `Content-Type`, key idempoten stabil, MIME/ukuran, serta kegagalan transport. Tidak membuktikan transfer Android atau penyimpanan backend. |
 | Integrasi/QA | UI tetap SQLite. Build Android, emulator, Figma MCP, QA perangkat, provider produksi, dan transaksi nyata tidak dijalankan. |
+
+## BE-16/FE-25 — retry dokumen profesi (18 November 2026)
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm run check` di `apps/api`; `npm run api:contract` | **Lulus**; 10/10 tes kontrak termasuk DTO upload, guard role Dokter, replay key, dan fingerprint pada service. |
+| `npm run check` di `apps/mobile` | **Lulus**; 209/209 tes setelah adapter mengirim key. |
+| `npm run db:migrate`, `npm run db:seed`, `npm run api:smoke` | **Lulus** pada PostgreSQL 17 lokal terisolasi, loopback port 55432, database `vetlink_document_idempotency`; 19 migrasi diterapkan. Smoke memeriksa key wajib, Peternak ditolak, retry dari sesi Dokter kedua menghasilkan ID yang sama, key sama dengan byte berbeda ditolak 409 `IDEMPOTENCY_CONFLICT`, dan dua unggah paralel dari sesi Dokter berbeda menghasilkan satu row. Cluster dihentikan sesudahnya. |
+| Batas | Transfer multipart pada Android fisik dan wiring UI API belum diuji. Tidak memakai emulator, Figma MCP, provider produksi, deployment, atau transaksi nyata. Direktori uji sementara `/tmp/vetlink-doc-idem.5dMmhO` dibiarkan setelah cluster berhenti. |

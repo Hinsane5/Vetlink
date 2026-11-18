@@ -28,3 +28,10 @@ export class AddressResponseDto {
   @ApiProperty({ type: 'string', format: 'date-time' }) updatedAt!: string;
   @ApiProperty({ type: 'integer', minimum: 1 }) version!: number;
 }
+
+export class ProfessionalDocumentResponseDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty({ maxLength: 255 }) filename!: string;
+  @ApiProperty({ enum: ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'] }) mimeType!: string;
+  @ApiProperty({ type: 'integer', format: 'int64', minimum: 1, maximum: 10 * 1024 * 1024 }) byteSize!: number;
+}

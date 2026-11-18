@@ -44,6 +44,8 @@ Follow-up BE-16 pasien: `PatientResponseDto` kini menambahkan jenis/status layan
 
 Follow-up BE-16 profil: GET/PATCH `/me/farmer` dan `/me/vet` kini mempunyai `RequireRoles` sesuai path, sehingga sesi Dokter tidak dapat memperoleh profil melalui path Peternak atau sebaliknya. `npm run check` dan `api:contract` 9/9 lulus; smoke PostgreSQL untuk perubahan ini belum dijalankan. FE-25 sudah memiliki adapter profil/verifikasi, tetapi upload dokumen multipart, wiring UI, dan QA perangkat tetap gate.
 
+Follow-up BE-16 dokumen profesi: migrasi `20261118_000019` menambah key dan fingerprint unggah per Dokter. POST multipart kini mewajibkan `Idempotency-Key` dan guard role Dokter; retry isi sama dari sesi lain mengembalikan metadata yang sama, isi berbeda ditolak 409. Respons punya DTO OpenAPI eksplisit. `npm run check`, `api:contract` 10/10, migrasi/seed 19 file, dan `api:smoke` pada PostgreSQL lokal terisolasi lulus. Transfer Android fisik, wiring UI API, dan QA dua perangkat tetap gate FE-25/BE-16.
+
 ## Kriteria integrasi lintas mobile/backend
 
 - OpenAPI v1 dan domain error menjadi kontrak; perubahan breaking dibahas dan dipetakan ke adapter mobile.

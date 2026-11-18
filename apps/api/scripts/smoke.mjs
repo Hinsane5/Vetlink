@@ -337,6 +337,37 @@ try {
       actors.push(farmer.user.id, vet.user.id, outsider.user.id, unverifiedVet.user.id, directoryVetBeta.user.id);
       assert.notEqual(farmer.sessionId, farmerDeviceB.sessionId);
       assert.notEqual(vet.sessionId, vetDeviceB.sessionId);
+      const documentKey = `be16-document-${randomUUID()}`;
+      const documentBody = (content = '%PDF-fiktif') => {
+        const form = new FormData();
+        form.set('file', new Blob([content], { type: 'application/pdf' }), 'dokumen-fiktif.pdf');
+        return form;
+      };
+      const uploadDocument = (token, key, body) => fetch(`${healthy.baseUrl}/v1/me/vet/professional-documents`, {
+        method: 'POST', headers: { authorization: `Bearer ${token}`, 'Idempotency-Key': key }, body,
+      });
+      assert.equal((await uploadDocument(vet.accessToken, '', documentBody())).status, 422);
+      assert.equal((await uploadDocument(farmer.accessToken, documentKey, documentBody())).status, 403);
+      const firstDocumentResponse = await uploadDocument(vet.accessToken, documentKey, documentBody());
+      assert.equal(firstDocumentResponse.status, 201, await firstDocumentResponse.clone().text());
+      const firstDocument = await firstDocumentResponse.json();
+      const replayDocumentResponse = await uploadDocument(vetDeviceB.accessToken, documentKey, documentBody());
+      assert.equal(replayDocumentResponse.status, 201, await replayDocumentResponse.clone().text());
+      assert.deepEqual(await replayDocumentResponse.json(), firstDocument);
+      const changedDocumentResponse = await uploadDocument(vet.accessToken, documentKey, documentBody('%PDF-berbeda'));
+      assert.equal(changedDocumentResponse.status, 409);
+      assert.equal((await changedDocumentResponse.json()).code, 'IDEMPOTENCY_CONFLICT');
+      const documentCount = await database.query('SELECT count(*)::integer AS count FROM professional_documents WHERE owner_id=$1 AND upload_key=$2', [vet.user.id,documentKey]);
+      assert.equal(documentCount.rows[0].count, 1);
+      const parallelDocumentKey = `be16-document-parallel-${randomUUID()}`;
+      const parallelDocuments = await Promise.all([
+        uploadDocument(vet.accessToken, parallelDocumentKey, documentBody()),
+        uploadDocument(vetDeviceB.accessToken, parallelDocumentKey, documentBody()),
+      ]);
+      for (const response of parallelDocuments) assert.equal(response.status, 201, await response.clone().text());
+      assert.deepEqual(await parallelDocuments[0].json(), await parallelDocuments[1].json());
+      const parallelDocumentCount = await database.query('SELECT count(*)::integer AS count FROM professional_documents WHERE owner_id=$1 AND upload_key=$2', [vet.user.id,parallelDocumentKey]);
+      assert.equal(parallelDocumentCount.rows[0].count, 1);
       const [farmerDeviceAMe, farmerDeviceBMe] = await Promise.all([
         sendJson(healthy.baseUrl, '/v1/me', farmer.accessToken, 'GET'),
         sendJson(healthy.baseUrl, '/v1/me', farmerDeviceB.accessToken, 'GET'),
@@ -2025,6 +2056,7 @@ try {
           await database.query('DELETE FROM vet_service_rates WHERE vet_id = ANY($1::uuid[])', [actors]);
           await database.query('DELETE FROM vet_availabilities WHERE vet_id = ANY($1::uuid[])', [actors]);
           await database.query('DELETE FROM vet_directory_profiles WHERE vet_id = ANY($1::uuid[])', [actors]);
+          await database.query('DELETE FROM professional_documents WHERE owner_id = ANY($1::uuid[])', [actors]);
           await database.query('DELETE FROM farmer_profiles WHERE user_id = ANY($1::uuid[])', [actors]);
           await database.query('DELETE FROM vet_profiles WHERE user_id = ANY($1::uuid[])', [actors]);
           await database.query('DELETE FROM users WHERE id = ANY($1::uuid[])', [actors]);

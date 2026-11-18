@@ -71,16 +71,16 @@ test('professional document upload uses one private multipart request and valida
       return response(201, { id: id.document, filename: 'fiktif.pdf', mimeType: 'application/pdf', byteSize: 4 });
     }));
     const file = { uri: 'file:///fictional/fiktif.pdf', filename: 'fiktif.pdf', mimeType: 'application/pdf', byteSize: 4 };
-    assert.equal((await repository.uploadProfessionalDocument(file)).id, id.document);
+    assert.equal((await repository.uploadProfessionalDocument(file, 'document-key-001')).id, id.document);
     assert.equal(calls[0].url.endsWith('/me/vet/professional-documents'), true);
     assert.equal(calls[0].init.headers.Authorization, 'Bearer access-token-1');
     assert.equal(calls[0].init.headers['Content-Type'], undefined);
-    assert.equal(calls[0].init.headers['Idempotency-Key'], undefined);
+    assert.equal(calls[0].init.headers['Idempotency-Key'], 'document-key-001');
     assert.deepEqual(calls[0].init.body.fields.map(([name]) => name), ['file']);
-    await assert.rejects(repository.uploadProfessionalDocument({ ...file, byteSize: 11 * 1024 * 1024 }), { code: 'VALIDATION_FAILED' });
+    await assert.rejects(repository.uploadProfessionalDocument({ ...file, byteSize: 11 * 1024 * 1024 }, 'document-key-001'), { code: 'VALIDATION_FAILED' });
     assert.equal(calls.length, 1);
     const uncertain = new HttpApiProfileRepository(apiClient(async () => { throw new Error('lost response'); }));
-    await assert.rejects(uncertain.uploadProfessionalDocument(file), { code: 'SERVICE_UNAVAILABLE' });
+    await assert.rejects(uncertain.uploadProfessionalDocument(file, 'document-key-001'), { code: 'SERVICE_UNAVAILABLE' });
   } finally { globalThis.FormData = previous; }
 });
 

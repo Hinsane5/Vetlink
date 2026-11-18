@@ -165,6 +165,7 @@ async function bootstrap(): Promise<void> {
     ['/v1/reminders/{reminderId}', 'patch'],
     ['/v1/reminders/{reminderId}/complete', 'post'],
     ['/v1/attachments/uploads', 'post'],
+    ['/v1/me/vet/professional-documents', 'post'],
     ['/v1/payments', 'post'],
     ['/v1/me/vet/withdrawals', 'post'],
     ['/v1/orders', 'post'],
