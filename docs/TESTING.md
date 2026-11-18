@@ -1,5 +1,7 @@
 # Strategi pengujian VetLink
 
+Pembaruan 18 November 2026 — FE-03/25: `apps/mobile npm run check` lulus (typecheck, lint, 209/209 tes); `git diff --check` lulus. Mode autentikasi server dipasang dengan konfigurasi eksplisit `EXPO_PUBLIC_API_BASE_URL`; bootstrap SQLite dilewati dalam mode itu. Layar login/daftar/restore/switch/logout memakai `ServerAuthService`. Pemeriksaan perangkat tertahan karena ADB masih `unauthorized`; pengguna melaporkan dialog izin tidak muncul. Reset password belum dapat dipakai karena adapter pengiriman BE-01 gagal tertutup tanpa provider. Layar layanan API belum dihubungkan dan QA dua perangkat belum dilakukan.
+
 Status QA per 16 November 2026: frontend masih memakai data lokal persisten tanpa integrasi API dan FE-03 autentikasi tetap ditunda. BE-00–16 memiliki route executable; `api:contract` dan `api:smoke` BE-16 lulus pada runtime lokal/PostgreSQL 17 terisolasi, termasuk follow-up active-role, payment recovery, read DTO, owner/role scope, dan cursor pagination. Smoke BE-09/13/14/15 juga lulus. Mobile belum memakai API; kontrak dua sesi API sudah diuji, tetapi QA mobile dua perangkat fisik, interaksi/visual, ukuran kecil, serta font besar belum terbukti. APK Android preview sudah dibangun dan dipasang lewat USB pada 20 Oktober. Tidak ada pemanggilan Figma MCP baru.
 
 ## APK preview Android lokal (20 Oktober 2026)

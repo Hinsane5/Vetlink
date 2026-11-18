@@ -11,6 +11,7 @@ import { Button } from './src/ui/components/Button';
 import { LoadingState } from './src/ui/components/Feedback';
 import { fontAssets } from './src/ui/theme/fontAssets';
 import { FrontendFlow } from './src/ui/preview/FrontendFlow';
+import { ServerAuthFlow } from './src/ui/auth/ServerAuthFlow';
 import { colors, fonts } from './src/ui/theme/tokens';
 import type { LocalStore } from './src/data/local/sqlite/LocalStore';
 
@@ -20,11 +21,13 @@ export default function App() {
 
 function VetLinkApp() {
   const [fontsLoaded, fontError] = useFonts(fontAssets);
+  const apiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
   const [localStore, setLocalStore] = useState<LocalStore | null>(null);
   const [storeFailed, setStoreFailed] = useState(false);
   const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
 
   useEffect(() => {
+    if (apiBaseUrl) return;
     let active = true;
     const bootstrap = bootstrapAttempt === 0 ? openLocalStore() : retryLocalStoreBootstrap();
     bootstrap.then(
@@ -41,11 +44,13 @@ function VetLinkApp() {
     return () => {
       active = false;
     };
-  }, [bootstrapAttempt]);
+  }, [apiBaseUrl, bootstrapAttempt]);
 
   if (!fontsLoaded && !fontError) {
     return null;
   }
+
+  if (apiBaseUrl) return <ServerAuthFlow baseUrl={apiBaseUrl} />;
 
   if (!localStore) {
     return (
