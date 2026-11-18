@@ -1057,3 +1057,14 @@ Adapter commerce memakai DTO server untuk cart, quote, order, dan shipment. Vali
 | `npm run check` di `apps/mobile` | **Lulus**: typecheck, Expo lint, kompilasi tes domain, 196/196 tes. Node memberi `ExperimentalWarning` SQLite. |
 | Empat tes baru | Fake HTTP memeriksa versi dan allowlist cart, quote/order server, retry order eksplisit dengan key/payload sama setelah respons hilang, daftar/detail/timeline, input invalid, total palsu, dan status order baru. Tidak menghubungi PostgreSQL runtime. |
 | Integrasi dan QA | Adapter tersedia di factory; UI tetap SQLite. Migrasi API satu otoritas dan QA dua perangkat fisik tetap gate FE-25/BE-16. Android build, emulator, Figma MCP, deployment, provider produksi, dan transaksi uang nyata tidak dijalankan. |
+
+## FE-25 lanjutan — inbox dan preferensi API BE-14 (18 November 2026)
+
+Adapter notifikasi membaca inbox scoped dan preferensi, menandai baca lewat ID, serta membentuk PATCH allowlist. Respons read harus membawa konteks yang masih dapat diakses oleh active role; daftar boleh menyembunyikan ID konteks.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm run typecheck` di `apps/mobile` | **Lulus** setelah port/adapter dibuat. |
+| `npm run check` di `apps/mobile` | **Lulus**: typecheck, Expo lint, kompilasi tes domain, 199/199 tes. Node memberi `ExperimentalWarning` SQLite. |
+| Tiga tes baru | Fake HTTP memeriksa inbox/unread count, context ID saat read, payload PATCH hanya kategori yang dipilih, ID salah, patch kosong, dan respons stale. Tidak menghubungi backend runtime. |
+| Integrasi dan QA | Adapter hanya tersedia di factory; UI tetap SQLite. QA Android/visual dan dua perangkat API belum dijalankan. Emulator, Figma MCP, provider produksi, deployment, dan transaksi finansial nyata tidak digunakan. |

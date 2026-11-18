@@ -272,3 +272,7 @@ Adapter yang sama kini membaca/membuat pengingat, mencoba ulang pengiriman, dan 
 ### Slice keranjang, checkout, pesanan, dan shipment API BE-11/12 — 18 November 2026
 
 `ApiCommerceRepository`/`HttpApiCommerceRepository` mengekspos keranjang Peternak, perubahan jumlah dengan version guard, penghapusan item, quote checkout alamat Farm, order dengan `Idempotency-Key`, daftar/detail pesanan, dan timeline shipment owner-scoped. Parser memeriksa UUID, integer rupiah aman, total item/subtotal/ongkir, snapshot alamat, status pembayaran, serta event pengiriman. Quote dan harga tetap berasal dari server; order baru harus `awaiting_payment`, sedangkan replay dapat mencerminkan status server yang lebih baru. Kegagalan transport order tidak dicoba ulang otomatis. Adapter tersedia di factory API tanpa mengganti sumber data layar; FE-25 masih menunggu integrasi satu otoritas dan QA dua perangkat.
+
+### Slice inbox dan preferensi API BE-14 — 18 November 2026
+
+`ApiNotificationsRepository`/`HttpApiNotificationsRepository` membaca inbox penerima, menandai notifikasi telah dibaca lewat ID, serta membaca/mengubah preferensi kategori. Link konteks hanya dipakai dari respons read yang sudah diperiksa backend terhadap active role; daftar dapat menampilkan `contextId:null` bila link tidak dapat diakses. Patch memakai allowlist boolean dan tidak mengirim identitas pengguna. Preferensi tidak menghapus inbox. Tiga tes adapter membawa suite mobile ke 199/199 lulus. Runtime tetap SQLite; integrasi dua perangkat dan QA masih gate FE-25.
