@@ -132,3 +132,7 @@ Pengingat memakai GET/POST `/v1/reminders`, PATCH `/v1/reminders/{id}` dengan `a
 ## FE-25 inbox dan preferensi BE-14
 
 `HttpApiNotificationsRepository` memakai GET `/v1/me/notifications`, POST `/v1/me/notifications/{id}/read`, dan GET/PATCH `/v1/me/preferences`. Inbox berisi notifikasi penerima dan `unreadCount`; `contextId` dapat `null` jika peran aktif tidak lagi dapat membuka resource. Tindakan mark read harus memakai hasil yang telah diautorisasi ulang server sebelum navigasi ke resource. PATCH hanya mengirim `enabled` dan kategori boolean yang dipilih; preferensi yang tidak disebut dipertahankan oleh backend dan tidak menghapus notifikasi tersimpan. Status `pending/failed/suppressed` tidak dianggap terkirim. Runtime UI masih SQLite.
+
+## FE-25 ulasan BE-13
+
+`HttpApiReviewRepository` memakai POST `/v1/consultations/{id}/review` dengan `{stars,text?}` serta GET `/v1/vets/{id}/reviews` dengan limit 1–100 dan cursor opak. Backend menerima ulasan hanya dari Peternak pemilik untuk konsultasi selesai, menyimpan satu record immutable, mengembalikan record yang sama pada retry isi identik, dan menolak isi berbeda. Adapter tidak mengirim actor ID dan tidak mengulang POST otomatis pada kegagalan transport. Rating agregat tetap dibaca dari directory/detail Dokter server. UI aktif masih SQLite.

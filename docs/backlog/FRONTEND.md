@@ -276,3 +276,7 @@ Adapter yang sama kini membaca/membuat pengingat, mencoba ulang pengiriman, dan 
 ### Slice inbox dan preferensi API BE-14 — 18 November 2026
 
 `ApiNotificationsRepository`/`HttpApiNotificationsRepository` membaca inbox penerima, menandai notifikasi telah dibaca lewat ID, serta membaca/mengubah preferensi kategori. Link konteks hanya dipakai dari respons read yang sudah diperiksa backend terhadap active role; daftar dapat menampilkan `contextId:null` bila link tidak dapat diakses. Patch memakai allowlist boolean dan tidak mengirim identitas pengguna. Preferensi tidak menghapus inbox. Tiga tes adapter membawa suite mobile ke 199/199 lulus. Runtime tetap SQLite; integrasi dua perangkat dan QA masih gate FE-25.
+
+### Slice ulasan konsultasi dan dokter API BE-13 — 18 November 2026
+
+`ApiReviewRepository`/`HttpApiReviewRepository` mengirim ulasan Peternak 1–5 bintang pada konsultasi selesai dan membaca halaman ulasan publik Dokter dengan cursor server. POST hanya mengirim `stars` dan komentar opsional; backend menegakkan ownership, status selesai, satu ulasan immutable, serta dedupe isi ternormalisasi. Respons ID konsultasi harus cocok; transport tidak pasti tidak diulang otomatis, dan caller dapat mencoba lagi dengan isi sama setelah memeriksa hasil. Runtime UI tetap SQLite; FE-25/BE-16 belum diterima tanpa integrasi dua perangkat dan QA.

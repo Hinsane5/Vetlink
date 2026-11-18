@@ -21,6 +21,7 @@ import { HttpApiChatRepository } from './HttpApiChatRepository';
 import { HttpApiCareCoordinationRepository } from './HttpApiCareCoordinationRepository';
 import { HttpApiCommerceRepository } from './HttpApiCommerceRepository';
 import { HttpApiNotificationsRepository } from './HttpApiNotificationsRepository';
+import { HttpApiReviewRepository } from './HttpApiReviewRepository';
 
 /** Build API-only services from an explicitly configured development base URL. */
 export function createApiAdapters(baseUrl: string) {
@@ -45,5 +46,6 @@ export function createApiAdapters(baseUrl: string) {
     careCoordination: new HttpApiCareCoordinationRepository(api),
     commerce: new HttpApiCommerceRepository(api),
     notifications: new HttpApiNotificationsRepository(api),
+    reviews: new HttpApiReviewRepository(api),
   };
 }

@@ -1068,3 +1068,13 @@ Adapter notifikasi membaca inbox scoped dan preferensi, menandai baca lewat ID, 
 | `npm run check` di `apps/mobile` | **Lulus**: typecheck, Expo lint, kompilasi tes domain, 199/199 tes. Node memberi `ExperimentalWarning` SQLite. |
 | Tiga tes baru | Fake HTTP memeriksa inbox/unread count, context ID saat read, payload PATCH hanya kategori yang dipilih, ID salah, patch kosong, dan respons stale. Tidak menghubungi backend runtime. |
 | Integrasi dan QA | Adapter hanya tersedia di factory; UI tetap SQLite. QA Android/visual dan dua perangkat API belum dijalankan. Emulator, Figma MCP, provider produksi, deployment, dan transaksi finansial nyata tidak digunakan. |
+
+## FE-25 lanjutan — ulasan API BE-13 (18 November 2026)
+
+Adapter ulasan mengirim hanya bintang/komentar pada ID konsultasi server dan membaca halaman ulasan publik Dokter. Tidak ada `Idempotency-Key` pada route BE-13; backend mendeduplikasi isi ternormalisasi untuk satu konsultasi.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm run check` di `apps/mobile` | **Lulus**: typecheck, Expo lint, kompilasi tes domain, 202/202 tes. Node memberi `ExperimentalWarning` SQLite. |
+| Tiga tes baru | Fake HTTP memeriksa allowlist POST, cursor publik, UUID/rating/bounds, respons konsultasi salah, dan satu upaya setelah respons jaringan hilang. Tidak menghubungi backend runtime. |
+| Integrasi dan QA | Adapter terpisah tersedia di factory; UI tetap SQLite. Integrasi dua perangkat, Android/visual QA, emulator, Figma MCP, provider produksi, deployment, dan transaksi nyata tidak dijalankan. |
