@@ -6,6 +6,7 @@ import { ServerFarmService } from '../../application/ServerFarmService';
 import { ServerLivestockService } from '../../application/ServerLivestockService';
 import type { ApiFarmRecord } from '../../application/ports/FarmReadRepository';
 import type { AccountRole, SessionSnapshot } from '../../domain/auth';
+import { speciesLabel } from '../../domain/catalog';
 import { DomainError } from '../../domain/errors';
 import { Button } from '../components/Button';
 import { ConfirmationDialog } from '../components/ConfirmationDialog';
@@ -237,7 +238,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
             {farmsLoaded && !farmsBusy && !farmLoadFailed && farmList.length === 0 && <Text style={styles.description}>Belum ada peternakan.</Text>}
             {farmList.map((farm) => <View key={farm.id} style={styles.farmCard}>
               <Text style={styles.farmName}>{farm.name}</Text>
-              <Text style={styles.description}>{farm.species.length ? farm.species.join(', ') : 'Semua jenis ternak'}</Text>
+              <Text style={styles.description}>{farm.species.length ? farm.species.map(speciesLabel).join(', ') : 'Semua jenis ternak'}</Text>
               <Button label={selectedFarmId === farm.id ? 'Peternakan dipilih' : `Pilih ${farm.name}`} role="farmer" variant="secondary" selected={selectedFarmId === farm.id} disabled={farmsBusy} onPress={() => setSelectedFarmId(farm.id)} />
             </View>)}
             <TextField label="Nama peternakan baru" value={farmName} onChangeText={setFarmName} />

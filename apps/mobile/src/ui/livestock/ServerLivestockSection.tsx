@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import type { ServerLivestockService } from '../../application/ServerLivestockService';
+import { filterServerLivestock, type ServerLivestockService } from '../../application/ServerLivestockService';
 import type { ApiFarmRecord } from '../../application/ports/FarmReadRepository';
 import type { ApiLivestockRecord } from '../../application/ports/LivestockReadRepository';
 import type { LivestockSex } from '../../domain/livestock';
@@ -38,6 +38,8 @@ export function ServerLivestockSection({ service, farm, userId, backHandlerRef }
   const [weight, setWeight] = useState('');
   const [species, setSpecies] = useState<LivestockSpecies | null>(null);
   const [sex, setSex] = useState<LivestockSex>('unknown');
+  const [query, setQuery] = useState('');
+  const [speciesFilter, setSpeciesFilter] = useState<LivestockSpecies | null>(null);
   const operationInFlight = useRef(false);
   const dirty = !!(code || name || breed || age || weight || species || sex !== 'unknown');
 
@@ -126,12 +128,19 @@ export function ServerLivestockSection({ service, farm, userId, backHandlerRef }
   };
 
   const availableSpecies = farm.species.length ? farm.species : livestockSpecies;
+  const shownAnimals = filterServerLivestock(animals, { query, species: speciesFilter });
 
   return <View style={styles.section}>
     <Text accessibilityRole="header" style={styles.heading}>Ternak di {farm.name}</Text>
+    <TextField label="Cari ternak" value={query} onChangeText={setQuery} placeholder="Nama, kode, ras, atau jenis" />
+    <View style={styles.choices}>
+      <Button label="Semua jenis" role="farmer" variant="secondary" selected={speciesFilter === null} onPress={() => setSpeciesFilter(null)} style={styles.choice} />
+      {availableSpecies.map((value) => <Button key={value} label={speciesLabels[value]} role="farmer" variant="secondary" selected={speciesFilter === value} onPress={() => setSpeciesFilter(value)} style={styles.choice} />)}
+    </View>
     {!loaded || busy ? <LoadingState label="Memuat ternak…" /> : null}
     {loaded && !busy && !loadFailed && animals.length === 0 ? <Text style={styles.body}>Belum ada ternak di peternakan ini.</Text> : null}
-    {animals.map((animal) => <View key={animal.id} style={styles.card}>
+    {loaded && !busy && !loadFailed && animals.length > 0 && shownAnimals.length === 0 ? <Text style={styles.body}>Tidak ada ternak yang cocok dengan pencarian dan filter.</Text> : null}
+    {shownAnimals.map((animal) => <View key={animal.id} style={styles.card}>
       <Text style={styles.cardTitle}>{animal.name} · {animal.displayCode}</Text>
       <Text style={styles.body}>{speciesLabels[animal.species]} · {sexLabels[animal.sex]}{animal.breed ? ` · ${animal.breed}` : ''}</Text>
       {animal.estimatedAgeMonths !== null ? <Text style={styles.body}>Umur perkiraan: {animal.estimatedAgeMonths} bulan</Text> : null}

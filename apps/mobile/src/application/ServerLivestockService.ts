@@ -1,7 +1,8 @@
 import type { AccountRole } from '../domain/auth';
 import { DomainError } from '../domain/errors';
+import { speciesLabel } from '../domain/catalog';
 import { livestockSexes } from '../domain/livestock';
-import { livestockSpecies } from '../domain/profiles';
+import { livestockSpecies, type LivestockSpecies } from '../domain/profiles';
 import type { FarmReadRepository } from './ports/FarmReadRepository';
 import type { ApiLivestockRecord, LivestockReadRepository } from './ports/LivestockReadRepository';
 import type { LivestockCreateInput, LivestockWriteRepository } from './ports/LivestockWriteRepository';
@@ -66,4 +67,17 @@ export class ServerLivestockService {
   private requireFarmer(role: AccountRole): void {
     if (role !== 'farmer') throw new DomainError('FORBIDDEN', 'Hanya Peternak dapat mengubah ternak.');
   }
+}
+
+export function filterServerLivestock(items: readonly ApiLivestockRecord[], filters: {
+  query?: string;
+  species?: LivestockSpecies | null;
+}): ApiLivestockRecord[] {
+  const query = filters.query?.trim().toLocaleLowerCase('id-ID') ?? '';
+  return items.filter((animal) => {
+    if (filters.species && animal.species !== filters.species) return false;
+    if (!query) return true;
+    return [animal.displayCode, animal.name, animal.breed ?? '', speciesLabel(animal.species)]
+      .some((value) => value.toLocaleLowerCase('id-ID').includes(query));
+  });
 }

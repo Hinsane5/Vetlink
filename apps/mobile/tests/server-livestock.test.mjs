@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ServerLivestockService } from '../.test-build/src/application/ServerLivestockService.js';
+import { ServerLivestockService, filterServerLivestock } from '../.test-build/src/application/ServerLivestockService.js';
 
 const farm = { id: 'farm-a', species: ['cattle'] };
 const animal = (id, farmId, farmerId = 'farmer-a') => ({ id, farmId, farmerId });
@@ -62,4 +62,15 @@ test('server livestock pagination fails closed on duplicate IDs or foreign owner
     );
     await assert.rejects(service.listForFarm('farmer', 'farmer-a', 'farm-a'), { code: 'API_RESPONSE_INVALID' });
   }
+});
+
+test('server livestock search and species filter combine over the same server page results', () => {
+  const items = [
+    { ...animal('one', 'farm-a'), displayCode: 'S-01', name: 'Bintang', breed: 'Brahman', species: 'cattle' },
+    { ...animal('two', 'farm-a'), displayCode: 'K-02', name: 'Bintang', breed: 'Etawa', species: 'goat' },
+    { ...animal('three', 'farm-a'), displayCode: 'S-03', name: 'Awan', breed: null, species: 'cattle' },
+  ];
+  assert.deepEqual(filterServerLivestock(items, { query: '  bintang  ', species: 'cattle' }).map(({ id }) => id), ['one']);
+  assert.deepEqual(filterServerLivestock(items, { query: 'K-02', species: 'cattle' }), []);
+  assert.deepEqual(filterServerLivestock(items, { query: 'sapi' }).map(({ id }) => id), ['one', 'three']);
 });
