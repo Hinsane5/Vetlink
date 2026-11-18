@@ -2,8 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { BackHandler, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createApiAdapters } from '../../data/remote/createApiAdapters';
+import { ExpoPendingCareReportStore } from '../../data/remote/ExpoPendingCareReportStore';
+import * as Crypto from 'expo-crypto';
 import { ServerFarmService } from '../../application/ServerFarmService';
 import { ServerLivestockService } from '../../application/ServerLivestockService';
+import { ServerLivestockHealthService } from '../../application/ServerLivestockHealthService';
 import type { ApiFarmRecord } from '../../application/ports/FarmReadRepository';
 import type { AccountRole, SessionSnapshot } from '../../domain/auth';
 import { speciesLabel } from '../../domain/catalog';
@@ -19,12 +22,14 @@ type Screen = 'loading' | 'roles' | 'login' | 'register' | 'home';
 
 /** Server mode never opens the local fixture store or writes to SQLite. */
 export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
-  const { auth, farms, livestock } = useMemo(() => {
+  const { auth, farms, livestock, livestockHealth } = useMemo(() => {
     const adapters = createApiAdapters(baseUrl);
+    const livestock = new ServerLivestockService(adapters.farms, adapters.livestock, adapters.livestockWrites);
     return {
       auth: adapters.auth,
       farms: new ServerFarmService(adapters.farms, adapters.farmWrites),
-      livestock: new ServerLivestockService(adapters.farms, adapters.livestock, adapters.livestockWrites),
+      livestock,
+      livestockHealth: new ServerLivestockHealthService(livestock, adapters.livestockHealth, adapters.livestockHealth, new ExpoPendingCareReportStore(), () => Crypto.randomUUID()),
     };
   }, [baseUrl]);
   const insets = useSafeAreaInsets();
@@ -245,7 +250,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
             {farmWriteUncertain ? <Text style={styles.description}>Muat ulang peternakan sebelum mencoba menyimpan lagi.</Text> : null}
             <Button label="Tambah peternakan" role="farmer" onPress={createFarm} loading={farmsBusy} disabled={!farmsLoaded || farmLoadFailed || farmWriteUncertain} />
             <Button label="Muat ulang peternakan" role="farmer" variant="secondary" onPress={refreshFarms} disabled={!farmsLoaded || farmsBusy} />
-            {selectedFarm ? <ServerLivestockSection key={selectedFarm.id} service={livestock} farm={selectedFarm} userId={session.userId} backHandlerRef={livestockBackHandler} /> : null}
+            {selectedFarm ? <ServerLivestockSection key={selectedFarm.id} service={livestock} healthService={livestockHealth} farm={selectedFarm} userId={session.userId} backHandlerRef={livestockBackHandler} /> : null}
           </>}
           {session.activeRole === 'vet' && <Text style={styles.description}>Data layanan belum tersedia di tampilan ini.</Text>}
           {session.roles.length > 1 && session.roles.map((availableRole) => <Button key={availableRole} label={`Ganti Peran: ${availableRole === 'farmer' ? 'Peternak' : 'Dokter Hewan'}`} role={availableRole} variant="secondary" disabled={busy || availableRole === session.activeRole} onPress={() => switchRole(availableRole)} />)}

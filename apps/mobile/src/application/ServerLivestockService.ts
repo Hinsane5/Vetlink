@@ -41,6 +41,16 @@ export class ServerLivestockService {
     throw new DomainError('API_RESPONSE_INVALID', 'Daftar ternak terlalu panjang untuk dimuat sekaligus.');
   }
 
+  async getForFarm(role: AccountRole, userId: string, farmId: string, livestockId: string): Promise<ApiLivestockRecord> {
+    this.requireFarmer(role);
+    await this.farms.getFarmById(farmId);
+    const animal = await this.reads.getById(livestockId);
+    if (animal.farmerId !== userId || animal.farmId !== farmId || animal.id !== livestockId) {
+      throw new DomainError('FORBIDDEN', 'Ternak tidak berada dalam peternakan milik akun ini.');
+    }
+    return animal;
+  }
+
   async create(role: AccountRole, farmId: string, input: Omit<LivestockCreateInput, 'farmId'>): Promise<ApiLivestockRecord> {
     this.requireFarmer(role);
     const farm = await this.farms.getFarmById(farmId);
