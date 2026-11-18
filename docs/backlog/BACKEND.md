@@ -42,6 +42,8 @@ BE-17 bukan izin deploy atau menjalankan transaksi uang nyata. Implementasi prov
 
 Follow-up BE-16 pasien: `PatientResponseDto` kini menambahkan jenis/status layanan terkait yang terscope ke Dokter; kontrak 8/8 dan smoke PostgreSQL lokal terisolasi lulus. Foto privat, wiring mobile, dan QA fisik tetap gate. Bukti di [Testing](../TESTING.md#be-16fe-25-jenis-dan-status-layanan-pasien--17-november-2026).
 
+Follow-up BE-16 profil: GET/PATCH `/me/farmer` dan `/me/vet` kini mempunyai `RequireRoles` sesuai path, sehingga sesi Dokter tidak dapat memperoleh profil melalui path Peternak atau sebaliknya. `npm run check` dan `api:contract` 9/9 lulus; smoke PostgreSQL untuk perubahan ini belum dijalankan. FE-25 sudah memiliki adapter profil/verifikasi, tetapi upload dokumen multipart, wiring UI, dan QA perangkat tetap gate.
+
 ## Kriteria integrasi lintas mobile/backend
 
 - OpenAPI v1 dan domain error menjadi kontrak; perubahan breaking dibahas dan dipetakan ke adapter mobile.

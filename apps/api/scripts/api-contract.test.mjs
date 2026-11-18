@@ -5,6 +5,8 @@ import 'reflect-metadata';
 import { after, before, test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { ConsultationService } from '../dist/consultation/consultation.service.js';
+import { ProfileController } from '../dist/profile/profile.controller.js';
+import { AUTH_ROLES_KEY } from '../dist/auth/auth.decorators.js';
 
 const methods = ['get', 'post', 'put', 'patch', 'delete'];
 const unauthenticatedOperations = new Set([
@@ -516,4 +518,13 @@ test('unauthenticated API access returns the shared error envelope', async () =>
   assert.equal(typeof error.message, 'string');
   assert.equal(typeof error.requestId, 'string');
   assert.equal('stack' in error, false);
+});
+
+test('profile routes require the role named by their path', () => {
+  for (const method of ['getFarmerProfile', 'patchFarmerProfile']) {
+    assert.deepEqual(Reflect.getMetadata(AUTH_ROLES_KEY, ProfileController.prototype[method]), ['farmer']);
+  }
+  for (const method of ['getVetProfile', 'patchVetProfile']) {
+    assert.deepEqual(Reflect.getMetadata(AUTH_ROLES_KEY, ProfileController.prototype[method]), ['vet']);
+  }
 });

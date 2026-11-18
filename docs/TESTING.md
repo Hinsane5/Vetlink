@@ -1078,3 +1078,16 @@ Adapter ulasan mengirim hanya bintang/komentar pada ID konsultasi server dan mem
 | `npm run check` di `apps/mobile` | **Lulus**: typecheck, Expo lint, kompilasi tes domain, 202/202 tes. Node memberi `ExperimentalWarning` SQLite. |
 | Tiga tes baru | Fake HTTP memeriksa allowlist POST, cursor publik, UUID/rating/bounds, respons konsultasi salah, dan satu upaya setelah respons jaringan hilang. Tidak menghubungi backend runtime. |
 | Integrasi dan QA | Adapter terpisah tersedia di factory; UI tetap SQLite. Integrasi dua perangkat, Android/visual QA, emulator, Figma MCP, provider produksi, deployment, dan transaksi nyata tidak dijalankan. |
+
+## FE-25/BE-16 — profil dan verifikasi API BE-02 (18 November 2026)
+
+Adapter profil menormalkan respons raw profil/submission dan memakai payload PATCH/submit allowlist. BE-16 memisahkan route profil Peternak/Dokter agar RoleGuard memeriksa peran sesuai path, bukan hanya membership umum controller.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm run typecheck` di `apps/mobile` | **Lulus** setelah port/adapter dibuat. |
+| `npm run check` di `apps/mobile` | **Lulus**: typecheck, Expo lint, kompilasi tes domain, 205/205 tes. Node memberi `ExperimentalWarning` SQLite. |
+| Tiga tes adapter baru | Fake HTTP memeriksa bentuk profil dan submission, allowlist PATCH, ID dokumen unik, identitas profil, serta submit yang tidak mengklaim verified. Tidak menghubungi backend runtime. |
+| `npm run check` di `apps/api` | **Lulus**: TypeScript typecheck dan Nest build. |
+| `npm run api:contract` di `apps/api` | **Lulus**: 9/9 tes, termasuk metadata role khusus pada GET/PATCH `/me/farmer` dan `/me/vet`. |
+| Integrasi/QA | Smoke PostgreSQL tidak diulang untuk guard ini. Upload multipart, wiring API UI, Android build/QA perangkat, emulator, Figma MCP, provider produksi, deployment, dan transaksi nyata tidak dijalankan. |

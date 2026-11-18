@@ -21,8 +21,10 @@ class FarmPatchDto extends FarmDto { @IsInt() @Min(1) expectedVersion!:number; }
 @ApiTags('Profile') @ApiBearerAuth('bearer') @Controller('me') @UseGuards(AccessTokenGuard,RoleGuard) @RequireRoles('farmer','vet')
 export class ProfileController {
   constructor(private readonly service:ProfileService){}
-  @Get(['farmer','vet']) getProfile(@AuthenticatedUser() p:AuthenticatedPrincipal){return this.service.profile(p);}
-  @Patch(['farmer','vet']) patchProfile(@AuthenticatedUser() p:AuthenticatedPrincipal,@Body() body:ProfileDto){return this.service.patchProfile(p,{...body});}
+  @Get('farmer') @RequireRoles('farmer') getFarmerProfile(@AuthenticatedUser() p:AuthenticatedPrincipal){return this.service.profile(p);}
+  @Get('vet') @RequireRoles('vet') getVetProfile(@AuthenticatedUser() p:AuthenticatedPrincipal){return this.service.profile(p);}
+  @Patch('farmer') @RequireRoles('farmer') patchFarmerProfile(@AuthenticatedUser() p:AuthenticatedPrincipal,@Body() body:ProfileDto){return this.service.patchProfile(p,{...body});}
+  @Patch('vet') @RequireRoles('vet') patchVetProfile(@AuthenticatedUser() p:AuthenticatedPrincipal,@Body() body:ProfileDto){return this.service.patchProfile(p,{...body});}
   @Get('farms') @RequireRoles('farmer') @ApiOkResponse({type:[FarmResponseDto],description:'Farm milik Peternak aktif, dalam urutan pembuatan stabil.'}) @ApiUnauthorizedResponse({type:ApiErrorResponseDto}) @ApiForbiddenResponse({type:ApiErrorResponseDto})
   farms(@AuthenticatedUser() p:AuthenticatedPrincipal){return this.service.farms(p);}
   @Get('farms/:id') @RequireRoles('farmer') @ApiOkResponse({type:FarmResponseDto}) @ApiUnauthorizedResponse({type:ApiErrorResponseDto}) @ApiForbiddenResponse({type:ApiErrorResponseDto}) @ApiNotFoundResponse({type:ApiErrorResponseDto})

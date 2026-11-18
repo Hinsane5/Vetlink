@@ -136,3 +136,7 @@ Pengingat memakai GET/POST `/v1/reminders`, PATCH `/v1/reminders/{id}` dengan `a
 ## FE-25 ulasan BE-13
 
 `HttpApiReviewRepository` memakai POST `/v1/consultations/{id}/review` dengan `{stars,text?}` serta GET `/v1/vets/{id}/reviews` dengan limit 1–100 dan cursor opak. Backend menerima ulasan hanya dari Peternak pemilik untuk konsultasi selesai, menyimpan satu record immutable, mengembalikan record yang sama pada retry isi identik, dan menolak isi berbeda. Adapter tidak mengirim actor ID dan tidak mengulang POST otomatis pada kegagalan transport. Rating agregat tetap dibaca dari directory/detail Dokter server. UI aktif masih SQLite.
+
+## FE-25 profil dan verifikasi BE-02
+
+`HttpApiProfileRepository` memakai GET/PATCH `/v1/me/farmer` dan `/v1/me/vet`, GET `/v1/me/vet/verification`, serta POST `/v1/me/vet/verification-submissions`. Path profil kini memerlukan peran aktif yang sesuai pada backend. PATCH profil hanya mengirim `fullName` dan, untuk Dokter, `professionalName`/`registrationReference`; status verifikasi tidak dapat diubah client. GET profil mengembalikan `fullName` camelCase tetapi field profil lain snake_case dari row PostgreSQL. GET daftar submission memakai camelCase; POST submission mengembalikan row snake_case berstatus `pending`. Adapter menormalkan kedua bentuk dan tidak menganggap submit sebagai verified. Upload dokumen profesi multipart belum didukung oleh port JSON ini; backend tetap membatasi 10 MiB dan MIME/signature. Runtime UI masih SQLite.

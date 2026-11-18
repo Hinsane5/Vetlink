@@ -280,3 +280,7 @@ Adapter yang sama kini membaca/membuat pengingat, mencoba ulang pengiriman, dan 
 ### Slice ulasan konsultasi dan dokter API BE-13 — 18 November 2026
 
 `ApiReviewRepository`/`HttpApiReviewRepository` mengirim ulasan Peternak 1–5 bintang pada konsultasi selesai dan membaca halaman ulasan publik Dokter dengan cursor server. POST hanya mengirim `stars` dan komentar opsional; backend menegakkan ownership, status selesai, satu ulasan immutable, serta dedupe isi ternormalisasi. Respons ID konsultasi harus cocok; transport tidak pasti tidak diulang otomatis, dan caller dapat mencoba lagi dengan isi sama setelah memeriksa hasil. Runtime UI tetap SQLite; FE-25/BE-16 belum diterima tanpa integrasi dua perangkat dan QA.
+
+### Slice profil dan status verifikasi API BE-02 — 18 November 2026
+
+`ApiProfileRepository`/`HttpApiProfileRepository` membaca/mengubah profil Peternak dan Dokter serta membaca/mengajukan verifikasi Dokter dengan 1–5 ID dokumen yang sudah tersedia. Respons profil BE-02 masih memakai field PostgreSQL snake_case, daftar submission memakai camelCase, dan hasil POST submission memakai snake_case; adapter menormalkan semuanya menjadi model API terpisah. PATCH memakai allowlist, tidak mengirim status verifikasi atau owner ID, dan submit hanya menerima hasil `pending`. Upload dokumen biner dan wiring UI API belum masuk slice ini; runtime tetap SQLite. Guard backend untuk empat path profil diperketat agar peran aktif harus cocok dengan `/me/farmer` atau `/me/vet`; acceptance FE-25 tetap gate integrasi dan QA.
