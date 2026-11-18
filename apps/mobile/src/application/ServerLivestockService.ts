@@ -5,7 +5,7 @@ import { livestockSexes } from '../domain/livestock';
 import { livestockSpecies, type LivestockSpecies } from '../domain/profiles';
 import type { FarmReadRepository } from './ports/FarmReadRepository';
 import type { ApiLivestockRecord, LivestockReadRepository } from './ports/LivestockReadRepository';
-import type { LivestockCreateInput, LivestockWriteRepository } from './ports/LivestockWriteRepository';
+import type { LivestockCreateInput, LivestockPatchInput, LivestockWriteRepository } from './ports/LivestockWriteRepository';
 
 /** Farmer livestock commands stay bound to an owned Farm in the server session. */
 export class ServerLivestockService {
@@ -72,6 +72,25 @@ export class ServerLivestockService {
       throw new DomainError('VALIDATION_FAILED', 'Pilih jenis kelamin ternak yang tersedia.');
     }
     return this.writes.create({ ...input, farmId, displayCode: code, name });
+  }
+
+  async update(role: AccountRole, userId: string, farmId: string, livestockId: string, input: LivestockPatchInput): Promise<ApiLivestockRecord> {
+    const current = await this.getForFarm(role, userId, farmId, livestockId);
+    if (current.version !== input.expectedVersion) {
+      throw new DomainError('VERSION_CONFLICT', 'Data ternak berubah di server. Muat ulang sebelum menyimpan.');
+    }
+    const name = input.name === undefined ? undefined : input.name.trim().replace(/\s+/g, ' ');
+    if (name !== undefined && (name.length < 2 || name.length > 120)) {
+      throw new DomainError('VALIDATION_FAILED', 'Nama ternak harus berisi 2 sampai 120 karakter.');
+    }
+    if (input.sex !== undefined && !livestockSexes.includes(input.sex)) {
+      throw new DomainError('VALIDATION_FAILED', 'Pilih jenis kelamin ternak yang tersedia.');
+    }
+    const saved = await this.writes.update(livestockId, { ...input, ...(name === undefined ? {} : { name }) });
+    if (saved.id !== livestockId || saved.farmerId !== userId || saved.farmId !== farmId || saved.version <= current.version) {
+      throw new DomainError('API_RESPONSE_INVALID', 'Hasil perubahan ternak tidak sesuai konteks atau versi server.');
+    }
+    return saved;
   }
 
   private requireFarmer(role: AccountRole): void {

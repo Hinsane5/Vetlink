@@ -151,3 +151,34 @@ test('server care report rejects invalid input and foreign owner before storing 
   await assert.rejects(new ServerLivestockHealthService(foreign, { listHealthEvents: async () => [] }, care, storage).createReport('farmer', 'farmer-a', 'farm-a', 'animal-a', 'care', 'Report'), { code: 'FORBIDDEN' });
   assert.equal(writes, 0);
 });
+
+test('server livestock edit verifies fresh ownership/version before PATCH and validates saved scope', async () => {
+  let writes = 0;
+  const livestock = new ServerLivestockService(
+    { getFarmById: async () => farm },
+    { getById: async (id) => ({ ...animal(id, 'farm-a'), version: 2 }) },
+    { update: async (id, input) => { writes++; assert.equal(id, 'animal-a'); assert.deepEqual(input, { expectedVersion: 2, name: 'Sapi Baru', breed: null, sex: 'female' }); return { ...animal(id, 'farm-a'), version: 3 }; } },
+  );
+  const patch = { expectedVersion: 2, name: '  Sapi   Baru ', breed: null, sex: 'female' };
+  await assert.rejects(livestock.update('vet', 'vet-a', 'farm-a', 'animal-a', patch), { code: 'FORBIDDEN' });
+  await assert.rejects(livestock.update('farmer', 'farmer-a', 'farm-a', 'animal-a', { ...patch, expectedVersion: 1 }), { code: 'VERSION_CONFLICT' });
+  await assert.rejects(livestock.update('farmer', 'farmer-a', 'farm-a', 'animal-a', { ...patch, name: ' ' }), { code: 'VALIDATION_FAILED' });
+  assert.equal(writes, 0);
+  const saved = await livestock.update('farmer', 'farmer-a', 'farm-a', 'animal-a', patch);
+  assert.equal(saved.version, 3);
+  assert.equal(writes, 1);
+});
+
+test('server livestock edit rejects a changed owner or non-incremented server response', async () => {
+  for (const result of [
+    { ...animal('animal-a', 'farm-a', 'other'), version: 3 },
+    { ...animal('animal-a', 'farm-a'), version: 2 },
+  ]) {
+    const livestock = new ServerLivestockService(
+      { getFarmById: async () => farm },
+      { getById: async (id) => ({ ...animal(id, 'farm-a'), version: 2 }) },
+      { update: async () => result },
+    );
+    await assert.rejects(livestock.update('farmer', 'farmer-a', 'farm-a', 'animal-a', { expectedVersion: 2, name: 'Sapi Baru' }), { code: 'API_RESPONSE_INVALID' });
+  }
+});

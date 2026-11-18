@@ -60,15 +60,31 @@ export function ServerLivestockSection({ service, healthService, farm, userId, b
   const [reportError, setReportError] = useState('');
   const [reportNotice, setReportNotice] = useState('');
   const [reportDiscardVisible, setReportDiscardVisible] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editBreed, setEditBreed] = useState('');
+  const [editSex, setEditSex] = useState<LivestockSex>('unknown');
+  const [editBusy, setEditBusy] = useState(false);
+  const [editUncertain, setEditUncertain] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [editDiscardVisible, setEditDiscardVisible] = useState(false);
   const operationInFlight = useRef(false);
   const detailRequest = useRef(0);
   const dirty = !!(code || name || breed || age || weight || species || sex !== 'unknown');
+  const editChanged = !!detailAnimal && (editName !== detailAnimal.name || editBreed !== (detailAnimal.breed ?? '') || editSex !== detailAnimal.sex);
 
   useEffect(() => {
     backHandlerRef.current = () => {
       if (discardVisible) { setDiscardVisible(false); return true; }
       if (reportDiscardVisible) { setReportDiscardVisible(false); return true; }
+      if (editDiscardVisible) { setEditDiscardVisible(false); return true; }
       if (reportBusy) return true;
+      if (editBusy) return true;
+      if (editOpen) {
+        if (editChanged) setEditDiscardVisible(true);
+        else setEditOpen(false);
+        return true;
+      }
       if (reportOpen) {
         if (reportDescription.trim() || reportKind !== 'disease') setReportDiscardVisible(true);
         else setReportOpen(false);
@@ -82,7 +98,23 @@ export function ServerLivestockSection({ service, healthService, farm, userId, b
       return true;
     };
     return () => { backHandlerRef.current = null; };
-  }, [backHandlerRef, busy, detailId, dirty, discardVisible, formOpen, reportBusy, reportDescription, reportDiscardVisible, reportKind, reportOpen]);
+  }, [backHandlerRef, busy, detailId, dirty, discardVisible, editBusy, editChanged, editDiscardVisible, editOpen, formOpen, reportBusy, reportDescription, reportDiscardVisible, reportKind, reportOpen]);
+
+  const openEdit = () => {
+    if (!detailAnimal) return;
+    setEditName(detailAnimal.name);
+    setEditBreed(detailAnimal.breed ?? '');
+    setEditSex(detailAnimal.sex);
+    setEditError('');
+    setEditUncertain(false);
+    setEditOpen(true);
+  };
+
+  const closeEdit = () => {
+    setEditOpen(false);
+    setEditDiscardVisible(false);
+    setEditError('');
+  };
 
   const closeReport = () => {
     setReportOpen(false);
@@ -101,15 +133,17 @@ export function ServerLivestockSection({ service, healthService, farm, userId, b
         healthService.getDetail('farmer', userId, farm.id, livestockId),
         healthService.getPendingReport('farmer', userId, farm.id, livestockId),
       ]);
-      if (request !== detailRequest.current) return;
+      if (request !== detailRequest.current) return false;
       setDetailAnimal(detail.animal);
       setHealthEvents(detail.events);
       setPendingReport(pending);
+      return true;
     } catch (cause) {
-      if (request !== detailRequest.current) return;
+      if (request !== detailRequest.current) return false;
       setDetailAnimal(null);
       setHealthEvents([]);
       setDetailError(messageFor(cause));
+      return false;
     } finally {
       if (request === detailRequest.current) setDetailLoading(false);
     }
@@ -153,6 +187,38 @@ export function ServerLivestockSection({ service, healthService, farm, userId, b
     } finally {
       operationInFlight.current = false;
       setReportBusy(false);
+    }
+  };
+
+  const saveEdit = async () => {
+    if (!detailId || !detailAnimal || !editChanged || editBusy || editUncertain || operationInFlight.current) return;
+    operationInFlight.current = true;
+    setEditBusy(true);
+    setEditError('');
+    try {
+      const saved = await service.update('farmer', userId, farm.id, detailId, {
+        expectedVersion: detailAnimal.version,
+        name: editName,
+        breed: editBreed.trim() || null,
+        sex: editSex,
+      });
+      setDetailAnimal(saved);
+      setAnimals((current) => current.map((item) => item.id === saved.id ? saved : item));
+      closeEdit();
+    } catch (cause) {
+      setEditError(messageFor(cause));
+      if (cause instanceof DomainError && ['SERVICE_UNAVAILABLE', 'API_RESPONSE_INVALID', 'VERSION_CONFLICT'].includes(cause.code)) setEditUncertain(true);
+    } finally {
+      operationInFlight.current = false;
+      setEditBusy(false);
+    }
+  };
+
+  const refreshAfterEdit = async () => {
+    if (!detailId || editBusy) return;
+    if (await loadDetail(detailId)) {
+      setEditUncertain(false);
+      closeEdit();
     }
   };
 
@@ -232,17 +298,30 @@ export function ServerLivestockSection({ service, healthService, farm, userId, b
   const shownAnimals = filterServerLivestock(animals, { query, species: speciesFilter });
 
   if (detailId) return <View style={styles.section}>
-    <Button label={reportOpen ? 'Kembali ke riwayat' : 'Kembali ke daftar ternak'} role="farmer" variant="secondary" disabled={reportBusy} onPress={() => {
+    <Button label={reportOpen || editOpen ? 'Kembali ke riwayat' : 'Kembali ke daftar ternak'} role="farmer" variant="secondary" disabled={reportBusy || editBusy} onPress={() => {
       if (reportOpen) {
         if (reportDescription.trim() || reportKind !== 'disease') setReportDiscardVisible(true);
         else closeReport();
+      } else if (editOpen) {
+        if (editChanged) setEditDiscardVisible(true);
+        else closeEdit();
       } else { detailRequest.current++; setDetailId(null); setDetailError(''); }
     }} />
     <Text accessibilityRole="header" style={styles.heading}>Detail Ternak</Text>
     {detailLoading ? <LoadingState label="Memuat detail dan riwayat…" /> : null}
     {detailError ? <Text accessibilityLiveRegion="polite" style={styles.error}>{detailError}</Text> : null}
     {!detailLoading && detailError ? <Button label="Coba muat ulang" role="farmer" variant="secondary" onPress={() => loadDetail(detailId)} /> : null}
-    {!detailLoading && detailAnimal && reportOpen ? <>
+    {!detailLoading && detailAnimal && editOpen ? <>
+      <TextField label="Nama ternak" value={editName} onChangeText={setEditName} />
+      <TextField label="Ras (opsional)" value={editBreed} onChangeText={setEditBreed} />
+      <Text style={styles.body}>Jenis kelamin</Text>
+      <View style={styles.choices}>{(['female', 'male', 'unknown'] as const).map((value) => <Button key={value} label={sexLabels[value]} role="farmer" variant="secondary" selected={editSex === value} disabled={editBusy} onPress={() => setEditSex(value)} style={styles.choice} />)}</View>
+      {editError ? <Text accessibilityLiveRegion="polite" style={styles.error}>{editError}</Text> : null}
+      {editUncertain ? <Text style={styles.body}>Status simpan belum pasti. Muat ulang detail server sebelum mencoba lagi; perubahan form ini akan ditutup.</Text> : null}
+      <Button label="Simpan perubahan" role="farmer" onPress={saveEdit} loading={editBusy} disabled={editUncertain || !editChanged} />
+      {editUncertain ? <Button label="Muat ulang detail" role="farmer" variant="secondary" onPress={refreshAfterEdit} /> : null}
+    </> : null}
+    {!detailLoading && detailAnimal && reportOpen && !editOpen ? <>
       <Text style={styles.body}>Laporan ini berasal dari Peternak dan terpisah dari catatan klinis final Dokter.</Text>
       <Text style={styles.body}>Jenis laporan</Text>
       <View style={styles.choices}>{(['disease', 'vaccine', 'medication', 'care'] as const).map((kind) => <Button key={kind} label={healthLabels[kind]} role="farmer" variant="secondary" selected={reportKind === kind} disabled={reportBusy} onPress={() => setReportKind(kind)} style={styles.choice} />)}</View>
@@ -252,13 +331,14 @@ export function ServerLivestockSection({ service, healthService, farm, userId, b
       {pendingReport ? <Button label="Coba ulang laporan" role="farmer" onPress={retryReport} loading={reportBusy} /> : null}
       <Button label="Simpan laporan" role="farmer" onPress={saveReport} loading={reportBusy} disabled={!!pendingReport || !reportDescription.trim()} />
     </> : null}
-    {!detailLoading && detailAnimal && !reportOpen ? <>
+    {!detailLoading && detailAnimal && !reportOpen && !editOpen ? <>
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{detailAnimal.name} · {detailAnimal.displayCode}</Text>
         <Text style={styles.body}>{speciesLabels[detailAnimal.species]} · {sexLabels[detailAnimal.sex]}{detailAnimal.breed ? ` · ${detailAnimal.breed}` : ''}</Text>
         {detailAnimal.estimatedAgeMonths !== null ? <Text style={styles.body}>Umur perkiraan: {detailAnimal.estimatedAgeMonths} bulan</Text> : null}
         {detailAnimal.weightKg !== null ? <Text style={styles.body}>Berat: {detailAnimal.weightKg} kg</Text> : null}
       </View>
+      <Button label="Ubah data ternak" role="farmer" variant="secondary" onPress={openEdit} />
       <Text style={styles.heading}>Riwayat Kesehatan</Text>
       {reportNotice ? <Text accessibilityLiveRegion="polite" style={styles.body}>{reportNotice}</Text> : null}
       {reportError ? <Text accessibilityLiveRegion="polite" style={styles.error}>{reportError}</Text> : null}
@@ -276,6 +356,7 @@ export function ServerLivestockSection({ service, healthService, farm, userId, b
       <Button label="Muat ulang riwayat" role="farmer" variant="secondary" onPress={() => loadDetail(detailId)} />
     </> : null}
     <ConfirmationDialog visible={reportDiscardVisible} title="Buang laporan yang belum disimpan?" message="Keterangan yang belum dikirim akan hilang." role="farmer" confirmLabel="Buang" cancelLabel="Tetap Mengedit" onConfirm={closeReport} onCancel={() => setReportDiscardVisible(false)} destructive />
+    <ConfirmationDialog visible={editDiscardVisible} title="Buang perubahan ternak?" message="Perubahan yang belum disimpan akan hilang." role="farmer" confirmLabel="Buang" cancelLabel="Tetap Mengedit" onConfirm={closeEdit} onCancel={() => setEditDiscardVisible(false)} destructive />
   </View>;
 
   return <View style={styles.section}>
