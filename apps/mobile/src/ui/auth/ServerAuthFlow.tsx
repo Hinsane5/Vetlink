@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { BackHandler, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createApiAdapters } from '../../data/remote/createApiAdapters';
+import { ServerFarmService } from '../../application/ServerFarmService';
+import type { ApiFarmRecord } from '../../application/ports/FarmReadRepository';
 import type { AccountRole, SessionSnapshot } from '../../domain/auth';
 import { Button } from '../components/Button';
 import { ConfirmationDialog } from '../components/ConfirmationDialog';
@@ -13,7 +15,10 @@ type Screen = 'loading' | 'roles' | 'login' | 'register' | 'home';
 
 /** Server mode never opens the local fixture store or writes to SQLite. */
 export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
-  const { auth } = useMemo(() => createApiAdapters(baseUrl), [baseUrl]);
+  const { auth, farms } = useMemo(() => {
+    const adapters = createApiAdapters(baseUrl);
+    return { auth: adapters.auth, farms: new ServerFarmService(adapters.farms, adapters.farmWrites) };
+  }, [baseUrl]);
   const insets = useSafeAreaInsets();
   const [screen, setScreen] = useState<Screen>('loading');
   const [session, setSession] = useState<SessionSnapshot | null>(null);
@@ -25,6 +30,11 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
   const [busy, setBusy] = useState(false);
   const [logoutVisible, setLogoutVisible] = useState(false);
   const [error, setError] = useState('');
+  const [farmList, setFarmList] = useState<ApiFarmRecord[]>([]);
+  const [farmName, setFarmName] = useState('');
+  const [farmsBusy, setFarmsBusy] = useState(false);
+  const [farmsLoaded, setFarmsLoaded] = useState(false);
+  const farmCreateInFlight = useRef(false);
 
   useEffect(() => {
     let mounted = true;
@@ -56,6 +66,35 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
     return () => subscription.remove();
   }, [screen]);
 
+  useEffect(() => {
+    if (!session || session.activeRole !== 'farmer') {
+      return;
+    }
+    let mounted = true;
+    farms.list(session.activeRole).then(
+      (records) => { if (mounted) { setFarmList(records); setFarmsLoaded(true); setFarmsBusy(false); } },
+      (cause) => { if (mounted) { setError(messageFor(cause)); setFarmsLoaded(true); setFarmsBusy(false); } },
+    );
+    return () => { mounted = false; };
+  }, [farms, session]);
+
+  const createFarm = async () => {
+    if (!session || farmCreateInFlight.current) return;
+    farmCreateInFlight.current = true;
+    setFarmsBusy(true);
+    setError('');
+    try {
+      await farms.create(session.activeRole, farmName);
+      setFarmList(await farms.list(session.activeRole));
+      setFarmName('');
+    } catch (cause) {
+      setError(messageFor(cause));
+    } finally {
+      farmCreateInFlight.current = false;
+      setFarmsBusy(false);
+    }
+  };
+
   const submit = async () => {
     if (busy) return;
     if (screen === 'register' && password !== confirmation) {
@@ -69,6 +108,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
         ? await auth.register({ name, email, password, role })
         : await auth.login({ email, password, role });
       setSession(next);
+      setFarmsLoaded(false);
       setRole(next.activeRole);
       setPassword('');
       setConfirmation('');
@@ -88,6 +128,8 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
       const next = await auth.switchRole(nextRole);
       setSession(next);
       setRole(next.activeRole);
+      setFarmList([]);
+      setFarmsLoaded(false);
     } catch (cause) {
       setError(messageFor(cause));
     } finally {
@@ -103,6 +145,8 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
       await auth.logout();
       setLogoutVisible(false);
       setSession(null);
+      setFarmList([]);
+      setFarmsLoaded(false);
       setPassword('');
       setScreen('roles');
     } catch (cause) {
@@ -138,7 +182,15 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
         {screen === 'home' && session && <>
           <Text style={styles.heading}>Akun {session.activeRole === 'farmer' ? 'Peternak' : 'Dokter Hewan'}</Text>
           <Text style={styles.description}>{session.displayName}{'\n'}{session.email}</Text>
-          <Text style={styles.description}>Data layanan belum tersedia di tampilan ini.</Text>
+          {session.activeRole === 'farmer' && <>
+            <Text style={styles.heading}>Peternakan saya</Text>
+            {(!farmsLoaded || farmsBusy) && <LoadingState label="Memuat peternakan…" />}
+            {farmsLoaded && !farmsBusy && farmList.length === 0 && <Text style={styles.description}>Belum ada peternakan.</Text>}
+            {farmList.map((farm) => <View key={farm.id} style={styles.farmCard}><Text style={styles.farmName}>{farm.name}</Text><Text style={styles.description}>{farm.species.length ? farm.species.join(', ') : 'Jenis ternak belum diisi'}</Text></View>)}
+            <TextField label="Nama peternakan baru" value={farmName} onChangeText={setFarmName} />
+            <Button label="Tambah peternakan" role="farmer" onPress={createFarm} loading={farmsBusy} />
+          </>}
+          {session.activeRole === 'vet' && <Text style={styles.description}>Data layanan belum tersedia di tampilan ini.</Text>}
           {session.roles.length > 1 && session.roles.map((availableRole) => <Button key={availableRole} label={`Ganti Peran: ${availableRole === 'farmer' ? 'Peternak' : 'Dokter Hewan'}`} role={availableRole} variant="secondary" disabled={busy || availableRole === session.activeRole} onPress={() => switchRole(availableRole)} />)}
           <Button label="Keluar" role={session.activeRole} variant="secondary" disabled={busy} onPress={() => setLogoutVisible(true)} />
         </>}
@@ -161,4 +213,6 @@ const styles = StyleSheet.create({
   heading: { color: colors.dark, fontFamily: fonts.semiBold, fontSize: typeScale.heading },
   description: { color: colors.dark, fontFamily: fonts.regular, fontSize: typeScale.body, lineHeight: 22 },
   error: { color: colors.orange, fontFamily: fonts.medium, fontSize: typeScale.body },
+  farmCard: { padding: spacing[4], backgroundColor: colors.white, borderRadius: 14, gap: spacing[2] },
+  farmName: { color: colors.dark, fontFamily: fonts.semiBold, fontSize: typeScale.section },
 });

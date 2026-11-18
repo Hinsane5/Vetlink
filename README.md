@@ -1,6 +1,6 @@
 # VetLink
 
-Pembaruan 18 November 2026: DEC-28 mencabut penundaan FE-03. Secara default aplikasi tetap membuka alur fixture lokal. Untuk mode autentikasi server development, set `EXPO_PUBLIC_API_BASE_URL` ke URL API lokal yang dapat dijangkau perangkat sebelum menjalankan aplikasi. Mode ini dipilih saat startup dan tidak membuka SQLite; daftar, masuk, pemulihan sesi, ganti membership yang sah, dan keluar memakai BE-01. Layar layanan belum dihubungkan ke API, sehingga mode server saat ini hanya menampilkan akun. Reset password masih menunggu delivery adapter yang disetujui. Detail gate ada di [Testing](docs/TESTING.md).
+Pembaruan 18 November 2026: DEC-28 mencabut penundaan FE-03. Secara default aplikasi tetap membuka alur fixture lokal. Untuk mode autentikasi server development, set `EXPO_PUBLIC_API_BASE_URL` ke URL API lokal yang dapat dijangkau perangkat sebelum menjalankan aplikasi. Mode ini dipilih saat startup dan tidak membuka SQLite; daftar, masuk, pemulihan sesi, ganti membership yang sah, dan keluar memakai BE-01. Mode server menampilkan daftar Peternakan Peternak dan dapat menambah Peternakan melalui BE-02; layar layanan lain belum dihubungkan ke API. Reset password masih menunggu delivery adapter yang disetujui. Detail gate ada di [Testing](docs/TESTING.md).
 
 Aplikasi mobile berbahasa Indonesia untuk pengelolaan kesehatan ternak, konsultasi dokter hewan, kunjungan, dan pembelian produk kesehatan hewan.
 
