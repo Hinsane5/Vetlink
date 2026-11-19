@@ -24,6 +24,7 @@ import { ServerLivestockSection } from '../livestock/ServerLivestockSection';
 import { ServerPatientsSection } from '../patients/ServerPatientsSection';
 import { ServerVetDirectorySection } from '../directory/ServerVetDirectorySection';
 import { ServerConsultationSection } from '../consultations/ServerConsultationSection';
+import { ServerFarmAddressesSection } from '../farms/ServerFarmAddressesSection';
 import { colors, fonts, spacing, typeScale } from '../theme/tokens';
 
 type Screen = 'loading' | 'roles' | 'login' | 'register' | 'home';
@@ -63,6 +64,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
   const [farmLoadFailed, setFarmLoadFailed] = useState(false);
   const [farmWriteUncertain, setFarmWriteUncertain] = useState(false);
   const farmCreateInFlight = useRef(false);
+  const farmAddressesBackHandler = useRef<(() => boolean) | null>(null);
   const livestockBackHandler = useRef<(() => boolean) | null>(null);
   const patientBackHandler = useRef<(() => boolean) | null>(null);
   const directoryBackHandler = useRef<(() => boolean) | null>(null);
@@ -94,6 +96,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
         return true;
       }
       if (screen === 'home') {
+        if (farmAddressesBackHandler.current?.()) return true;
         if (patientBackHandler.current?.()) return true;
         if (consultationBackHandler.current?.()) return true;
         if (directoryBackHandler.current?.()) return true;
@@ -270,6 +273,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
             {farmWriteUncertain ? <Text style={styles.description}>Muat ulang peternakan sebelum mencoba menyimpan lagi.</Text> : null}
             <Button label="Tambah peternakan" role="farmer" onPress={createFarm} loading={farmsBusy} disabled={!farmsLoaded || farmLoadFailed || farmWriteUncertain} />
             <Button label="Muat ulang peternakan" role="farmer" variant="secondary" onPress={refreshFarms} disabled={!farmsLoaded || farmsBusy} />
+            <ServerFarmAddressesSection service={farms} farms={farmList} onFarmsChanged={setFarmList} backHandlerRef={farmAddressesBackHandler} />
             {selectedFarm ? <ServerLivestockSection key={selectedFarm.id} service={livestock} healthService={livestockHealth} farm={selectedFarm} userId={session.userId} backHandlerRef={livestockBackHandler} /> : null}
           </>}
           {session.activeRole === 'vet' && <ServerPatientsSection service={patients} backHandlerRef={patientBackHandler} />}

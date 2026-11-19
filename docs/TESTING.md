@@ -18,7 +18,7 @@ Pemeriksaan FE-03/25 lanjutan, 18 November 2026: `apps/mobile npm run check` **l
 
 Pembaruan 18 November 2026 — FE-03/25: `apps/mobile npm run check` lulus (typecheck, lint, 209/209 tes); `git diff --check` lulus. Mode autentikasi server dipasang dengan konfigurasi eksplisit `EXPO_PUBLIC_API_BASE_URL`; bootstrap SQLite dilewati dalam mode itu. Layar login/daftar/restore/switch/logout memakai `ServerAuthService`. `apps/mobile/android ./gradlew --no-daemon --max-workers=1 assembleDebug` **gagal sebelum kompilasi aplikasi**: plugin Android tidak dapat mengakses `~/.android`, yang merupakan symlink ke `/Volumes/AndroidSDK/dotandroid`; drive `/Volumes/AndroidSDK` dan `/Volumes/HowSSD` tidak terpasang. Build harus diulang setelah SDK tersedia. Pemeriksaan perangkat tertahan karena ADB masih `unauthorized`; pengguna melaporkan dialog izin tidak muncul. Reset password belum dapat dipakai karena adapter pengiriman BE-01 gagal tertutup tanpa provider. Layar layanan API belum dihubungkan dan QA dua perangkat belum dilakukan.
 
-Status QA diperbarui 19 November 2026: mode API FE-03/25 dipilih eksplisit melalui `EXPO_PUBLIC_API_BASE_URL`, tidak membuka SQLite, dan kini menghubungkan Farm/ternak/kesehatan, pasien/timeline Dokter, direktori/slot, quote/booking, serta baca konsultasi. Pemeriksaan backend BE-00–16 dan PostgreSQL lokal tercatat pada bagian bertanggal di bawah. `npm run check` mobile terakhir lulus dengan 237/237 tes. Pemeriksaan ini tidak meliputi server API hidup, build Android, dua perangkat, sentuh/keyboard/Back/scroll, viewport visual, ukuran kecil, atau font besar. Pengguna meminta build Android dilewati untuk iterasi saat ini; tidak ada emulator atau panggilan Figma MCP baru.
+Status QA diperbarui 19 November 2026: mode API FE-03/25 dipilih eksplisit melalui `EXPO_PUBLIC_API_BASE_URL`, tidak membuka SQLite, dan kini menghubungkan Farm/alamat, ternak/kesehatan, pasien/timeline Dokter, direktori/slot, quote/booking, serta baca konsultasi. Pemeriksaan backend BE-00–16 dan PostgreSQL lokal tercatat pada bagian bertanggal di bawah. `npm run check` mobile terakhir lulus dengan 240/240 tes. Pemeriksaan ini tidak meliputi server API hidup, build Android, dua perangkat, sentuh/keyboard/Back/scroll, viewport visual, ukuran kecil, atau font besar. Pengguna meminta build Android dilewati untuk iterasi saat ini; tidak ada emulator atau panggilan Figma MCP baru.
 
 ## APK preview Android lokal (20 Oktober 2026)
 
@@ -1145,7 +1145,7 @@ Mode API kini menghubungkan direktori Dokter dengan alur booking Peternak. Servi
 | `npm run check` di `apps/mobile` | **Lulus**: typecheck, Expo lint, kompilasi tes domain, dan 235/235 tes. Node menghasilkan `ExperimentalWarning` SQLite dari suite lokal yang sudah ada. |
 | Tes baru booking server | Lima skenario service memeriksa role/Farm/ternak/Dokter/slot/alamat, penolakan ID/snapshot quote tak cocok dan nominal tidak aman, key yang sama setelah response hilang lintas instance, quote asing/terpakai, serta status booking yang harus menunggu pembayaran. |
 | `git diff --check` | **Lulus**. |
-| QA/runtime | Build Android dilewati sesuai arahan pengguna. Tidak ada emulator, Figma MCP, API server hidup, provider produksi, secret, deployment, atau transaksi nyata. QA sentuh/Back/keyboard/scroll, ukuran 390 × 844, layar kecil/font besar, dan perbandingan visual masih gate. Alamat visit harus sudah tersedia pada Farm; editor alamat belum ada pada mode API. |
+| QA/runtime | Build Android dilewati sesuai arahan pengguna. Tidak ada emulator, Figma MCP, API server hidup, provider produksi, secret, deployment, atau transaksi nyata. QA sentuh/Back/keyboard/scroll, ukuran 390 × 844, layar kecil/font besar, dan perbandingan visual masih gate. Alamat visit harus sudah tersimpan dan ditautkan ke Farm lewat UI server atau tersedia sebelumnya. |
 
 FE-09 dan FE-25 tetap **Sedang dikerjakan** sampai QA Android/visual dan penerimaan integrasi selesai.
 
@@ -1160,3 +1160,15 @@ Mode API Dokter kini membuka detail dari daftar pasien BE-16 dan timeline `GET /
 | Integrasi/QA | Pemeriksaan memakai repositori fake lokal; API server hidup tidak dijalankan. Build Android dilewati sesuai arahan. Interaksi perangkat, Back Android, ukuran layar, dan pembandingan visual belum diuji. Tidak ada emulator atau Figma MCP. |
 
 FE-07 dan FE-25 tetap **Sedang dikerjakan** sampai QA perangkat/visual dan penerimaan API terpenuhi.
+
+## FE-25 — editor alamat Farm API BE-02 (19 November 2026)
+
+Mode API Peternak kini menampilkan alamat tersimpan, membuat dan mengubah alamat dengan DTO allowlist, serta menautkan alamat ke Farm lewat PATCH ber-`expectedVersion`. Service membaca kembali Farm dan alamat owner-scoped sebelum penautan, memeriksa ID hasil, dan memastikan versi bertambah. Form punya konfirmasi buang perubahan. Setelah transport POST/PATCH yang tidak pasti, tombol simpan diblokir sampai daftar alamat/Farm dibaca ulang; perubahan address yang berkonflik perlu ditinjau sebelum dikirim ulang.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm run check` di `apps/mobile` | **Lulus**: typecheck, Expo lint tanpa warning proyek, kompilasi tes domain, dan 240/240 tes. |
+| Tes service alamat | Tiga tes memeriksa normalisasi input, role Peternak, field wajib, pemeriksaan ID Farm/alamat, binding versi Farm, dan update alamat dengan expectedVersion/versi respons baru. |
+| Integrasi/QA | Hanya repositori fake lokal yang digunakan; tidak mengirim data alamat ke API hidup. Build Android dilewati; tidak ada emulator/Figma MCP. Sentuh, Back, keyboard, scroll, layout dan visual Android belum diuji. |
+
+FE-25 tetap **Sedang dikerjakan** sampai API server/dua perangkat dan QA Android/visual diterima.

@@ -370,6 +370,8 @@ Inventory dan cache screenshot lokal tidak menyediakan frame khusus untuk daftar
 
 `FarmFlow` menambahkan list/detail/create/edit/select mandiri di Beranda Peternak. `LivestockFlow` memakai picker Farm eksplisit saat create dan menampilkan nama Farm pada list/detail tanpa membatasi daftar ke pilihan aktif. Booking menunjukkan Farm dari animal dan mengisi alamat kunjungan dari alamat Farm tersebut. Perbedaan ini mengikuti DEC-27 dan aturan owner/context; tidak mempertahankan picker alamat bebas untuk kunjungan.
 
+Mode server menyediakan buat/ubah alamat, pilihan alamat tersimpan per Farm, dan konfirmasi perubahan yang belum disimpan. Referensi lokal yang sama digunakan tanpa panggilan Figma MCP; Farm manager/alamat tidak memiliki frame khusus pada inventory, sehingga susunan memakai field/address card yang sudah ada. QA visual dan interaksi Android tetap tertunda.
+
 Farm management dirancang dengan tokens/Inter/Lucide dan komponen input/dialog yang sudah ada sesuai DEC-24 karena frame khusus tidak tersedia dalam cache lokal. Tidak ada screenshot prototype yang dipakai sebagai UI. Perbandingan desain terkini, layar Android 390 × 844, ukuran kecil/font besar, taps, keyboard, Back, dan scroll **Belum diuji** karena sesi tidak memiliki Android SDK atau `adb`; FE-26 tetap menunggu gate QA native.
 
 ## Implementasi FE-21: rating dan ulasan Peternak
