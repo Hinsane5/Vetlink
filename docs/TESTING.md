@@ -1292,3 +1292,13 @@ Mode API menyediakan menu Bantuan berbahasa Indonesia berisi panduan detail laya
 | --- | --- |
 | `cd apps/mobile && npm run check` | **Lulus** sesudah perubahan: typecheck, Expo lint tanpa warning proyek, dan 289/289 tes domain/repository. Tidak ada tes khusus komponen UI. |
 | QA aplikasi | Build Android dan perangkat/emulator tidak digunakan sesuai arahan. Interaksi accordion, Back fisik, safe area, font besar, dan visual masih harus diterima pengguna pada app. |
+
+## FE-16/FE-25 — koordinasi perawatan API BE-09 (20 November 2026)
+
+Detail konsultasi API kini membuka layar tindak lanjut/pengingat. Service memuat FollowUp, Reminder, dan ProgressReport dari BE-09 lalu memastikan relasinya cocok dengan konsultasi aktif; timezone Dokter dipakai untuk membaca serta memvalidasi tanggal lokal. Dokter dapat membuat jadwal follow-up setelah catatan final dibaca; backend tetap memeriksa verified/payment/scope. Kedua peran terkait dapat membuat pengingat, Peternak mengirim laporan untuk follow-up, dan Peternak mengonfirmasi care reminder. Key dan payload persis disimpan di SecureStore sebelum request dan dipulihkan saat layar dibuka kembali, sehingga retry setelah aplikasi dimulai ulang memakai request identik; response harus cocok dengan owner, dokter, ternak, dan layanan. `deliveryStatus` tetap dipisahkan dari `careStatus`. Lampiran laporan hanya dihitung dan tidak diunduh.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `cd apps/mobile && npm run check` | **Lulus**: typecheck, Expo lint, dan 294/294 tes domain/repository. Lima tes baru memeriksa scope baca, owner Dokter, konversi timezone dan bentuk payload, key idempotensi, validasi waktu lampau, hak Peternak, konfirmasi care hasil server, serta replay payload sama dari journal setelah instance service baru dibuat. |
+| `git diff --check` | **Lulus** setelah wiring aplikasi. |
+| QA aplikasi | Build Android, emulator, API/provider produksi, Figma MCP, perangkat, dan transaksi nyata tidak digunakan. Form, pemulihan SecureStore di perangkat setelah restart, Back/keyboard/scroll, layar kecil/font besar, lampiran laporan, dan visual masih perlu QA aplikasi/perangkat; FE-16/FE-25 tetap **Sedang dikerjakan**. |

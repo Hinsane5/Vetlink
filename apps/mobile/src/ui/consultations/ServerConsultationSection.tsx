@@ -8,12 +8,14 @@ import type { ServerConsultationService } from '../../application/ServerConsulta
 import type { ServerClinicalService } from '../../application/ServerClinicalService';
 import type { ServerChatService } from '../../application/ServerChatService';
 import type { ServerVetScheduleService } from '../../application/ServerVetScheduleService';
+import type { ServerCareCoordinationService } from '../../application/ServerCareCoordinationService';
 import { Button } from '../components/Button';
 import { ConfirmationDialog } from '../components/ConfirmationDialog';
 import { LoadingState } from '../components/Feedback';
 import { TextArea, TextField } from '../components/TextField';
 import { ServerClinicalSection } from './ServerClinicalSection';
 import { ServerChatSection } from '../chat/ServerChatSection';
+import { ServerCareCoordinationSection } from './ServerCareCoordinationSection';
 import { colors, fonts, spacing, typeScale } from '../theme/tokens';
 
 const statusLabels: Record<ApiConsultationListItem['status'], string> = {
@@ -24,11 +26,12 @@ const visitLabels: Record<NonNullable<ApiConsultationVisit>['stage'], string> = 
   scheduled: 'Terjadwal', en_route: 'Dalam perjalanan', arrived: 'Sudah tiba', examining: 'Pemeriksaan berlangsung', completed: 'Selesai',
 };
 
-export function ServerConsultationSection({ service, clinicalService, chatService, scheduleService, role, userId, backHandlerRef }: {
+export function ServerConsultationSection({ service, clinicalService, chatService, scheduleService, careService, role, userId, backHandlerRef }: {
   service: ServerConsultationService;
   clinicalService: ServerClinicalService;
   chatService: ServerChatService;
   scheduleService: ServerVetScheduleService;
+  careService: ServerCareCoordinationService;
   role: AccountRole;
   userId: string;
   backHandlerRef: { current: (() => boolean) | null };
@@ -41,6 +44,7 @@ export function ServerConsultationSection({ service, clinicalService, chatServic
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [clinicalOpen, setClinicalOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [careOpen, setCareOpen] = useState(false);
   const [detail, setDetail] = useState<ApiConsultationDetail | null>(null);
   const [visit, setVisit] = useState<ApiConsultationVisit | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -64,6 +68,7 @@ export function ServerConsultationSection({ service, clinicalService, chatServic
   const [proposalError, setProposalError] = useState('');
   const clinicalBackHandlerRef = useRef<(() => boolean) | null>(null);
   const chatBackHandlerRef = useRef<(() => boolean) | null>(null);
+  const careBackHandlerRef = useRef<(() => boolean) | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -79,6 +84,7 @@ export function ServerConsultationSection({ service, clinicalService, chatServic
   useEffect(() => {
     backHandlerRef.current = () => {
       if (!selectedId) return false;
+      if (careOpen && careBackHandlerRef.current?.()) return true;
       if (chatOpen && chatBackHandlerRef.current?.()) return true;
       if (clinicalOpen && clinicalBackHandlerRef.current?.()) return true;
       if (detailLoading || actionBusy) return true;
@@ -89,12 +95,13 @@ export function ServerConsultationSection({ service, clinicalService, chatServic
       return true;
     };
     return () => { backHandlerRef.current = null; };
-  }, [actionBusy, backHandlerRef, chatOpen, clinicalOpen, detailLoading, selectedId, clinicalBackHandlerRef]);
+  }, [actionBusy, backHandlerRef, careOpen, chatOpen, clinicalOpen, detailLoading, selectedId]);
 
   const openDetail = async (id: string) => {
     setSelectedId(id);
     setClinicalOpen(false);
     setChatOpen(false);
+    setCareOpen(false);
     setDetail(null);
     setVisit(null);
     setProposalTimezone(null);
@@ -252,8 +259,9 @@ export function ServerConsultationSection({ service, clinicalService, chatServic
   return <View style={styles.section}>
     <Text accessibilityRole="header" style={styles.heading}>Konsultasi dari server</Text>
     {selectedId ? <>
-      {!clinicalOpen && !chatOpen ? <Button label="Kembali ke daftar konsultasi" role={role} variant="secondary" disabled={detailLoading || actionBusy} onPress={() => { setSelectedId(null); setClinicalOpen(false); setDetail(null); setDetailError(''); }} /> : null}
-      {chatOpen && detail ? <ServerChatSection service={chatService} role={role} userId={userId} consultation={detail} onExit={() => setChatOpen(false)} backHandlerRef={chatBackHandlerRef} /> : clinicalOpen && detail ? <ServerClinicalSection service={clinicalService} role={role} consultation={detail} onCompleteVisit={completeVisit} onExit={() => setClinicalOpen(false)} backHandlerRef={clinicalBackHandlerRef} /> : <>
+      {!clinicalOpen && !chatOpen && !careOpen ? <Button label="Kembali ke daftar konsultasi" role={role} variant="secondary" disabled={detailLoading || actionBusy} onPress={() => { setSelectedId(null); setClinicalOpen(false); setDetail(null); setDetailError(''); }} /> : null}
+      {careOpen && detail ? <ServerCareCoordinationSection service={careService} clinicalService={clinicalService} consultation={detail} role={role} userId={userId} onExit={() => setCareOpen(false)} backHandlerRef={careBackHandlerRef} />
+        : chatOpen && detail ? <ServerChatSection service={chatService} role={role} userId={userId} consultation={detail} onExit={() => setChatOpen(false)} backHandlerRef={chatBackHandlerRef} /> : clinicalOpen && detail ? <ServerClinicalSection service={clinicalService} role={role} consultation={detail} onCompleteVisit={completeVisit} onExit={() => setClinicalOpen(false)} backHandlerRef={clinicalBackHandlerRef} /> : <>
         {detailLoading ? <LoadingState label="Memuat detail konsultasi…" /> : null}
         {detailError ? <Text accessibilityLiveRegion="polite" style={styles.error}>{detailError}</Text> : null}
         {!detailLoading && detailError ? <Button label="Coba muat ulang" role={role} variant="secondary" onPress={() => openDetail(selectedId)} /> : null}
@@ -275,6 +283,7 @@ export function ServerConsultationSection({ service, clinicalService, chatServic
           onStartChat={() => setStartChatVisible(true)}
           onAdvanceVisit={(action) => { void advanceVisit(action); }}
           onOpenClinical={() => setClinicalOpen(true)}
+          onOpenCare={() => setCareOpen(true)}
           onOpenChat={() => { setClinicalOpen(false); setChatOpen(true); }}
         /> : null}
         <ConfirmationDialog visible={acceptVisible} title="Terima permintaan layanan?" message="Permintaan akan menjadi terjadwal setelah server memeriksa verifikasi Dokter dan ketersediaan waktu." role="vet" confirmLabel="Terima permintaan" cancelLabel="Kembali" onConfirm={() => { void respondToRequest('accept'); }} onCancel={() => setAcceptVisible(false)} loading={actionBusy} confirmDisabled={actionUncertain || !detail || detail.status !== 'requested' || detail.paymentStatus !== 'succeeded'} />
@@ -343,7 +352,7 @@ export function ServerConsultationSection({ service, clinicalService, chatServic
   </View>;
 }
 
-function Detail({ role, consultation, visit, actionBusy, proposalTimezone, proposalTimezoneError, onRetryTimezone, onAccept, onReject, onCancel, onRespondProposal, onProposeSchedule, onStartChat, onAdvanceVisit, onOpenClinical, onOpenChat }: {
+function Detail({ role, consultation, visit, actionBusy, proposalTimezone, proposalTimezoneError, onRetryTimezone, onAccept, onReject, onCancel, onRespondProposal, onProposeSchedule, onStartChat, onAdvanceVisit, onOpenClinical, onOpenCare, onOpenChat }: {
   role: AccountRole;
   consultation: ApiConsultationDetail;
   visit: ApiConsultationVisit | null;
@@ -359,6 +368,7 @@ function Detail({ role, consultation, visit, actionBusy, proposalTimezone, propo
   onStartChat: () => void;
   onAdvanceVisit: (action: 'depart' | 'arrive' | 'start-examination') => void;
   onOpenClinical: () => void;
+  onOpenCare: () => void;
   onOpenChat: () => void;
 }) {
   const pendingProposals = consultation.proposals.filter((item) => item.status === 'pending');
@@ -402,6 +412,8 @@ function Detail({ role, consultation, visit, actionBusy, proposalTimezone, propo
     {role === 'vet' && consultation.serviceType === 'chat' && consultation.status === 'scheduled' && consultation.paymentStatus === 'succeeded' ? <Button role={role} label="Mulai konsultasi chat" disabled={actionBusy} onPress={onStartChat} /> : null}
     {consultation.serviceType === 'chat' && consultation.status === 'in_progress' && consultation.paymentStatus === 'succeeded' ? <Button role={role} variant="secondary" label="Buka chat konsultasi" onPress={onOpenChat} /> : null}
     <Button role={role} variant="secondary" label="Buka catatan klinis dan rekomendasi" onPress={onOpenClinical} />
+    {consultation.paymentStatus === 'succeeded' && ['scheduled', 'in_progress', 'completed'].includes(consultation.status)
+      ? <Button role={role} variant="secondary" label="Buka tindak lanjut & pengingat" onPress={onOpenCare} /> : null}
   </View>;
 }
 

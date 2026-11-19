@@ -33,6 +33,7 @@
     "src/application/ServerPatientService.ts",
     "src/application/ServerVetDirectoryService.ts",
     "src/application/ServerVetScheduleService.ts",
+    "src/application/ServerCareCoordinationService.ts",
     "src/application/ServerConsultationService.ts",
     "src/application/ServerBookingService.ts",
     "src/application/ServerClinicalService.ts",
