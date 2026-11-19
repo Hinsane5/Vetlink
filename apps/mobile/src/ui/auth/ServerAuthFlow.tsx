@@ -11,6 +11,7 @@ import { ServerLivestockHealthService } from '../../application/ServerLivestockH
 import { ServerPatientService } from '../../application/ServerPatientService';
 import { ServerVetDirectoryService } from '../../application/ServerVetDirectoryService';
 import { ServerConsultationService } from '../../application/ServerConsultationService';
+import { ServerClinicalService } from '../../application/ServerClinicalService';
 import { ServerBookingService } from '../../application/ServerBookingService';
 import type { ApiFarmRecord } from '../../application/ports/FarmReadRepository';
 import type { AccountRole, SessionSnapshot } from '../../domain/auth';
@@ -31,7 +32,7 @@ type Screen = 'loading' | 'roles' | 'login' | 'register' | 'home';
 
 /** Server mode never opens the local fixture store or writes to SQLite. */
 export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
-  const { auth, farms, livestock, livestockHealth, patients, vets, consultations, booking } = useMemo(() => {
+  const { auth, farms, livestock, livestockHealth, patients, vets, consultations, clinical, booking } = useMemo(() => {
     const adapters = createApiAdapters(baseUrl);
     const livestock = new ServerLivestockService(adapters.farms, adapters.livestock, adapters.livestockWrites);
     return {
@@ -42,6 +43,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
       patients: new ServerPatientService(adapters.patients, adapters.livestockHealth),
       vets: new ServerVetDirectoryService(adapters.vets),
       consultations: new ServerConsultationService(adapters.consultations),
+      clinical: new ServerClinicalService(adapters.clinical),
       booking: new ServerBookingService(adapters.farms, adapters.livestock, adapters.vets, adapters.consultations, new ExpoPendingServerBookingStore()),
     };
   }, [baseUrl]);
@@ -278,7 +280,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
           </>}
           {session.activeRole === 'vet' && <ServerPatientsSection service={patients} backHandlerRef={patientBackHandler} />}
           {session.activeRole === 'farmer' && <ServerVetDirectorySection service={vets} bookingService={booking} livestockService={livestock} farms={farmList} userId={session.userId} backHandlerRef={directoryBackHandler} />}
-          <ServerConsultationSection key={session.activeRole} service={consultations} role={session.activeRole} backHandlerRef={consultationBackHandler} />
+          <ServerConsultationSection key={session.activeRole} service={consultations} clinicalService={clinical} role={session.activeRole} backHandlerRef={consultationBackHandler} />
           {session.roles.length > 1 && session.roles.map((availableRole) => <Button key={availableRole} label={`Ganti Peran: ${availableRole === 'farmer' ? 'Peternak' : 'Dokter Hewan'}`} role={availableRole} variant="secondary" disabled={busy || availableRole === session.activeRole} onPress={() => switchRole(availableRole)} />)}
           <Button label="Keluar" role={session.activeRole} variant="secondary" disabled={busy} onPress={() => setLogoutVisible(true)} />
         </>}

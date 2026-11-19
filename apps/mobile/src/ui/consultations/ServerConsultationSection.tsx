@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import type { AccountRole } from '../../domain/auth';
 import type { ApiConsultationDetail, ApiConsultationListItem, ApiConsultationVisit } from '../../application/ports/ApiConsultationRepository';
 import type { ServerConsultationService } from '../../application/ServerConsultationService';
+import type { ServerClinicalService } from '../../application/ServerClinicalService';
 import { Button } from '../components/Button';
 import { LoadingState } from '../components/Feedback';
 import { TextField } from '../components/TextField';
+import { ServerClinicalSection } from './ServerClinicalSection';
 import { colors, fonts, spacing, typeScale } from '../theme/tokens';
 
 const statusLabels: Record<ApiConsultationListItem['status'], string> = {
@@ -16,8 +18,9 @@ const visitLabels: Record<NonNullable<ApiConsultationVisit>['stage'], string> = 
   scheduled: 'Terjadwal', en_route: 'Dalam perjalanan', arrived: 'Sudah tiba', examining: 'Pemeriksaan berlangsung', completed: 'Selesai',
 };
 
-export function ServerConsultationSection({ service, role, backHandlerRef }: {
+export function ServerConsultationSection({ service, clinicalService, role, backHandlerRef }: {
   service: ServerConsultationService;
+  clinicalService: ServerClinicalService;
   role: AccountRole;
   backHandlerRef: { current: (() => boolean) | null };
 }) {
@@ -27,10 +30,12 @@ export function ServerConsultationSection({ service, role, backHandlerRef }: {
   const [error, setError] = useState('');
   const [revision, setRevision] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [clinicalOpen, setClinicalOpen] = useState(false);
   const [detail, setDetail] = useState<ApiConsultationDetail | null>(null);
   const [visit, setVisit] = useState<ApiConsultationVisit | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState('');
+  const clinicalBackHandlerRef = useRef<(() => boolean) | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -46,17 +51,20 @@ export function ServerConsultationSection({ service, role, backHandlerRef }: {
   useEffect(() => {
     backHandlerRef.current = () => {
       if (!selectedId) return false;
+      if (clinicalOpen && clinicalBackHandlerRef.current?.()) return true;
       if (detailLoading) return true;
       setSelectedId(null);
+      setClinicalOpen(false);
       setDetail(null);
       setDetailError('');
       return true;
     };
     return () => { backHandlerRef.current = null; };
-  }, [backHandlerRef, detailLoading, selectedId]);
+  }, [backHandlerRef, clinicalOpen, detailLoading, selectedId, clinicalBackHandlerRef]);
 
   const openDetail = async (id: string) => {
     setSelectedId(id);
+    setClinicalOpen(false);
     setDetail(null);
     setVisit(null);
     setDetailError('');
@@ -78,11 +86,13 @@ export function ServerConsultationSection({ service, role, backHandlerRef }: {
   return <View style={styles.section}>
     <Text accessibilityRole="header" style={styles.heading}>Konsultasi dari server</Text>
     {selectedId ? <>
-      <Button label="Kembali ke daftar konsultasi" role={role} variant="secondary" disabled={detailLoading} onPress={() => { setSelectedId(null); setDetail(null); setDetailError(''); }} />
-      {detailLoading ? <LoadingState label="Memuat detail konsultasi…" /> : null}
-      {detailError ? <Text accessibilityLiveRegion="polite" style={styles.error}>{detailError}</Text> : null}
-      {!detailLoading && detailError ? <Button label="Coba muat ulang" role={role} variant="secondary" onPress={() => openDetail(selectedId)} /> : null}
-      {detail ? <Detail role={role} consultation={detail} visit={visit} /> : null}
+      {!clinicalOpen ? <Button label="Kembali ke daftar konsultasi" role={role} variant="secondary" disabled={detailLoading} onPress={() => { setSelectedId(null); setClinicalOpen(false); setDetail(null); setDetailError(''); }} /> : null}
+      {clinicalOpen && detail ? <ServerClinicalSection service={clinicalService} role={role} consultation={detail} onExit={() => setClinicalOpen(false)} backHandlerRef={clinicalBackHandlerRef} /> : <>
+        {detailLoading ? <LoadingState label="Memuat detail konsultasi…" /> : null}
+        {detailError ? <Text accessibilityLiveRegion="polite" style={styles.error}>{detailError}</Text> : null}
+        {!detailLoading && detailError ? <Button label="Coba muat ulang" role={role} variant="secondary" onPress={() => openDetail(selectedId)} /> : null}
+        {detail ? <Detail role={role} consultation={detail} visit={visit} onOpenClinical={() => setClinicalOpen(true)} /> : null}
+      </>}
     </> : <>
       <TextField label="Cari konsultasi" value={query} onChangeText={setQuery} placeholder="Kode layanan atau ternak" />
       {loading ? <LoadingState label="Memuat konsultasi…" /> : null}
@@ -100,7 +110,7 @@ export function ServerConsultationSection({ service, role, backHandlerRef }: {
   </View>;
 }
 
-function Detail({ role, consultation, visit }: { role: AccountRole; consultation: ApiConsultationDetail; visit: ApiConsultationVisit | null }) {
+function Detail({ role, consultation, visit, onOpenClinical }: { role: AccountRole; consultation: ApiConsultationDetail; visit: ApiConsultationVisit | null; onOpenClinical: () => void }) {
   return <View style={styles.card}>
     <Text style={styles.cardTitle}>{consultation.displayCode} · {consultation.animalName}</Text>
     <Line label="Status" value={statusLabels[consultation.status]} />
@@ -114,6 +124,7 @@ function Detail({ role, consultation, visit }: { role: AccountRole; consultation
     {consultation.visitAddressSnapshot && consultation.serviceType === 'visit' ? <Line label="Alamat kunjungan" value={`${consultation.visitAddressSnapshot.addressLine}, ${consultation.visitAddressSnapshot.city}`} /> : null}
     {visit ? <Line label="Tahap kunjungan" value={visitLabels[visit.stage]} /> : null}
     <Text style={styles.body}>{role === 'farmer' ? 'Status ditampilkan dari akun server.' : 'Layanan ini muncul dari penugasan akun Dokter.'}</Text>
+    <Button role={role} variant="secondary" label="Buka catatan klinis dan rekomendasi" onPress={onOpenClinical} />
   </View>;
 }
 
