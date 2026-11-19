@@ -1,5 +1,11 @@
 # Strategi pengujian VetLink
 
+## FE-22/FE-25 — inbox dan preferensi notifikasi server (19 November 2026)
+
+`ServerNotificationsService` dan `ServerNotificationsSection` menghubungkan Kotak Masuk serta preferensi BE-14 di mode API, tanpa membaca/menulis SQLite. `apps/mobile npm run check` lulus: typecheck, Expo lint, dan 249/249 tes domain/repository. Empat tes baru mencakup role guard, ID unik/jumlah belum dibaca, kecocokan konteks mark-read, dan patch preferensi.
+
+Build Android, emulator/perangkat, Figma MCP, API server hidup, provider produksi, dan transaksi nyata tidak dijalankan. ID konteks yang lolos pemeriksaan server ditampilkan, tetapi belum membuka detail follow-up/laporan/pengingat; QA perangkat/visual tetap gate FE-22/FE-25.
+
 FE-25 lanjutan, 19 November 2026 — detail konsultasi mode API kini membuka catatan klinis BE-08 untuk baca final Peternak dan draft/editor Dokter, finalisasi melalui review, serta rekomendasi draft/kirim dan baca hasil terkirim. Aplikasi menolak draft klinis/rekomendasi yang bocor ke Peternak; aksi tulis dibatasi role dan status layanan, sementara backend tetap memeriksa verified, pembayaran, assignment, dan immutable final. Penyimpanan/kirim dengan respons tidak pasti memblokir pengulangan hingga refresh. Empat tes use case memeriksa role, 404 normal untuk belum ada publikasi, penolakan draft bocor, batas field/version/rekomendasi; `apps/mobile npm run check` **lulus** (typecheck, Expo lint, 245/245 tes). Build Android dilewati atas arahan pengguna. API server hidup, dua akun/perangkat, emulator, screenshot/QA visual, dan Figma MCP tidak dijalankan; gate perangkat/visual FE-24/25 tetap terbuka.
 
 FE-25 lanjutan, 19 November 2026 — edit Ternak mode API kini mencakup jenis (hanya spesies yang diizinkan Farm), tanggal lahir atau estimasi umur, dan bobot selain nama/ras/jenis kelamin. Perubahan mengirim versi yang dibaca; service memeriksa batas domain sebelum PATCH dan adapter tetap memvalidasi DTO. Form menjaga tanggal lahir dan estimasi umur saling eksklusif. `apps/mobile npm run check` **lulus** (typecheck, Expo lint, 241/241 tes; satu tes service tambahan mencakup spesies Farm, tanggal kalender, rentang umur, rentang bobot, dan ras). Build Android dilewati sesuai arahan; tidak diuji API server hidup, perangkat, emulator, atau Figma MCP. Pemeriksaan visual dan perangkat tetap gate FE-24/25.

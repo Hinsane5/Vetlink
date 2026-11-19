@@ -13,6 +13,7 @@ import { ServerVetDirectoryService } from '../../application/ServerVetDirectoryS
 import { ServerConsultationService } from '../../application/ServerConsultationService';
 import { ServerClinicalService } from '../../application/ServerClinicalService';
 import { ServerBookingService } from '../../application/ServerBookingService';
+import { ServerNotificationsService } from '../../application/ServerNotificationsService';
 import type { ApiFarmRecord } from '../../application/ports/FarmReadRepository';
 import type { AccountRole, SessionSnapshot } from '../../domain/auth';
 import { speciesLabel } from '../../domain/catalog';
@@ -26,13 +27,14 @@ import { ServerPatientsSection } from '../patients/ServerPatientsSection';
 import { ServerVetDirectorySection } from '../directory/ServerVetDirectorySection';
 import { ServerConsultationSection } from '../consultations/ServerConsultationSection';
 import { ServerFarmAddressesSection } from '../farms/ServerFarmAddressesSection';
+import { ServerNotificationsSection } from '../notifications/ServerNotificationsSection';
 import { colors, fonts, spacing, typeScale } from '../theme/tokens';
 
 type Screen = 'loading' | 'roles' | 'login' | 'register' | 'home';
 
 /** Server mode never opens the local fixture store or writes to SQLite. */
 export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
-  const { auth, farms, livestock, livestockHealth, patients, vets, consultations, clinical, booking } = useMemo(() => {
+  const { auth, farms, livestock, livestockHealth, patients, vets, consultations, clinical, booking, notifications } = useMemo(() => {
     const adapters = createApiAdapters(baseUrl);
     const livestock = new ServerLivestockService(adapters.farms, adapters.livestock, adapters.livestockWrites);
     return {
@@ -45,6 +47,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
       consultations: new ServerConsultationService(adapters.consultations),
       clinical: new ServerClinicalService(adapters.clinical),
       booking: new ServerBookingService(adapters.farms, adapters.livestock, adapters.vets, adapters.consultations, new ExpoPendingServerBookingStore()),
+      notifications: new ServerNotificationsService(adapters.notifications),
     };
   }, [baseUrl]);
   const insets = useSafeAreaInsets();
@@ -57,6 +60,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
   const [confirmation, setConfirmation] = useState('');
   const [busy, setBusy] = useState(false);
   const [logoutVisible, setLogoutVisible] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [error, setError] = useState('');
   const [farmList, setFarmList] = useState<ApiFarmRecord[]>([]);
   const [farmName, setFarmName] = useState('');
@@ -71,6 +75,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
   const patientBackHandler = useRef<(() => boolean) | null>(null);
   const directoryBackHandler = useRef<(() => boolean) | null>(null);
   const consultationBackHandler = useRef<(() => boolean) | null>(null);
+  const notificationsBackHandler = useRef<(() => boolean) | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -98,6 +103,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
         return true;
       }
       if (screen === 'home') {
+        if (notificationsBackHandler.current?.()) return true;
         if (farmAddressesBackHandler.current?.()) return true;
         if (patientBackHandler.current?.()) return true;
         if (consultationBackHandler.current?.()) return true;
@@ -181,6 +187,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
       setFarmLoadFailed(false);
       setFarmWriteUncertain(false);
       setSelectedFarmId(null);
+      setNotificationsOpen(false);
       setRole(next.activeRole);
       setPassword('');
       setConfirmation('');
@@ -205,6 +212,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
       setFarmLoadFailed(false);
       setFarmWriteUncertain(false);
       setSelectedFarmId(null);
+      setNotificationsOpen(false);
     } catch (cause) {
       setError(messageFor(cause));
     } finally {
@@ -260,8 +268,10 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
           <Button label="Kembali" role={role} variant="secondary" onPress={() => { setError(''); setScreen('roles'); }} />
         </>}
         {screen === 'home' && session && <>
+          {notificationsOpen ? <ServerNotificationsSection service={notifications} role={session.activeRole} onExit={() => setNotificationsOpen(false)} backHandlerRef={notificationsBackHandler} /> : <>
           <Text style={styles.heading}>Akun {session.activeRole === 'farmer' ? 'Peternak' : 'Dokter Hewan'}</Text>
           <Text style={styles.description}>{session.displayName}{'\n'}{session.email}</Text>
+          <Button label="Kotak Masuk & Preferensi Notifikasi" role={session.activeRole} variant="secondary" onPress={() => setNotificationsOpen(true)} />
           {session.activeRole === 'farmer' && <>
             <Text style={styles.heading}>Peternakan saya</Text>
             {(!farmsLoaded || farmsBusy) && <LoadingState label="Memuat peternakan…" />}
@@ -283,6 +293,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
           <ServerConsultationSection key={session.activeRole} service={consultations} clinicalService={clinical} role={session.activeRole} backHandlerRef={consultationBackHandler} />
           {session.roles.length > 1 && session.roles.map((availableRole) => <Button key={availableRole} label={`Ganti Peran: ${availableRole === 'farmer' ? 'Peternak' : 'Dokter Hewan'}`} role={availableRole} variant="secondary" disabled={busy || availableRole === session.activeRole} onPress={() => switchRole(availableRole)} />)}
           <Button label="Keluar" role={session.activeRole} variant="secondary" disabled={busy} onPress={() => setLogoutVisible(true)} />
+          </>}
         </>}
         {!!error && <Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text>}
       </ScrollView>
