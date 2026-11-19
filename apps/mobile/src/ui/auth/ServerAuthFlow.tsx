@@ -263,7 +263,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
           </>}
           {session.activeRole === 'vet' && <ServerPatientsSection service={patients} />}
           {session.activeRole === 'farmer' && <ServerVetDirectorySection service={vets} />}
-          <ServerConsultationSection service={consultations} role={session.activeRole} />
+          <ServerConsultationSection key={session.activeRole} service={consultations} role={session.activeRole} />
           {session.roles.length > 1 && session.roles.map((availableRole) => <Button key={availableRole} label={`Ganti Peran: ${availableRole === 'farmer' ? 'Peternak' : 'Dokter Hewan'}`} role={availableRole} variant="secondary" disabled={busy || availableRole === session.activeRole} onPress={() => switchRole(availableRole)} />)}
           <Button label="Keluar" role={session.activeRole} variant="secondary" disabled={busy} onPress={() => setLogoutVisible(true)} />
         </>}
