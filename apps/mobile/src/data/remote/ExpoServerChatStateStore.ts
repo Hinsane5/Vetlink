@@ -47,7 +47,33 @@ function storageError(message: string): DomainError { return new DomainError('SE
 function isPending(value: unknown): value is PendingServerChatMessage {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const item = value as Record<string, unknown>;
-  return typeof item.clientMessageId === 'string'
-    && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(item.clientMessageId)
-    && typeof item.text === 'string' && item.text.trim().length > 0 && item.text.length <= 4000;
+  const attachments = item.attachments;
+  return isUuid(item.clientMessageId)
+    && typeof item.text === 'string' && item.text.length <= 4000
+    && (attachments === undefined || (Array.isArray(attachments) && attachments.length <= 5 && attachments.every(isPendingAttachment)))
+    && (!!item.text.trim() || (Array.isArray(attachments) && attachments.length > 0));
+}
+
+function isPendingAttachment(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const item = value as Record<string, unknown>;
+  const file = item.file;
+  return isUuid(item.idempotencyKey) && isFile(file)
+    && (item.attachmentId === undefined || isUuid(item.attachmentId))
+    && (item.committed === undefined || typeof item.committed === 'boolean');
+}
+
+function isFile(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const item = value as Record<string, unknown>;
+  const mimeType = item.mimeType;
+  const maximumBytes = mimeType === 'video/mp4' ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
+  return typeof item.uri === 'string' && item.uri.startsWith('file://')
+    && typeof item.filename === 'string' && item.filename.trim().length > 0 && item.filename.length <= 255
+    && ['image/jpeg', 'image/png', 'image/webp', 'video/mp4'].includes(String(mimeType))
+    && Number.isSafeInteger(item.byteSize) && Number(item.byteSize) > 0 && Number(item.byteSize) <= maximumBytes;
+}
+
+function isUuid(value: unknown): value is string {
+  return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }

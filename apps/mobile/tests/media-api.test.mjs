@@ -38,7 +38,9 @@ test('media download checks committed metadata and exact bytes through authentic
     if (url.endsWith('/content')) return { ...response(200, null), arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer };
     return response(200, { ...metadata, uploadStatus: 'committed' });
   }));
-  assert.deepEqual([...new Uint8Array(await repository.download(attachment))], [1, 2, 3]);
+  const downloaded = await repository.download(attachment);
+  assert.deepEqual([...new Uint8Array(downloaded.bytes)], [1, 2, 3]);
+  assert.equal(downloaded.attachment.uploadStatus, 'committed');
   assert.equal(calls[1].init.headers.Accept, '*/*');
   assert.equal(calls[1].init.headers.Authorization, 'Bearer access-token');
   const incomplete = new HttpApiMediaRepository(client(async () => response(200, metadata)));

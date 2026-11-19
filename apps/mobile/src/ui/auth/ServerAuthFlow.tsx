@@ -5,6 +5,7 @@ import { createApiAdapters } from '../../data/remote/createApiAdapters';
 import { ExpoPendingCareReportStore } from '../../data/remote/ExpoPendingCareReportStore';
 import { ExpoPendingServerBookingStore } from '../../data/remote/ExpoPendingServerBookingStore';
 import { ExpoServerChatStateStore } from '../../data/remote/ExpoServerChatStateStore';
+import { ExpoServerChatMediaStore } from '../../data/remote/ExpoServerChatMediaStore';
 import { ExpoServerVetVerificationStore } from '../../data/remote/ExpoServerVetVerificationStore';
 import * as Crypto from 'expo-crypto';
 import { ServerFarmService } from '../../application/ServerFarmService';
@@ -55,7 +56,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
       booking: new ServerBookingService(adapters.farms, adapters.livestock, adapters.vets, adapters.consultations, new ExpoPendingServerBookingStore()),
       notifications: new ServerNotificationsService(adapters.notifications),
       profiles: new ServerProfileService(adapters.profiles),
-      chat: new ServerChatService(adapters.chat, new ExpoServerChatStateStore(), () => Crypto.randomUUID()),
+      chat: new ServerChatService(adapters.chat, new ExpoServerChatStateStore(), () => Crypto.randomUUID(), adapters.media, new ExpoServerChatMediaStore()),
       vetVerification: new ServerVetVerificationService(adapters.profiles, new ExpoServerVetVerificationStore(), () => Crypto.randomUUID()),
     };
   }, [baseUrl]);

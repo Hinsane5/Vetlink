@@ -1,10 +1,10 @@
 # Strategi pengujian VetLink
 
-## FE-12/FE-25 — chat teks server BE-07 (19 November 2026)
+## FE-12/FE-25 — chat server BE-07 (19 November 2026)
 
-`ServerChatService`, `ExpoServerChatStateStore`, dan `ServerChatSection` menghubungkan daftar/paging, kirim teks, retry pesan gagal, draft, serta recovery `clientMessageId` pada konsultasi aktif. Pemeriksaan `apps/mobile npm run check` lulus: typecheck, Expo lint tanpa warning, dan 258/258 tes domain/repository. Enam tes baru mencakup role/status/member guard, retry payload identik setelah respons tak pasti, pemulihan dari hasil POST yang telah tersimpan, retry pesan gagal milik akun, dan draft.
+`ServerChatService`, `ExpoServerChatStateStore`, `ExpoServerChatMediaStore`, dan `ServerChatSection` menghubungkan daftar/paging, draft, pesan teks dan lampiran, retry pesan gagal, serta recovery `clientMessageId`. Sampai checkpoint media, `cd apps/mobile && npm run check` lulus: typecheck, Expo lint, dan 267/267 tes domain/repository. Tes terbaru membuktikan file media disalin ke ruang privat aplikasi, key upload dan file sama digunakan saat response upload hilang, commit tidak diulang, payload pesan dengan ID lampiran yang sama dipakai sesudah response POST hilang, duplicate submit pada service yang sama ditolak, serta unduhan memeriksa attachment terhadap pesan peserta dan metadata server.
 
-Tidak dilakukan build Android, emulator/perangkat, API server hidup, Figma MCP, provider produksi, atau transaksi. UI hanya mengirim teks; transfer byte lampiran dan tampilan media privat belum terhubung. QA dua sesi/perangkat dan visual tetap gate.
+Gambar yang telah diunduh dapat dibuka di viewer lokal. Video diunduh dan metadata-nya tampil, tetapi playback belum tersedia. Chat masih perlu refresh manual. Build Android, API server hidup, perangkat/emulator, Figma MCP, provider produksi, atau transaksi nyata tidak dijalankan. QA dua sesi/perangkat, sentuh/Back/keyboard/scroll dan visual masih gate.
 
 ## FE-04/FE-25 — profil server BE-02 (19 November 2026)
 

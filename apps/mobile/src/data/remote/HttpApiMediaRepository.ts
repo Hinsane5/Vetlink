@@ -44,13 +44,13 @@ export class HttpApiMediaRepository implements ApiMediaRepository {
     return result;
   }
 
-  async download(attachmentId: string): Promise<ArrayBuffer> {
+  async download(attachmentId: string): Promise<{ attachment: ApiMediaAttachment; bytes: ArrayBuffer }> {
     const id = resourceId(attachmentId);
     const metadata = await this.get(id);
     if (metadata.uploadStatus !== 'committed') throw invalidQuery('Media belum di-commit.');
     const bytes = await this.api.downloadBytes(metadata.url);
     if (bytes.byteLength !== metadata.byteSize) throw invalidResponse('Ukuran berkas media tidak cocok dengan metadata.');
-    return bytes;
+    return { attachment: metadata, bytes };
   }
 }
 

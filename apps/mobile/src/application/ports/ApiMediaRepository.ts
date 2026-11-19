@@ -21,5 +21,5 @@ export interface ApiMediaRepository {
   commit(attachmentId: string): Promise<ApiMediaAttachment>;
   get(attachmentId: string): Promise<ApiMediaAttachment>;
   /** Caller must persist bytes without treating the private URL as a public asset. */
-  download(attachmentId: string): Promise<ArrayBuffer>;
+  download(attachmentId: string): Promise<{ attachment: ApiMediaAttachment; bytes: ArrayBuffer }>;
 }
