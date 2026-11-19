@@ -1302,3 +1302,14 @@ Detail konsultasi API kini membuka layar tindak lanjut/pengingat. Service memuat
 | `cd apps/mobile && npm run check` | **Lulus**: typecheck, Expo lint, dan 294/294 tes domain/repository. Lima tes baru memeriksa scope baca, owner Dokter, konversi timezone dan bentuk payload, key idempotensi, validasi waktu lampau, hak Peternak, konfirmasi care hasil server, serta replay payload sama dari journal setelah instance service baru dibuat. |
 | `git diff --check` | **Lulus** setelah wiring aplikasi. |
 | QA aplikasi | Build Android, emulator, API/provider produksi, Figma MCP, perangkat, dan transaksi nyata tidak digunakan. Form, pemulihan SecureStore di perangkat setelah restart, Back/keyboard/scroll, layar kecil/font besar, lampiran laporan, dan visual masih perlu QA aplikasi/perangkat; FE-16/FE-25 tetap **Sedang dikerjakan**. |
+
+## FE-19/FE-25 — permintaan pembayaran konsultasi API (20 November 2026)
+
+Detail konsultasi API menampilkan layar pembayaran bagi Peternak pada status `awaiting_payment`. Layar membaca quote rupiah integer dari server dan Payment/Attempt owner-scoped; quote harus cocok dengan tarif snapshot konsultasi. Submit hanya mengirim payable ID server, metode, dan kunci idempotensi. Status `pending`/`succeeded` tidak membuat Attempt ganda; retry setelah `failed`/`expired` memakai metode sebelumnya dan key baru. Setelah hasil mutasi tidak pasti, UI menahan submit sampai status dibaca ulang. Adapter lokal aktif selalu mengembalikan `pending`, sehingga permintaan tidak melunasi tagihan dan tidak menghubungi provider/layanan keuangan.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `cd apps/mobile && npm run check` | **Lulus**: typecheck, Expo lint, dan 295/295 tes domain/repository. Satu tes baru memeriksa gateway hanya menerima quote safe-integer IDR dengan jenis/ID payable yang sesuai. Node tetap menampilkan `ExperimentalWarning` SQLite dari suite lokal yang sudah ada. |
+| Payment API | Hanya diuji dengan fake HTTP/repository pada suite lokal; tidak ada request POST pembayaran atau callback yang dijalankan pada server. |
+| `git diff --check` | **Lulus** setelah kode dan dokumentasi diperbarui. |
+| QA aplikasi | Build Android, emulator, provider produksi, Figma MCP, perangkat, dan transaksi nyata tidak digunakan. Quote, metode, retry, Back, sentuh, layout kecil/font besar, integrasi API hidup, serta penerimaan visual masih gate FE-19/FE-24/FE-25. |

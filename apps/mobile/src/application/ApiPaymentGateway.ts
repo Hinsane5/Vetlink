@@ -1,6 +1,6 @@
 import type { AccountRole } from '../domain/auth';
 import { DomainError } from '../domain/errors';
-import type { ApiPaymentAttempt, ApiPaymentRecord, ApiPaymentRepository, ApiPaymentStatus } from './ports/ApiPaymentRepository';
+import type { ApiPaymentAttempt, ApiPaymentQuote, ApiPaymentRecord, ApiPaymentRepository, ApiPaymentStatus } from './ports/ApiPaymentRepository';
 import type { ApiPaymentOperationStore } from './ports/ApiPaymentOperationStore';
 import type { PaymentMethod, PayableType } from './PaymentService';
 
@@ -24,6 +24,12 @@ export class ApiPaymentGateway {
     private readonly repository: ApiPaymentRepository,
     private readonly operations: ApiPaymentOperationStore,
   ) {}
+
+  async getQuote(payableType: PayableType, payableId: string): Promise<ApiPaymentQuote> {
+    const quote = await this.repository.getQuote(payableType, payableId);
+    validateQuote(quote, payableType, payableId);
+    return quote;
+  }
 
   async getPaymentForPayable(payableType: PayableType, payableId: string): Promise<ApiPaymentSnapshot | null> {
     const payment = await this.repository.getForPayable(payableType, payableId);

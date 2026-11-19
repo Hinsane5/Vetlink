@@ -46,13 +46,14 @@ type Screen = 'loading' | 'roles' | 'login' | 'register' | 'home';
 
 /** Server mode never opens the local fixture store or writes to SQLite. */
 export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
-  const { auth, farms, livestock, livestockHealth, patients, vets, vetSchedule, careCoordination, consultations, clinical, booking, notifications, notificationContext, profiles, chat, vetVerification } = useMemo(() => {
+  const { auth, farms, livestock, livestockHealth, patients, vets, vetSchedule, careCoordination, consultations, clinical, booking, notifications, notificationContext, profiles, chat, vetVerification, paymentGateway } = useMemo(() => {
     const adapters = createApiAdapters(baseUrl);
     const livestock = new ServerLivestockService(adapters.farms, adapters.livestock, adapters.livestockWrites);
     const vets = new ServerVetDirectoryService(adapters.vets);
     const vetSchedule = new ServerVetScheduleService(adapters.vetSchedule, vets);
     return {
       auth: adapters.auth,
+      paymentGateway: adapters.payments,
       farms: new ServerFarmService(adapters.farms, adapters.farmWrites),
       livestock,
       livestockHealth: new ServerLivestockHealthService(livestock, adapters.livestockHealth, adapters.livestockHealth, new ExpoPendingCareReportStore(), () => Crypto.randomUUID()),
@@ -322,7 +323,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
           </>}
           {session.activeRole === 'vet' && <ServerPatientsSection service={patients} backHandlerRef={patientBackHandler} />}
           {session.activeRole === 'farmer' && <ServerVetDirectorySection service={vets} bookingService={booking} livestockService={livestock} farms={farmList} userId={session.userId} backHandlerRef={directoryBackHandler} />}
-          <ServerConsultationSection key={session.activeRole} service={consultations} clinicalService={clinical} chatService={chat} scheduleService={vetSchedule} careService={careCoordination} role={session.activeRole} userId={session.userId} backHandlerRef={consultationBackHandler} />
+          <ServerConsultationSection key={session.activeRole} service={consultations} clinicalService={clinical} chatService={chat} scheduleService={vetSchedule} careService={careCoordination} paymentGateway={paymentGateway} role={session.activeRole} userId={session.userId} backHandlerRef={consultationBackHandler} />
           {session.roles.length > 1 && session.roles.map((availableRole) => <Button key={availableRole} label={`Ganti Peran: ${availableRole === 'farmer' ? 'Peternak' : 'Dokter Hewan'}`} role={availableRole} variant="secondary" disabled={busy || availableRole === session.activeRole} onPress={() => switchRole(availableRole)} />)}
           <Button label="Keluar" role={session.activeRole} variant="secondary" disabled={busy} onPress={() => setLogoutVisible(true)} />
           </>}

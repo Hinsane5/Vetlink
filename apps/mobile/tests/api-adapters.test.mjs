@@ -282,6 +282,18 @@ test('API payment uses integer server quote, sends no client amount, and preserv
   assert.equal(Object.hasOwn(JSON.parse(calls[2].init.body), 'amount'), false);
 });
 
+test('payment gateway exposes only a matching safe-integer server quote', async () => {
+  const quote = { payableType: 'consultation', payableId: 'consultation-2', amountIdr: 87500, currency: 'IDR' };
+  const gateway = new ApiPaymentGateway({ getQuote: async () => quote }, createPaymentOperationJournal());
+  assert.deepEqual(await gateway.getQuote('consultation', 'consultation-2'), quote);
+
+  const mismatched = new ApiPaymentGateway({
+    getQuote: async () => ({ ...quote, payableId: 'another-consultation' }),
+  }, createPaymentOperationJournal());
+  await assert.rejects(mismatched.getQuote('consultation', 'consultation-2'),
+    (error) => error instanceof DomainError && error.code === 'API_RESPONSE_INVALID');
+});
+
 test('server 404 on payment lookup means no record, but malformed integer IDR is rejected', async () => {
   const sessions = new MemoryServerSessionStore(tokenSet());
   const api = new ApiClient('http://localhost:3000', sessions, async (url) => {
