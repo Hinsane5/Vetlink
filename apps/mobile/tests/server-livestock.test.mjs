@@ -157,9 +157,9 @@ test('server livestock edit verifies fresh ownership/version before PATCH and va
   const livestock = new ServerLivestockService(
     { getFarmById: async () => farm },
     { getById: async (id) => ({ ...animal(id, 'farm-a'), version: 2 }) },
-    { update: async (id, input) => { writes++; assert.equal(id, 'animal-a'); assert.deepEqual(input, { expectedVersion: 2, name: 'Sapi Baru', breed: null, sex: 'female' }); return { ...animal(id, 'farm-a'), version: 3 }; } },
+    { update: async (id, input) => { writes++; assert.equal(id, 'animal-a'); assert.deepEqual(input, { expectedVersion: 2, name: 'Sapi Baru', breed: null, species: 'cattle', sex: 'female', birthDate: '2020-02-29', estimatedAgeMonths: null, weightKg: 125.5 }); return { ...animal(id, 'farm-a'), version: 3 }; } },
   );
-  const patch = { expectedVersion: 2, name: '  Sapi   Baru ', breed: null, sex: 'female' };
+  const patch = { expectedVersion: 2, name: '  Sapi   Baru ', breed: null, species: 'cattle', sex: 'female', birthDate: '2020-02-29', estimatedAgeMonths: null, weightKg: 125.5 };
   await assert.rejects(livestock.update('vet', 'vet-a', 'farm-a', 'animal-a', patch), { code: 'FORBIDDEN' });
   await assert.rejects(livestock.update('farmer', 'farmer-a', 'farm-a', 'animal-a', { ...patch, expectedVersion: 1 }), { code: 'VERSION_CONFLICT' });
   await assert.rejects(livestock.update('farmer', 'farmer-a', 'farm-a', 'animal-a', { ...patch, name: ' ' }), { code: 'VALIDATION_FAILED' });
@@ -167,6 +167,31 @@ test('server livestock edit verifies fresh ownership/version before PATCH and va
   const saved = await livestock.update('farmer', 'farmer-a', 'farm-a', 'animal-a', patch);
   assert.equal(saved.version, 3);
   assert.equal(writes, 1);
+});
+
+test('server livestock edit validates Farm species and age, date, breed and weight before PATCH', async () => {
+  let writes = 0;
+  let farmReads = 0;
+  const livestock = new ServerLivestockService(
+    { getFarmById: async () => { farmReads++; return farm; } },
+    { getById: async (id) => ({ ...animal(id, 'farm-a'), version: 2 }) },
+    { update: async () => { writes++; return { ...animal('animal-a', 'farm-a'), version: 3 }; } },
+  );
+  const invalidPatches = [
+    { species: 'goat' },
+    { species: 'unknown' },
+    { birthDate: '2026-02-30' },
+    { estimatedAgeMonths: 1201 },
+    { birthDate: '2020-01-01', estimatedAgeMonths: 10 },
+    { weightKg: 1.234 },
+    { weightKg: -1 },
+    { breed: 'x'.repeat(81) },
+  ];
+  for (const patch of invalidPatches) {
+    await assert.rejects(livestock.update('farmer', 'farmer-a', 'farm-a', 'animal-a', { expectedVersion: 2, ...patch }), { code: 'VALIDATION_FAILED' });
+  }
+  assert.equal(writes, 0);
+  assert.equal(farmReads, 8); // each update uses one Farm snapshot for scope and species checks
 });
 
 test('server livestock edit rejects a changed owner or non-incremented server response', async () => {

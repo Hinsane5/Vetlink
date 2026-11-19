@@ -62,7 +62,11 @@ export function ServerLivestockSection({ service, healthService, farm, userId, b
   const [editOpen, setEditOpen] = useState(false);
   const [editName, setEditName] = useState('');
   const [editBreed, setEditBreed] = useState('');
+  const [editSpecies, setEditSpecies] = useState<LivestockSpecies>('cattle');
   const [editSex, setEditSex] = useState<LivestockSex>('unknown');
+  const [editBirthDate, setEditBirthDate] = useState('');
+  const [editAge, setEditAge] = useState('');
+  const [editWeight, setEditWeight] = useState('');
   const [editBusy, setEditBusy] = useState(false);
   const [editUncertain, setEditUncertain] = useState(false);
   const [editError, setEditError] = useState('');
@@ -70,7 +74,15 @@ export function ServerLivestockSection({ service, healthService, farm, userId, b
   const operationInFlight = useRef(false);
   const detailRequest = useRef(0);
   const dirty = !!(code || name || breed || age || weight || species || sex !== 'unknown');
-  const editChanged = !!detailAnimal && (editName !== detailAnimal.name || editBreed !== (detailAnimal.breed ?? '') || editSex !== detailAnimal.sex);
+  const editChanged = !!detailAnimal && (
+    editName !== detailAnimal.name
+    || editBreed !== (detailAnimal.breed ?? '')
+    || editSpecies !== detailAnimal.species
+    || editSex !== detailAnimal.sex
+    || editBirthDate !== (detailAnimal.birthDate ?? '')
+    || editAge !== (detailAnimal.estimatedAgeMonths === null ? '' : String(detailAnimal.estimatedAgeMonths))
+    || editWeight !== (detailAnimal.weightKg ?? '')
+  );
 
   useEffect(() => {
     backHandlerRef.current = () => {
@@ -103,7 +115,11 @@ export function ServerLivestockSection({ service, healthService, farm, userId, b
     if (!detailAnimal) return;
     setEditName(detailAnimal.name);
     setEditBreed(detailAnimal.breed ?? '');
+    setEditSpecies(detailAnimal.species);
     setEditSex(detailAnimal.sex);
+    setEditBirthDate(detailAnimal.birthDate ?? '');
+    setEditAge(detailAnimal.estimatedAgeMonths === null ? '' : String(detailAnimal.estimatedAgeMonths));
+    setEditWeight(detailAnimal.weightKg ?? '');
     setEditError('');
     setEditUncertain(false);
     setEditOpen(true);
@@ -199,7 +215,11 @@ export function ServerLivestockSection({ service, healthService, farm, userId, b
         expectedVersion: detailAnimal.version,
         name: editName,
         breed: editBreed.trim() || null,
+        species: editSpecies,
         sex: editSex,
+        birthDate: editBirthDate.trim() || null,
+        estimatedAgeMonths: editAge.trim() === '' ? null : Number(editAge),
+        weightKg: editWeight.trim() === '' ? null : Number(editWeight.replace(',', '.')),
       });
       setDetailAnimal(saved);
       setAnimals((current) => current.map((item) => item.id === saved.id ? saved : item));
@@ -313,8 +333,13 @@ export function ServerLivestockSection({ service, healthService, farm, userId, b
     {!detailLoading && detailAnimal && editOpen ? <>
       <TextField label="Nama ternak" value={editName} onChangeText={setEditName} />
       <TextField label="Ras (opsional)" value={editBreed} onChangeText={setEditBreed} />
+      <Text style={styles.body}>Jenis ternak</Text>
+      <View style={styles.choices}>{(farm.species.length ? farm.species : livestockSpecies).map((value) => <Button key={value} label={speciesLabels[value]} role="farmer" variant="secondary" selected={editSpecies === value} disabled={editBusy} onPress={() => setEditSpecies(value)} style={styles.choice} />)}</View>
       <Text style={styles.body}>Jenis kelamin</Text>
       <View style={styles.choices}>{(['female', 'male', 'unknown'] as const).map((value) => <Button key={value} label={sexLabels[value]} role="farmer" variant="secondary" selected={editSex === value} disabled={editBusy} onPress={() => setEditSex(value)} style={styles.choice} />)}</View>
+      <TextField label="Tanggal lahir (YYYY-MM-DD)" value={editBirthDate} onChangeText={(value) => { setEditBirthDate(value); if (value.trim()) setEditAge(''); }} placeholder="Kosongkan jika memakai umur" autoCapitalize="none" />
+      <TextField label="Umur perkiraan (bulan)" value={editAge} onChangeText={(value) => { setEditAge(value); if (value.trim()) setEditBirthDate(''); }} placeholder="Kosongkan jika memakai tanggal lahir" keyboardType="number-pad" />
+      <TextField label="Berat (kg)" value={editWeight} onChangeText={setEditWeight} placeholder="Opsional" keyboardType="decimal-pad" />
       {editError ? <Text accessibilityLiveRegion="polite" style={styles.error}>{editError}</Text> : null}
       {editUncertain ? <Text style={styles.body}>Status simpan belum pasti. Muat ulang detail server sebelum mencoba lagi; perubahan form ini akan ditutup.</Text> : null}
       <Button label="Simpan perubahan" role="farmer" onPress={saveEdit} loading={editBusy} disabled={editUncertain || !editChanged} />
@@ -334,6 +359,7 @@ export function ServerLivestockSection({ service, healthService, farm, userId, b
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{detailAnimal.name} · {detailAnimal.displayCode}</Text>
         <Text style={styles.body}>{speciesLabels[detailAnimal.species]} · {sexLabels[detailAnimal.sex]}{detailAnimal.breed ? ` · ${detailAnimal.breed}` : ''}</Text>
+        {detailAnimal.birthDate ? <Text style={styles.body}>Tanggal lahir: {detailAnimal.birthDate}</Text> : null}
         {detailAnimal.estimatedAgeMonths !== null ? <Text style={styles.body}>Umur perkiraan: {detailAnimal.estimatedAgeMonths} bulan</Text> : null}
         {detailAnimal.weightKg !== null ? <Text style={styles.body}>Berat: {detailAnimal.weightKg} kg</Text> : null}
       </View>
