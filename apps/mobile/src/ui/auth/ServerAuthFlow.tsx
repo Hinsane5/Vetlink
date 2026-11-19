@@ -38,7 +38,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
       farms: new ServerFarmService(adapters.farms, adapters.farmWrites),
       livestock,
       livestockHealth: new ServerLivestockHealthService(livestock, adapters.livestockHealth, adapters.livestockHealth, new ExpoPendingCareReportStore(), () => Crypto.randomUUID()),
-      patients: new ServerPatientService(adapters.patients),
+      patients: new ServerPatientService(adapters.patients, adapters.livestockHealth),
       vets: new ServerVetDirectoryService(adapters.vets),
       consultations: new ServerConsultationService(adapters.consultations),
       booking: new ServerBookingService(adapters.farms, adapters.livestock, adapters.vets, adapters.consultations, new ExpoPendingServerBookingStore()),
@@ -64,6 +64,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
   const [farmWriteUncertain, setFarmWriteUncertain] = useState(false);
   const farmCreateInFlight = useRef(false);
   const livestockBackHandler = useRef<(() => boolean) | null>(null);
+  const patientBackHandler = useRef<(() => boolean) | null>(null);
   const directoryBackHandler = useRef<(() => boolean) | null>(null);
   const consultationBackHandler = useRef<(() => boolean) | null>(null);
 
@@ -93,6 +94,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
         return true;
       }
       if (screen === 'home') {
+        if (patientBackHandler.current?.()) return true;
         if (consultationBackHandler.current?.()) return true;
         if (directoryBackHandler.current?.()) return true;
         return livestockBackHandler.current?.() ?? true;
@@ -270,7 +272,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
             <Button label="Muat ulang peternakan" role="farmer" variant="secondary" onPress={refreshFarms} disabled={!farmsLoaded || farmsBusy} />
             {selectedFarm ? <ServerLivestockSection key={selectedFarm.id} service={livestock} healthService={livestockHealth} farm={selectedFarm} userId={session.userId} backHandlerRef={livestockBackHandler} /> : null}
           </>}
-          {session.activeRole === 'vet' && <ServerPatientsSection service={patients} />}
+          {session.activeRole === 'vet' && <ServerPatientsSection service={patients} backHandlerRef={patientBackHandler} />}
           {session.activeRole === 'farmer' && <ServerVetDirectorySection service={vets} bookingService={booking} livestockService={livestock} farms={farmList} userId={session.userId} backHandlerRef={directoryBackHandler} />}
           <ServerConsultationSection key={session.activeRole} service={consultations} role={session.activeRole} backHandlerRef={consultationBackHandler} />
           {session.roles.length > 1 && session.roles.map((availableRole) => <Button key={availableRole} label={`Ganti Peran: ${availableRole === 'farmer' ? 'Peternak' : 'Dokter Hewan'}`} role={availableRole} variant="secondary" disabled={busy || availableRole === session.activeRole} onPress={() => switchRole(availableRole)} />)}

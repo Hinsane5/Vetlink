@@ -197,6 +197,8 @@ Konteks Peternak `12:2032`, `12:2068`, dan `12:2132` terkena error persis `You'v
 
 `PatientFlow` memasang daftar pasien, filter species, dan pencarian berbasis `PatientService`; detail dimuat memakai `animalId` route dan menampilkan riwayat final serta laporan terkait assignment. Catatan dibuka hanya baca; lampiran diotorisasi ulang oleh `HealthRecordService`. Selisih dari prototype: UI menambah tab “Lainnya” agar disease/care tidak tersembunyi; draft klinis tidak ditampilkan karena aturan final-only; tombol “Catatan Pemeriksaan” menunggu FE-14; back hit area menjadi 44 dp dan glyph diganti Lucide.
 
+Mode server Dokter memakai node pasien/detail yang sudah dicatat di atas (`80:4594`, `80:4726`) sebagai struktur lokal: daftar assigned → detail pasien → timeline dari BE-03. Figma MCP tidak dipanggil pada iterasi ini. UI hanya merender DTO timeline yang tersedia; foto/lampiran dan temuan klinis lengkap belum ada di kontrak projection. QA visual Android dan Back perangkat tertunda.
+
 `FarmerHealthFlow` sekarang dibuka dari detail ternak menggunakan `livestockId`/`animalId` yang sama. Riwayat menampilkan Semua/Periksa/Penyakit/Vaksin/Obat/Perawatan, sumber catatan, detail final hanya baca, dan lampiran dengan pemeriksaan akses ulang. Form laporan Peternak menyimpan kategori, keterangan, dan waktu saat simpan; tidak mengubah catatan Dokter. Karena node Peternak tidak dapat diambil, susunan ini dirancang dari tokens dan aturan fitur, bukan salinan visual Figma. Screenshot Android layar riwayat, input, modal, viewer, dan visual comparison belum diperoleh; MIUI menolak ADB input dengan `INJECT_EVENTS`.
 
 ## Implementasi shell FE-03

@@ -18,7 +18,7 @@ Pemeriksaan FE-03/25 lanjutan, 18 November 2026: `apps/mobile npm run check` **l
 
 Pembaruan 18 November 2026 — FE-03/25: `apps/mobile npm run check` lulus (typecheck, lint, 209/209 tes); `git diff --check` lulus. Mode autentikasi server dipasang dengan konfigurasi eksplisit `EXPO_PUBLIC_API_BASE_URL`; bootstrap SQLite dilewati dalam mode itu. Layar login/daftar/restore/switch/logout memakai `ServerAuthService`. `apps/mobile/android ./gradlew --no-daemon --max-workers=1 assembleDebug` **gagal sebelum kompilasi aplikasi**: plugin Android tidak dapat mengakses `~/.android`, yang merupakan symlink ke `/Volumes/AndroidSDK/dotandroid`; drive `/Volumes/AndroidSDK` dan `/Volumes/HowSSD` tidak terpasang. Build harus diulang setelah SDK tersedia. Pemeriksaan perangkat tertahan karena ADB masih `unauthorized`; pengguna melaporkan dialog izin tidak muncul. Reset password belum dapat dipakai karena adapter pengiriman BE-01 gagal tertutup tanpa provider. Layar layanan API belum dihubungkan dan QA dua perangkat belum dilakukan.
 
-Status QA per 16 November 2026: frontend masih memakai data lokal persisten tanpa integrasi API dan FE-03 autentikasi tetap ditunda. BE-00–16 memiliki route executable; `api:contract` dan `api:smoke` BE-16 lulus pada runtime lokal/PostgreSQL 17 terisolasi, termasuk follow-up active-role, payment recovery, read DTO, owner/role scope, dan cursor pagination. Smoke BE-09/13/14/15 juga lulus. Mobile belum memakai API; kontrak dua sesi API sudah diuji, tetapi QA mobile dua perangkat fisik, interaksi/visual, ukuran kecil, serta font besar belum terbukti. APK Android preview sudah dibangun dan dipasang lewat USB pada 20 Oktober. Tidak ada pemanggilan Figma MCP baru.
+Status QA diperbarui 19 November 2026: mode API FE-03/25 dipilih eksplisit melalui `EXPO_PUBLIC_API_BASE_URL`, tidak membuka SQLite, dan kini menghubungkan Farm/ternak/kesehatan, pasien/timeline Dokter, direktori/slot, quote/booking, serta baca konsultasi. Pemeriksaan backend BE-00–16 dan PostgreSQL lokal tercatat pada bagian bertanggal di bawah. `npm run check` mobile terakhir lulus dengan 237/237 tes. Pemeriksaan ini tidak meliputi server API hidup, build Android, dua perangkat, sentuh/keyboard/Back/scroll, viewport visual, ukuran kecil, atau font besar. Pengguna meminta build Android dilewati untuk iterasi saat ini; tidak ada emulator atau panggilan Figma MCP baru.
 
 ## APK preview Android lokal (20 Oktober 2026)
 
@@ -1148,3 +1148,15 @@ Mode API kini menghubungkan direktori Dokter dengan alur booking Peternak. Servi
 | QA/runtime | Build Android dilewati sesuai arahan pengguna. Tidak ada emulator, Figma MCP, API server hidup, provider produksi, secret, deployment, atau transaksi nyata. QA sentuh/Back/keyboard/scroll, ukuran 390 × 844, layar kecil/font besar, dan perbandingan visual masih gate. Alamat visit harus sudah tersedia pada Farm; editor alamat belum ada pada mode API. |
 
 FE-09 dan FE-25 tetap **Sedang dikerjakan** sampai QA Android/visual dan penerimaan integrasi selesai.
+
+## FE-25 — detail pasien Dokter API BE-03/16 (19 November 2026)
+
+Mode API Dokter kini membuka detail dari daftar pasien BE-16 dan timeline `GET /v1/livestock/{id}/health-events`. Use case terlebih dahulu memastikan ID ada pada daftar pasien yang sudah discope oleh sesi Dokter; hanya setelah itu ia meminta timeline. Backend memeriksa kembali assignment. UI menampilkan data ringkas yang benar-benar ada di `PatientResponseDto`, event timeline terpisah per sumber, serta catatan klinis final sebagai baca-saja. Foto, lampiran, temuan klinis lengkap, dan histori konsultasi penuh tidak tersedia pada projection ini.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm run check` di `apps/mobile` | **Lulus**: typecheck, Expo lint, kompilasi tes domain, dan 237/237 tes. Node menghasilkan `ExperimentalWarning` SQLite dari suite lokal. |
+| Tes baru detail pasien | Dua tes service memastikan role/assignment diperiksa sebelum request timeline dan ID event ganda ditolak. |
+| Integrasi/QA | Pemeriksaan memakai repositori fake lokal; API server hidup tidak dijalankan. Build Android dilewati sesuai arahan. Interaksi perangkat, Back Android, ukuran layar, dan pembandingan visual belum diuji. Tidak ada emulator atau Figma MCP. |
+
+FE-07 dan FE-25 tetap **Sedang dikerjakan** sampai QA perangkat/visual dan penerimaan API terpenuhi.

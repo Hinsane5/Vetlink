@@ -1,10 +1,19 @@
 import type { AccountRole } from '../domain/auth';
 import { DomainError } from '../domain/errors';
 import type { ApiPatientRecord, PatientReadRepository } from './ports/PatientReadRepository';
+import type { ApiHealthEvent, LivestockHealthReadRepository } from './ports/LivestockHealthRepository';
+
+export interface ServerPatientDetail {
+  patient: ApiPatientRecord;
+  events: ApiHealthEvent[];
+}
 
 /** BE-16 patient rows are already scoped by veterinarian assignment on the server. */
 export class ServerPatientService {
-  constructor(private readonly patients: PatientReadRepository) {}
+  constructor(
+    private readonly patients: PatientReadRepository,
+    private readonly health: LivestockHealthReadRepository,
+  ) {}
 
   async listAssigned(role: AccountRole): Promise<ApiPatientRecord[]> {
     if (role !== 'vet') throw new DomainError('FORBIDDEN', 'Hanya Dokter Hewan dapat membaca daftar pasien terkait layanan.');
@@ -15,6 +24,18 @@ export class ServerPatientService {
       seen.add(record.id);
     }
     return records;
+  }
+
+  async getAssignedDetail(role: AccountRole, animalId: string): Promise<ServerPatientDetail> {
+    const patient = (await this.listAssigned(role)).find((record) => record.id === animalId);
+    if (!patient) throw new DomainError('NOT_FOUND', 'Pasien tidak ditemukan pada layanan Dokter ini.');
+    const events = await this.health.listHealthEvents(patient.id);
+    const eventIds = new Set<string>();
+    for (const event of events) {
+      if (eventIds.has(event.id)) throw new DomainError('API_RESPONSE_INVALID', 'Timeline pasien server memuat ID catatan ganda.');
+      eventIds.add(event.id);
+    }
+    return { patient, events };
   }
 }
 
