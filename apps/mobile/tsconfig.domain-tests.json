@@ -30,6 +30,7 @@
     "src/application/ServerFarmService.ts",
     "src/application/ServerLivestockService.ts",
     "src/application/ServerLivestockHealthService.ts",
+    "src/application/ServerPatientService.ts",
     "src/data/local/sqlite/seed.ts",
     "src/data/local/sqlite/migrations.ts",
     "src/application/vetPatientAccess.ts",

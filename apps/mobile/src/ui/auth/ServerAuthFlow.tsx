@@ -7,6 +7,7 @@ import * as Crypto from 'expo-crypto';
 import { ServerFarmService } from '../../application/ServerFarmService';
 import { ServerLivestockService } from '../../application/ServerLivestockService';
 import { ServerLivestockHealthService } from '../../application/ServerLivestockHealthService';
+import { ServerPatientService } from '../../application/ServerPatientService';
 import type { ApiFarmRecord } from '../../application/ports/FarmReadRepository';
 import type { AccountRole, SessionSnapshot } from '../../domain/auth';
 import { speciesLabel } from '../../domain/catalog';
@@ -16,13 +17,14 @@ import { ConfirmationDialog } from '../components/ConfirmationDialog';
 import { LoadingState } from '../components/Feedback';
 import { TextField } from '../components/TextField';
 import { ServerLivestockSection } from '../livestock/ServerLivestockSection';
+import { ServerPatientsSection } from '../patients/ServerPatientsSection';
 import { colors, fonts, spacing, typeScale } from '../theme/tokens';
 
 type Screen = 'loading' | 'roles' | 'login' | 'register' | 'home';
 
 /** Server mode never opens the local fixture store or writes to SQLite. */
 export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
-  const { auth, farms, livestock, livestockHealth } = useMemo(() => {
+  const { auth, farms, livestock, livestockHealth, patients } = useMemo(() => {
     const adapters = createApiAdapters(baseUrl);
     const livestock = new ServerLivestockService(adapters.farms, adapters.livestock, adapters.livestockWrites);
     return {
@@ -30,6 +32,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
       farms: new ServerFarmService(adapters.farms, adapters.farmWrites),
       livestock,
       livestockHealth: new ServerLivestockHealthService(livestock, adapters.livestockHealth, adapters.livestockHealth, new ExpoPendingCareReportStore(), () => Crypto.randomUUID()),
+      patients: new ServerPatientService(adapters.patients),
     };
   }, [baseUrl]);
   const insets = useSafeAreaInsets();
@@ -252,7 +255,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
             <Button label="Muat ulang peternakan" role="farmer" variant="secondary" onPress={refreshFarms} disabled={!farmsLoaded || farmsBusy} />
             {selectedFarm ? <ServerLivestockSection key={selectedFarm.id} service={livestock} healthService={livestockHealth} farm={selectedFarm} userId={session.userId} backHandlerRef={livestockBackHandler} /> : null}
           </>}
-          {session.activeRole === 'vet' && <Text style={styles.description}>Data layanan belum tersedia di tampilan ini.</Text>}
+          {session.activeRole === 'vet' && <ServerPatientsSection service={patients} />}
           {session.roles.length > 1 && session.roles.map((availableRole) => <Button key={availableRole} label={`Ganti Peran: ${availableRole === 'farmer' ? 'Peternak' : 'Dokter Hewan'}`} role={availableRole} variant="secondary" disabled={busy || availableRole === session.activeRole} onPress={() => switchRole(availableRole)} />)}
           <Button label="Keluar" role={session.activeRole} variant="secondary" disabled={busy} onPress={() => setLogoutVisible(true)} />
         </>}

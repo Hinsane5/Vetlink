@@ -1,6 +1,5 @@
 import type { AccountRole } from '../domain/auth';
-import type { ApiHealthEvent, LivestockHealthReadRepository } from './ports/LivestockHealthRepository';
-import type { ApiCareEvent, ApiCareEventInput, LivestockCareEventWriteRepository } from './ports/LivestockHealthRepository';
+import type { ApiCareEvent, ApiCareEventInput, ApiHealthEvent, LivestockCareEventWriteRepository, LivestockHealthReadRepository } from './ports/LivestockHealthRepository';
 import type { ApiLivestockRecord } from './ports/LivestockReadRepository';
 import type { FarmerReportKind } from '../domain/health';
 import { DomainError } from '../domain/errors';
