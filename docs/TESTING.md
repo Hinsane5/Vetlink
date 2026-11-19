@@ -1194,3 +1194,14 @@ Mode API Peternak kini menampilkan alamat tersimpan, membuat dan mengubah alamat
 | Integrasi/QA | Hanya repositori fake lokal yang digunakan; tidak mengirim data alamat ke API hidup. Build Android dilewati; tidak ada emulator/Figma MCP. Sentuh, Back, keyboard, scroll, layout dan visual Android belum diuji. |
 
 FE-25 tetap **Sedang dikerjakan** sampai API server/dua perangkat dan QA Android/visual diterima.
+
+## UI verifikasi Dokter API BE-02 (19 November 2026)
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm run check` di `apps/mobile` | **Lulus**: typecheck, Expo lint tanpa warning proyek, kompilasi tes domain, 264/264 tes. Node mengeluarkan `ExperimentalWarning` SQLite dari suite lokal yang sudah ada. |
+| Tes service baru | Menguji upload dengan key/payload stabil, retry setelah koneksi gagal, penolakan format/ukuran dan role, batas lima dokumen, submit hanya setelah upload, status `pending` tanpa self-verify, recovery staging lokal ambigu, serta pelepasan operasi pada penolakan server definitif. |
+| `git diff --check` | Dijalankan setelah perubahan kode dan dokumentasi. |
+| Batas QA | Build Android dilewati sesuai arahan pengguna. Tidak ada API server hidup, emulator, Figma MCP, provider produksi, secret, deployment, atau transaksi finansial nyata. Picker dan transfer file harus diverifikasi pengguna pada app/perangkat; sentuh, Back Android, keyboard, scroll, viewport 390 × 844, layar kecil, font besar, serta pembandingan visual masih gate. |
+
+Mode default tetap lokal. Untuk melihat UI baru, aplikasi harus dijalankan pada mode API development yang dikonfigurasi dengan `EXPO_PUBLIC_API_BASE_URL`, lalu masuk menggunakan akun Dokter yang dimiliki pengguna. Dokumen yang dipilih dikirim ke backend yang dikonfigurasi; jangan gunakan akun atau dokumen nyata saat hanya memeriksa layout.

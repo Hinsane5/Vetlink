@@ -5,6 +5,7 @@ import { createApiAdapters } from '../../data/remote/createApiAdapters';
 import { ExpoPendingCareReportStore } from '../../data/remote/ExpoPendingCareReportStore';
 import { ExpoPendingServerBookingStore } from '../../data/remote/ExpoPendingServerBookingStore';
 import { ExpoServerChatStateStore } from '../../data/remote/ExpoServerChatStateStore';
+import { ExpoServerVetVerificationStore } from '../../data/remote/ExpoServerVetVerificationStore';
 import * as Crypto from 'expo-crypto';
 import { ServerFarmService } from '../../application/ServerFarmService';
 import { ServerLivestockService } from '../../application/ServerLivestockService';
@@ -17,6 +18,7 @@ import { ServerBookingService } from '../../application/ServerBookingService';
 import { ServerNotificationsService } from '../../application/ServerNotificationsService';
 import { ServerProfileService } from '../../application/ServerProfileService';
 import { ServerChatService } from '../../application/ServerChatService';
+import { ServerVetVerificationService } from '../../application/ServerVetVerificationService';
 import type { ApiFarmRecord } from '../../application/ports/FarmReadRepository';
 import type { AccountRole, SessionSnapshot } from '../../domain/auth';
 import { speciesLabel } from '../../domain/catalog';
@@ -38,7 +40,7 @@ type Screen = 'loading' | 'roles' | 'login' | 'register' | 'home';
 
 /** Server mode never opens the local fixture store or writes to SQLite. */
 export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
-  const { auth, farms, livestock, livestockHealth, patients, vets, consultations, clinical, booking, notifications, profiles, chat } = useMemo(() => {
+  const { auth, farms, livestock, livestockHealth, patients, vets, consultations, clinical, booking, notifications, profiles, chat, vetVerification } = useMemo(() => {
     const adapters = createApiAdapters(baseUrl);
     const livestock = new ServerLivestockService(adapters.farms, adapters.livestock, adapters.livestockWrites);
     return {
@@ -54,6 +56,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
       notifications: new ServerNotificationsService(adapters.notifications),
       profiles: new ServerProfileService(adapters.profiles),
       chat: new ServerChatService(adapters.chat, new ExpoServerChatStateStore(), () => Crypto.randomUUID()),
+      vetVerification: new ServerVetVerificationService(adapters.profiles, new ExpoServerVetVerificationStore(), () => Crypto.randomUUID()),
     };
   }, [baseUrl]);
   const insets = useSafeAreaInsets();
@@ -279,7 +282,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
           <Button label="Kembali" role={role} variant="secondary" onPress={() => { setError(''); setScreen('roles'); }} />
         </>}
         {screen === 'home' && session && <>
-          {profileOpen ? <ServerProfileSection service={profiles} role={session.activeRole} onExit={() => setProfileOpen(false)} onNameSaved={(displayName) => setSession((current) => current ? { ...current, displayName } : current)} backHandlerRef={profileBackHandler} />
+          {profileOpen ? <ServerProfileSection service={profiles} verificationService={vetVerification} role={session.activeRole} userId={session.userId} onExit={() => setProfileOpen(false)} onNameSaved={(displayName) => setSession((current) => current ? { ...current, displayName } : current)} backHandlerRef={profileBackHandler} />
             : notificationsOpen ? <ServerNotificationsSection service={notifications} role={session.activeRole} onExit={() => setNotificationsOpen(false)} backHandlerRef={notificationsBackHandler} /> : <>
           <Text style={styles.heading}>Akun {session.activeRole === 'farmer' ? 'Peternak' : 'Dokter Hewan'}</Text>
           <Text style={styles.description}>{session.displayName}{'\n'}{session.email}</Text>

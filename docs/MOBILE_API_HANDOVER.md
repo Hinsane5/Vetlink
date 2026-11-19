@@ -152,7 +152,7 @@ Mode API memakai `ServerNotificationsService` di atas `ApiNotificationsRepositor
 
 ## UI mode API: profil BE-02
 
-`ServerProfileService` memakai GET/PATCH profil per role aktif dan GET riwayat verifikasi Dokter. Form mengirim hanya `fullName` untuk Peternak, serta `fullName`, `professionalName`, dan `registrationReference` untuk Dokter. Status verifikasi tidak dapat diubah client. UI menampilkan status/reviewer reason terbaru, tetapi upload dokumen biner dan pengajuan verifikasi belum memiliki kontrol mode API.
+`ServerProfileService` memakai GET/PATCH profil per role aktif dan GET riwayat verifikasi Dokter. Form mengirim hanya `fullName` untuk Peternak, serta `fullName`, `professionalName`, dan `registrationReference` untuk Dokter. Status verifikasi tidak dapat diubah client. `ServerVetVerificationService` memberi Dokter pemilih PDF/JPEG/PNG/WebP maksimum 10 MiB, menyimpan salinan file di direktori privat aplikasi, lalu mengirim berkas melalui BE-02. Sebelum POST, SecureStore menyimpan URI privat dan `Idempotency-Key`; hasil jaringan tidak pasti mempertahankan keduanya untuk retry file/payload yang sama. Penolakan server definitif membersihkan operasi lokal agar Dokter dapat memilih ulang. Dokumen yang berhasil diunggah baru dikirim sebagai submission ketika Dokter menekan Ajukan verifikasi. UI memerlukan profil Dokter server dan status `not_submitted` atau `revision_required`; pending/verified dikunci. Hasil submission hanya `pending`; verifikasi final tetap tindakan reviewer tepercaya backend. Mode default aplikasi tetap SQLite, dan transfer file, interaksi, serta visual Android belum diuji pada perangkat.
 
 ## UI mode API: chat BE-07
 
