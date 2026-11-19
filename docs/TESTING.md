@@ -1,5 +1,11 @@
 # Strategi pengujian VetLink
 
+## FE-12/FE-25 — chat teks server BE-07 (19 November 2026)
+
+`ServerChatService`, `ExpoServerChatStateStore`, dan `ServerChatSection` menghubungkan daftar/paging, kirim teks, retry pesan gagal, draft, serta recovery `clientMessageId` pada konsultasi aktif. Pemeriksaan `apps/mobile npm run check` lulus: typecheck, Expo lint tanpa warning, dan 258/258 tes domain/repository. Enam tes baru mencakup role/status/member guard, retry payload identik setelah respons tak pasti, pemulihan dari hasil POST yang telah tersimpan, retry pesan gagal milik akun, dan draft.
+
+Tidak dilakukan build Android, emulator/perangkat, API server hidup, Figma MCP, provider produksi, atau transaksi. UI hanya mengirim teks; transfer byte lampiran dan tampilan media privat belum terhubung. QA dua sesi/perangkat dan visual tetap gate.
+
 ## FE-04/FE-25 — profil server BE-02 (19 November 2026)
 
 `ServerProfileService` dan `ServerProfileSection` menghubungkan baca/ubah profil Farmer/Vet serta baca status dan riwayat verifikasi ke adapter BE-02. `apps/mobile npm run check` lulus: typecheck, Expo lint tanpa warning, dan 252/252 tes domain/repository. Tiga tes baru memeriksa pemilihan profil berdasarkan role, normalisasi payload allowlist, serta role guard dan batas teks.

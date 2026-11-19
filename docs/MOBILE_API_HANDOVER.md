@@ -153,3 +153,7 @@ Mode API memakai `ServerNotificationsService` di atas `ApiNotificationsRepositor
 ## UI mode API: profil BE-02
 
 `ServerProfileService` memakai GET/PATCH profil per role aktif dan GET riwayat verifikasi Dokter. Form mengirim hanya `fullName` untuk Peternak, serta `fullName`, `professionalName`, dan `registrationReference` untuk Dokter. Status verifikasi tidak dapat diubah client. UI menampilkan status/reviewer reason terbaru, tetapi upload dokumen biner dan pengajuan verifikasi belum memiliki kontrol mode API.
+
+## UI mode API: chat BE-07
+
+Detail konsultasi membuka `ServerChatSection` hanya untuk chat dengan status `in_progress` dan payment `succeeded`; service memeriksa role serta participant sebelum memakai repository. Pesan teks dikirim dengan UUID `clientMessageId` dan payload persisnya disimpan sebelum POST di SecureStore per user/konsultasi. Retry setelah hasil jaringan tidak pasti membaca halaman terbaru terlebih dahulu; jika pesan sudah ada, journal dibersihkan tanpa POST kedua, jika belum ada payload yang sama dikirim ulang. Pesan gagal yang sudah memiliki record dapat dicoba ulang lewat ID message server. Draft composer tersimpan di SecureStore saat pengguna memilih Simpan Draft ketika Back. Chat saat ini mendukung teks, refresh manual dan cursor paging; lampiran tidak dapat diupload/dibuka dan runtime tidak melakukan polling otomatis.

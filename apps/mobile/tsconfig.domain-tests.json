@@ -35,6 +35,7 @@
     "src/application/ServerConsultationService.ts",
     "src/application/ServerBookingService.ts",
     "src/application/ServerClinicalService.ts",
+    "src/application/ServerChatService.ts",
     "src/application/ServerNotificationsService.ts",
     "src/application/ServerProfileService.ts",
     "src/data/local/sqlite/seed.ts",

@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createApiAdapters } from '../../data/remote/createApiAdapters';
 import { ExpoPendingCareReportStore } from '../../data/remote/ExpoPendingCareReportStore';
 import { ExpoPendingServerBookingStore } from '../../data/remote/ExpoPendingServerBookingStore';
+import { ExpoServerChatStateStore } from '../../data/remote/ExpoServerChatStateStore';
 import * as Crypto from 'expo-crypto';
 import { ServerFarmService } from '../../application/ServerFarmService';
 import { ServerLivestockService } from '../../application/ServerLivestockService';
@@ -15,6 +16,7 @@ import { ServerClinicalService } from '../../application/ServerClinicalService';
 import { ServerBookingService } from '../../application/ServerBookingService';
 import { ServerNotificationsService } from '../../application/ServerNotificationsService';
 import { ServerProfileService } from '../../application/ServerProfileService';
+import { ServerChatService } from '../../application/ServerChatService';
 import type { ApiFarmRecord } from '../../application/ports/FarmReadRepository';
 import type { AccountRole, SessionSnapshot } from '../../domain/auth';
 import { speciesLabel } from '../../domain/catalog';
@@ -36,7 +38,7 @@ type Screen = 'loading' | 'roles' | 'login' | 'register' | 'home';
 
 /** Server mode never opens the local fixture store or writes to SQLite. */
 export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
-  const { auth, farms, livestock, livestockHealth, patients, vets, consultations, clinical, booking, notifications, profiles } = useMemo(() => {
+  const { auth, farms, livestock, livestockHealth, patients, vets, consultations, clinical, booking, notifications, profiles, chat } = useMemo(() => {
     const adapters = createApiAdapters(baseUrl);
     const livestock = new ServerLivestockService(adapters.farms, adapters.livestock, adapters.livestockWrites);
     return {
@@ -51,6 +53,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
       booking: new ServerBookingService(adapters.farms, adapters.livestock, adapters.vets, adapters.consultations, new ExpoPendingServerBookingStore()),
       notifications: new ServerNotificationsService(adapters.notifications),
       profiles: new ServerProfileService(adapters.profiles),
+      chat: new ServerChatService(adapters.chat, new ExpoServerChatStateStore(), () => Crypto.randomUUID()),
     };
   }, [baseUrl]);
   const insets = useSafeAreaInsets();
@@ -300,7 +303,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
           </>}
           {session.activeRole === 'vet' && <ServerPatientsSection service={patients} backHandlerRef={patientBackHandler} />}
           {session.activeRole === 'farmer' && <ServerVetDirectorySection service={vets} bookingService={booking} livestockService={livestock} farms={farmList} userId={session.userId} backHandlerRef={directoryBackHandler} />}
-          <ServerConsultationSection key={session.activeRole} service={consultations} clinicalService={clinical} role={session.activeRole} backHandlerRef={consultationBackHandler} />
+          <ServerConsultationSection key={session.activeRole} service={consultations} clinicalService={clinical} chatService={chat} role={session.activeRole} userId={session.userId} backHandlerRef={consultationBackHandler} />
           {session.roles.length > 1 && session.roles.map((availableRole) => <Button key={availableRole} label={`Ganti Peran: ${availableRole === 'farmer' ? 'Peternak' : 'Dokter Hewan'}`} role={availableRole} variant="secondary" disabled={busy || availableRole === session.activeRole} onPress={() => switchRole(availableRole)} />)}
           <Button label="Keluar" role={session.activeRole} variant="secondary" disabled={busy} onPress={() => setLogoutVisible(true)} />
           </>}
