@@ -1,6 +1,6 @@
 # Handover kontrak API untuk mobile
 
-Status 19 November 2026: `EXPO_PUBLIC_API_BASE_URL` memilih ServerAuthFlow API saat startup; mode itu tidak membuka SQLite. Runtime default tetap SQLite; mode API menghubungkan Farm/alamat, ternak/kesehatan, pasien/timeline, direktori/booking, konsultasi, serta catatan klinis/rekomendasi. Layar layanan lain belum seluruhnya memakai API. Gunakan OpenAPI aktif di `/openapi.json` dan [kontrak integrasi](API_CONTRACT.md) sebagai sumber detail route/schema; tidak ada URL produksi yang dipilih.
+Status 19 November 2026: `EXPO_PUBLIC_API_BASE_URL` memilih ServerAuthFlow API saat startup; mode itu tidak membuka SQLite. Runtime default tetap SQLite; mode API menghubungkan profil, inbox/preferensi, Farm/alamat, ternak/kesehatan, pasien/timeline, direktori/booking, konsultasi, serta catatan klinis/rekomendasi. Layar layanan lain belum seluruhnya memakai API. Gunakan OpenAPI aktif di `/openapi.json` dan [kontrak integrasi](API_CONTRACT.md) sebagai sumber detail route/schema; tidak ada URL produksi yang dipilih.
 
 ## Koneksi dan sesi
 
@@ -149,3 +149,7 @@ Pengingat memakai GET/POST `/v1/reminders`, PATCH `/v1/reminders/{id}` dengan `a
 ## UI mode API: inbox dan preferensi BE-14
 
 Mode API memakai `ServerNotificationsService` di atas `ApiNotificationsRepository`. Layar memuat inbox untuk penerima aktif, menampilkan jumlah belum dibaca, dan setelah mark-read hanya menyimpan ID/type konteks dari respons yang telah diverifikasi server. Konteks ditampilkan dengan ID, tetapi navigasi detail resource belum tersedia. Notifikasi tanpa context ID tidak bisa dibuka dari UI. Preferensi dibaca dari server dan Switch berubah setelah PATCH berhasil; setelah hasil transport tidak pasti, UI meminta refresh sebelum aksi berikutnya. Inbox/preferensi belum mengganti runtime default SQLite.
+
+## UI mode API: profil BE-02
+
+`ServerProfileService` memakai GET/PATCH profil per role aktif dan GET riwayat verifikasi Dokter. Form mengirim hanya `fullName` untuk Peternak, serta `fullName`, `professionalName`, dan `registrationReference` untuk Dokter. Status verifikasi tidak dapat diubah client. UI menampilkan status/reviewer reason terbaru, tetapi upload dokumen biner dan pengajuan verifikasi belum memiliki kontrol mode API.

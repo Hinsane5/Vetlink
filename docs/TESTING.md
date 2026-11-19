@@ -1,5 +1,11 @@
 # Strategi pengujian VetLink
 
+## FE-04/FE-25 — profil server BE-02 (19 November 2026)
+
+`ServerProfileService` dan `ServerProfileSection` menghubungkan baca/ubah profil Farmer/Vet serta baca status dan riwayat verifikasi ke adapter BE-02. `apps/mobile npm run check` lulus: typecheck, Expo lint tanpa warning, dan 252/252 tes domain/repository. Tiga tes baru memeriksa pemilihan profil berdasarkan role, normalisasi payload allowlist, serta role guard dan batas teks.
+
+Back dengan perubahan menawarkan simpan/buang/tetap mengedit; respons simpan yang tidak pasti memerlukan refresh, tanpa optimistis sukses. Upload dokumen dan pengajuan verifikasi Dokter belum dihubungkan. Build Android, emulator/perangkat, Figma MCP, API server hidup, provider produksi, dan transaksi nyata tidak dijalankan.
+
 ## FE-22/FE-25 — inbox dan preferensi notifikasi server (19 November 2026)
 
 `ServerNotificationsService` dan `ServerNotificationsSection` menghubungkan Kotak Masuk serta preferensi BE-14 di mode API, tanpa membaca/menulis SQLite. `apps/mobile npm run check` lulus: typecheck, Expo lint, dan 249/249 tes domain/repository. Empat tes baru mencakup role guard, ID unik/jumlah belum dibaca, kecocokan konteks mark-read, dan patch preferensi.
