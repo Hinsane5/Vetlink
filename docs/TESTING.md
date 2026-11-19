@@ -1283,3 +1283,12 @@ Inbox mode API menandai notifikasi dibaca melalui BE-14, lalu memuat resource ya
 | `db:migrate`, `db:seed`, `api:smoke` | **Lulus** pada PostgreSQL 17 sementara, loopback port 55432, database baru; 20 migrasi dan fixture fiktif. Smoke memeriksa owner Farmer, Dokter assigned, outsider 404 untuk detail tindak lanjut/laporan/pengingat, serta `viewedAt` yang hanya berubah pada pembacaan Dokter. Cluster dihentikan dan direktori sementara dihapus. Percobaan smoke pertama menemukan urutan assertion lama yang mengharapkan laporan tetap belum dibaca sesudah request Dokter; assertion dipindah sebelum pembacaan Dokter lalu smoke penuh lulus. |
 | `git diff --check` | **Lulus** setelah kode dan dokumentasi diperbarui. |
 | QA aplikasi | Android build, emulator, API/provider produksi, Figma MCP, perangkat, dan transaksi nyata tidak digunakan. Sentuh, Back ketika detail sedang dimuat, keyboard, scroll, layar kecil/font besar, dua sesi, dan perbandingan visual masih gate FE-22/FE-24/FE-25. |
+
+## FE-22 — bantuan akun server (19 November 2026)
+
+Mode API menyediakan menu Bantuan berbahasa Indonesia berisi panduan detail layanan, perbedaan tindak lanjut/pengingat/laporan, dampak preferensi, dan pergantian peran. Topik memakai accordion aksesibel; tombol Kembali dan Back Android kembali ke halaman akun. Dialog keluar tetap tersedia di flow akun.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `cd apps/mobile && npm run check` | **Lulus** sesudah perubahan: typecheck, Expo lint tanpa warning proyek, dan 289/289 tes domain/repository. Tidak ada tes khusus komponen UI. |
+| QA aplikasi | Build Android dan perangkat/emulator tidak digunakan sesuai arahan. Interaksi accordion, Back fisik, safe area, font besar, dan visual masih harus diterima pengguna pada app. |

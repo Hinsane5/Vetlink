@@ -37,6 +37,7 @@ import { ServerConsultationSection } from '../consultations/ServerConsultationSe
 import { ServerFarmAddressesSection } from '../farms/ServerFarmAddressesSection';
 import { ServerNotificationsSection } from '../notifications/ServerNotificationsSection';
 import { ServerProfileSection } from '../profile/ServerProfileSection';
+import { ServerHelpSection } from '../profile/ServerHelpSection';
 import { colors, fonts, spacing, typeScale } from '../theme/tokens';
 
 type Screen = 'loading' | 'roles' | 'login' | 'register' | 'home';
@@ -77,6 +78,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
   const [logoutVisible, setLogoutVisible] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [error, setError] = useState('');
   const [farmList, setFarmList] = useState<ApiFarmRecord[]>([]);
   const [farmName, setFarmName] = useState('');
@@ -93,6 +95,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
   const consultationBackHandler = useRef<(() => boolean) | null>(null);
   const notificationsBackHandler = useRef<(() => boolean) | null>(null);
   const profileBackHandler = useRef<(() => boolean) | null>(null);
+  const helpBackHandler = useRef<(() => boolean) | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -122,6 +125,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
       if (screen === 'home') {
         if (profileBackHandler.current?.()) return true;
         if (notificationsBackHandler.current?.()) return true;
+        if (helpBackHandler.current?.()) return true;
         if (farmAddressesBackHandler.current?.()) return true;
         if (patientBackHandler.current?.()) return true;
         if (consultationBackHandler.current?.()) return true;
@@ -289,11 +293,13 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
         </>}
         {screen === 'home' && session && <>
           {profileOpen ? <ServerProfileSection service={profiles} verificationService={vetVerification} role={session.activeRole} userId={session.userId} onExit={() => setProfileOpen(false)} onNameSaved={(displayName) => setSession((current) => current ? { ...current, displayName } : current)} backHandlerRef={profileBackHandler} />
-            : notificationsOpen ? <ServerNotificationsSection service={notifications} contextService={notificationContext} role={session.activeRole} onExit={() => setNotificationsOpen(false)} backHandlerRef={notificationsBackHandler} /> : <>
+            : notificationsOpen ? <ServerNotificationsSection service={notifications} contextService={notificationContext} role={session.activeRole} onExit={() => setNotificationsOpen(false)} backHandlerRef={notificationsBackHandler} />
+            : helpOpen ? <ServerHelpSection role={session.activeRole} onExit={() => setHelpOpen(false)} backHandlerRef={helpBackHandler} /> : <>
           <Text style={styles.heading}>Akun {session.activeRole === 'farmer' ? 'Peternak' : 'Dokter Hewan'}</Text>
           <Text style={styles.description}>{session.displayName}{'\n'}{session.email}</Text>
           <Button label="Kotak Masuk & Preferensi Notifikasi" role={session.activeRole} variant="secondary" onPress={() => setNotificationsOpen(true)} />
           <Button label="Profil dan verifikasi" role={session.activeRole} variant="secondary" onPress={() => setProfileOpen(true)} />
+          <Button label="Bantuan" role={session.activeRole} variant="secondary" onPress={() => setHelpOpen(true)} />
           {session.activeRole === 'farmer' && <>
             <Text style={styles.heading}>Peternakan saya</Text>
             {(!farmsLoaded || farmsBusy) && <LoadingState label="Memuat peternakan…" />}
