@@ -8,6 +8,7 @@ import { ServerFarmService } from '../../application/ServerFarmService';
 import { ServerLivestockService } from '../../application/ServerLivestockService';
 import { ServerLivestockHealthService } from '../../application/ServerLivestockHealthService';
 import { ServerPatientService } from '../../application/ServerPatientService';
+import { ServerVetDirectoryService } from '../../application/ServerVetDirectoryService';
 import type { ApiFarmRecord } from '../../application/ports/FarmReadRepository';
 import type { AccountRole, SessionSnapshot } from '../../domain/auth';
 import { speciesLabel } from '../../domain/catalog';
@@ -18,13 +19,14 @@ import { LoadingState } from '../components/Feedback';
 import { TextField } from '../components/TextField';
 import { ServerLivestockSection } from '../livestock/ServerLivestockSection';
 import { ServerPatientsSection } from '../patients/ServerPatientsSection';
+import { ServerVetDirectorySection } from '../directory/ServerVetDirectorySection';
 import { colors, fonts, spacing, typeScale } from '../theme/tokens';
 
 type Screen = 'loading' | 'roles' | 'login' | 'register' | 'home';
 
 /** Server mode never opens the local fixture store or writes to SQLite. */
 export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
-  const { auth, farms, livestock, livestockHealth, patients } = useMemo(() => {
+  const { auth, farms, livestock, livestockHealth, patients, vets } = useMemo(() => {
     const adapters = createApiAdapters(baseUrl);
     const livestock = new ServerLivestockService(adapters.farms, adapters.livestock, adapters.livestockWrites);
     return {
@@ -33,6 +35,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
       livestock,
       livestockHealth: new ServerLivestockHealthService(livestock, adapters.livestockHealth, adapters.livestockHealth, new ExpoPendingCareReportStore(), () => Crypto.randomUUID()),
       patients: new ServerPatientService(adapters.patients),
+      vets: new ServerVetDirectoryService(adapters.vets),
     };
   }, [baseUrl]);
   const insets = useSafeAreaInsets();
@@ -256,6 +259,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
             {selectedFarm ? <ServerLivestockSection key={selectedFarm.id} service={livestock} healthService={livestockHealth} farm={selectedFarm} userId={session.userId} backHandlerRef={livestockBackHandler} /> : null}
           </>}
           {session.activeRole === 'vet' && <ServerPatientsSection service={patients} />}
+          {session.activeRole === 'farmer' && <ServerVetDirectorySection service={vets} />}
           {session.roles.length > 1 && session.roles.map((availableRole) => <Button key={availableRole} label={`Ganti Peran: ${availableRole === 'farmer' ? 'Peternak' : 'Dokter Hewan'}`} role={availableRole} variant="secondary" disabled={busy || availableRole === session.activeRole} onPress={() => switchRole(availableRole)} />)}
           <Button label="Keluar" role={session.activeRole} variant="secondary" disabled={busy} onPress={() => setLogoutVisible(true)} />
         </>}
