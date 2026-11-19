@@ -1135,3 +1135,16 @@ Adapter profil menormalkan respons raw profil/submission dan memakai payload PAT
 | `npm run check` di `apps/mobile` | **Lulus**; 209/209 tes setelah adapter mengirim key. |
 | `npm run db:migrate`, `npm run db:seed`, `npm run api:smoke` | **Lulus** pada PostgreSQL 17 lokal terisolasi, loopback port 55432, database `vetlink_document_idempotency`; 19 migrasi diterapkan. Smoke memeriksa key wajib, Peternak ditolak, retry dari sesi Dokter kedua menghasilkan ID yang sama, key sama dengan byte berbeda ditolak 409 `IDEMPOTENCY_CONFLICT`, dan dua unggah paralel dari sesi Dokter berbeda menghasilkan satu row. Cluster dihentikan sesudahnya. |
 | Batas | Transfer multipart pada Android fisik dan wiring UI API belum diuji. Tidak memakai emulator, Figma MCP, provider produksi, deployment, atau transaksi nyata. Direktori uji sementara `/tmp/vetlink-doc-idem.5dMmhO` dibiarkan setelah cluster berhenti. |
+
+## FE-25 — quote dan booking konsultasi API BE-05 (19 November 2026)
+
+Mode API kini menghubungkan direktori Dokter dengan alur booking Peternak. Service memeriksa Farm pemilik dari sesi, ternak pada Farm itu, batas spesies, Dokter terverifikasi yang menerima layanan, slot server, dan alamat visit yang tersimpan pada Farm. Quote harus cocok dengan pilihan, berisi IDR integer aman, dan mengembalikan snapshot alamat yang sama. Booking hanya diterima pada status `awaiting_payment`/`pending`; UI tidak memulai pembayaran. Quote ID serta key idempotensi booking disimpan sebelum POST untuk pemulihan manual setelah hasil jaringan tidak pasti.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm run check` di `apps/mobile` | **Lulus**: typecheck, Expo lint, kompilasi tes domain, dan 235/235 tes. Node menghasilkan `ExperimentalWarning` SQLite dari suite lokal yang sudah ada. |
+| Tes baru booking server | Lima skenario service memeriksa role/Farm/ternak/Dokter/slot/alamat, penolakan ID/snapshot quote tak cocok dan nominal tidak aman, key yang sama setelah response hilang lintas instance, quote asing/terpakai, serta status booking yang harus menunggu pembayaran. |
+| `git diff --check` | **Lulus**. |
+| QA/runtime | Build Android dilewati sesuai arahan pengguna. Tidak ada emulator, Figma MCP, API server hidup, provider produksi, secret, deployment, atau transaksi nyata. QA sentuh/Back/keyboard/scroll, ukuran 390 × 844, layar kecil/font besar, dan perbandingan visual masih gate. Alamat visit harus sudah tersedia pada Farm; editor alamat belum ada pada mode API. |
+
+FE-09 dan FE-25 tetap **Sedang dikerjakan** sampai QA Android/visual dan penerimaan integrasi selesai.

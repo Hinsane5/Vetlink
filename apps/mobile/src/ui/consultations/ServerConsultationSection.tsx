@@ -16,7 +16,11 @@ const visitLabels: Record<NonNullable<ApiConsultationVisit>['stage'], string> = 
   scheduled: 'Terjadwal', en_route: 'Dalam perjalanan', arrived: 'Sudah tiba', examining: 'Pemeriksaan berlangsung', completed: 'Selesai',
 };
 
-export function ServerConsultationSection({ service, role }: { service: ServerConsultationService; role: AccountRole }) {
+export function ServerConsultationSection({ service, role, backHandlerRef }: {
+  service: ServerConsultationService;
+  role: AccountRole;
+  backHandlerRef: { current: (() => boolean) | null };
+}) {
   const [rows, setRows] = useState<ApiConsultationListItem[]>([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -38,6 +42,18 @@ export function ServerConsultationSection({ service, role }: { service: ServerCo
     }, 0);
     return () => { active = false; clearTimeout(timer); };
   }, [revision, role, service]);
+
+  useEffect(() => {
+    backHandlerRef.current = () => {
+      if (!selectedId) return false;
+      if (detailLoading) return true;
+      setSelectedId(null);
+      setDetail(null);
+      setDetailError('');
+      return true;
+    };
+    return () => { backHandlerRef.current = null; };
+  }, [backHandlerRef, detailLoading, selectedId]);
 
   const openDetail = async (id: string) => {
     setSelectedId(id);
