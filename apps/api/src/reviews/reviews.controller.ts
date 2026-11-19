@@ -27,6 +27,21 @@ import { ReviewsService } from './reviews.service.js';
 export class ReviewsController {
   constructor(private readonly reviews: ReviewsService) {}
 
+  @Get('consultations/:consultationId/review')
+  @RequireRoles('farmer')
+  @ApiOkResponse({ type: ReviewResponseDto, description: 'Ulasan konsultasi yang dimiliki Peternak aktif.' })
+  @ApiBadRequestResponse({ type: ApiErrorResponseDto })
+  @ApiUnauthorizedResponse({ type: ApiErrorResponseDto })
+  @ApiForbiddenResponse({ type: ApiErrorResponseDto })
+  @ApiNotFoundResponse({ type: ApiErrorResponseDto })
+  @ApiServiceUnavailableResponse({ type: ApiErrorResponseDto })
+  getForConsultation(
+    @AuthenticatedUser() principal: AuthenticatedPrincipal,
+    @Param('consultationId', ParseUUIDPipe) consultationId: string,
+  ) {
+    return this.reviews.getForConsultation(principal, consultationId);
+  }
+
   @Post('consultations/:consultationId/review')
   @RequireRoles('farmer')
   @ApiCreatedResponse({ type: ReviewResponseDto, description: 'Ulasan immutable tersimpan; pengiriman ulang dengan isi sama mengembalikan record yang sama.' })

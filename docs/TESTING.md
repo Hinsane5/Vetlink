@@ -1313,3 +1313,38 @@ Detail konsultasi API menampilkan layar pembayaran bagi Peternak pada status `aw
 | Payment API | Hanya diuji dengan fake HTTP/repository pada suite lokal; tidak ada request POST pembayaran atau callback yang dijalankan pada server. |
 | `git diff --check` | **Lulus** setelah kode dan dokumentasi diperbarui. |
 | QA aplikasi | Build Android, emulator, provider produksi, Figma MCP, perangkat, dan transaksi nyata tidak digunakan. Quote, metode, retry, Back, sentuh, layout kecil/font besar, integrasi API hidup, serta penerimaan visual masih gate FE-19/FE-24/FE-25. |
+
+## FE-21/FE-25 — ulasan privat konsultasi API BE-13/16 (20 November 2026)
+
+Mode API Peternak membuka ulasan dari konsultasi `completed`, membaca record owner-scoped, dan mengirim ulasan immutable. Respons POST yang tidak pasti menonaktifkan retry sampai GET status selesai. Backend mengembalikan 404 jika belum ada ulasan atau sesi bukan pemilik; Dokter tidak dapat memakai route pembacaan privat.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `cd apps/mobile && npm run check` | **Lulus**: typecheck, Expo lint, dan 300/300 tes domain/repository. Warning SQLite eksperimental berasal dari suite lokal lama. Tes baru meliputi guard role/owner/status, normalisasi, immutability, ID response, dan 404/error mapping. |
+| `cd apps/api && npm run check` | **Lulus**: TypeScript dan Nest build. |
+| `npm run api:contract` | **Lulus**: 11/11 tes, termasuk role Farmer dan response DTO GET review pada OpenAPI. |
+| `npm run api:smoke` | **Lulus** pada PostgreSQL 17 sementara loopback port 55432, database baru: 20 migrasi dan seed fiktif. Smoke memeriksa review owner/outsider/Dokter beserta BE-03–15; cluster dihentikan dan direktori sementara dihapus. |
+| QA aplikasi | Android build, emulator, API/provider produksi, Figma MCP, perangkat, dan transaksi nyata tidak digunakan. Tampilan rating, Back, keyboard, sentuhan, layout/font dan alur dua sesi masih gate FE-21/FE-24/FE-25. |
+
+## FE-23/FE-25 — pendapatan dan pencairan API BE-15 (20 November 2026)
+
+Mode API Dokter menggunakan ringkasan dan mutasi ledger BE-15, bukan ledger SQLite. Jurnal SecureStore menjaga request amount/tujuan/key yang sama setelah koneksi tidak pasti; server response `submitting/pending` tidak dianggap uang diterima. Tidak ada data rekening baru atau provider eksternal.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `cd apps/mobile && npm run check` | **Lulus**: typecheck, Expo lint tanpa warning proyek, dan 306/306 tes domain/repository. Tes baru mencakup role, IDR/saldo/tujuan, retry key/payload lintas instance, response mismatch dan kegagalan adapter terkonfirmasi. Warning SQLite eksperimental berasal dari suite lokal lama. |
+| `cd apps/api && npm run check` | **Lulus**: TypeScript dan Nest build. |
+| `npm run api:contract` | **Lulus**: 11/11 tes OpenAPI/auth/DTO. |
+| `db:migrate`, `db:seed`, `api:smoke` | **Lulus** pada cluster PostgreSQL 17 sementara loopback `127.0.0.1:55432`, database baru: 20 migrasi dan fixture fiktif. Smoke lintas BE-03–15 termasuk ulasan konsultasi, withdrawal/ledger, akses dan idempotensi. Cluster dihentikan dan direktori sementara dihapus. |
+| Build Android dan QA | Build dilewati sesuai arahan. Tidak memakai emulator, Figma MCP, provider produksi atau transaksi finansial nyata. Sentuhan, Back, keyboard, scroll, ukuran layar/font, dan QA visual masih gate FE-23/FE-24/FE-25. |
+
+## FE-17/18/20/25 — katalog dan order mode API BE-10–12 (20 November 2026)
+
+Menu akun Peternak membuka UI katalog, keranjang, checkout, pembayaran pending, order dan timeline shipment yang memakai repository server. Cart mutation memakai versi terkini; conflict atau hasil tidak pasti meminta refresh sebelum mutasi selanjutnya. Journal order menyimpan quote dan key idempoten di SecureStore. UI hanya menerima total/address snapshot server, dan order baru tetap `awaiting_payment`. Permintaan pembayaran memakai adapter lokal pending; tidak ada provider atau transaksi nyata.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `cd apps/mobile && npm run check` | **Lulus**: TypeScript typecheck, Expo lint, dan 311/311 tes domain/repository. Lima tes baru menguji guard role/owner, versi cart, alamat/quote, retry order lintas instance, dan mismatch response. Ada `ExperimentalWarning` SQLite dari suite lama. |
+| `git diff --check` | **Lulus** setelah kode dan dokumentasi diperbarui. |
+| API backend | Tidak berubah pada slice ini. Kontrak dan smoke BE-10–12 yang tercatat pada bukti backend sebelumnya tidak dijalankan ulang pada sesi ini. |
+| QA aplikasi | Android build, emulator, Figma MCP, API live, perangkat, provider dan transaksi nyata tidak digunakan. Sentuh, Back, keyboard/scroll, ukuran layar/font, runtime API dua perangkat dan visual tetap gate FE-17/18/20/24/25. |

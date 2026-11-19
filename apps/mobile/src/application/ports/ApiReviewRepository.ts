@@ -12,6 +12,7 @@ export interface ApiConsultationReview extends ApiReview {
 }
 
 export interface ApiReviewRepository {
+  getForConsultation(consultationId: string): Promise<ApiConsultationReview | null>;
   create(consultationId: string, input: { stars: number; text?: string }): Promise<ApiConsultationReview>;
   listForVet(vetId: string, query?: { cursor?: string; limit?: number }): Promise<ReadPage<ApiReview>>;
 }

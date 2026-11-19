@@ -64,6 +64,23 @@ function reviewResponse(row: ReviewRow) {
 export class ReviewsService {
   constructor(private readonly database: DatabaseService) {}
 
+  async getForConsultation(principal: AuthenticatedPrincipal, consultationId: string) {
+    if (principal.activeRole !== 'farmer') {
+      throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Ulasan hanya dapat dibaca oleh Peternak pemilik konsultasi.' });
+    }
+    const result = await this.database.query<ReviewRow>(
+      `SELECT r.id,r.consultation_id AS "consultationId",r.stars,r.review_text AS text,r.submitted_at AS "submittedAt"
+       FROM consultation_reviews r
+       JOIN consultations c ON c.id=r.consultation_id AND c.farmer_id=r.farmer_id AND c.vet_id=r.vet_id
+       WHERE r.consultation_id=$1 AND r.farmer_id=$2 AND c.status='completed'`,
+      [consultationId, principal.userId],
+    );
+    if (!result.rows[0]) {
+      throw new NotFoundException({ code: 'RESOURCE_NOT_FOUND', message: 'Ulasan konsultasi tidak ditemukan.' });
+    }
+    return reviewResponse(result.rows[0]);
+  }
+
   async create(principal: AuthenticatedPrincipal, consultationId: string, input: CreateReviewDto) {
     if (principal.activeRole !== 'farmer') {
       throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Ulasan hanya dapat dibuat oleh Peternak.' });

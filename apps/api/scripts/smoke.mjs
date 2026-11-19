@@ -231,6 +231,7 @@ try {
   assert.ok(openApi.paths['/v1/consultations/{consultationId}/schedule-proposals/{proposalId}/respond']?.post);
   assert.ok(openApi.paths['/v1/consultations/{consultationId}/visit/depart']?.post);
   assert.ok(openApi.paths['/v1/consultations/{consultationId}/complete']?.post);
+  assert.ok(openApi.paths['/v1/consultations/{consultationId}/review']?.get);
   assert.ok(openApi.paths['/v1/consultations/{consultationId}/review']?.post);
   assert.ok(openApi.paths['/v1/vets/{id}/reviews']?.get);
   assert.ok(openApi.paths['/v1/consultations/{consultationId}/follow-ups']?.get);
@@ -1131,6 +1132,11 @@ try {
       const parallelReviews = await Promise.all(parallelReviewResponses.map((response) => response.json()));
       assert.equal(parallelReviews[0].id, parallelReviews[1].id);
       assert.equal(parallelReviews[0].text, 'Penanganan ternak fiktif terasa jelas.');
+      const ownReview = await sendJson(healthy.baseUrl, `/v1/consultations/${visitConsultationId}/review`, farmer.accessToken, 'GET');
+      assert.equal(ownReview.status, 200);
+      assert.deepEqual(await ownReview.json(), parallelReviews[0]);
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/consultations/${visitConsultationId}/review`, outsider.accessToken, 'GET')).status, 404);
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/consultations/${visitConsultationId}/review`, vet.accessToken, 'GET')).status, 403);
       assert.equal((await sendJson(healthy.baseUrl, `/v1/consultations/${visitConsultationId}/review`, farmer.accessToken, 'POST', { stars: 4 })).status, 409);
       const firstReviewList = await sendJson(healthy.baseUrl, `/v1/vets/${vet.user.id}/reviews`, farmer.accessToken, 'GET');
       assert.equal(firstReviewList.status, 200);

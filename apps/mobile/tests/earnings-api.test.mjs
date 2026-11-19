@@ -59,6 +59,16 @@ test('withdrawal POST uses integer rupiah and caller idempotency key without aut
   assert.equal(requests[0].init.body, requests[1].init.body);
 });
 
+test('confirmed payout adapter failure is distinct from an uncertain transport error', async () => {
+  const repository = new HttpApiEarningsRepository(apiClient(async () => response(503, {
+    code: 'WITHDRAWAL_FAILED', message: 'Adapter pencairan gagal; reservasi saldo telah dilepas.', requestId: 'request-1',
+  })));
+  await assert.rejects(repository.createWithdrawal({
+    idempotencyKey: 'withdrawal:confirmed-failure',
+    payload: { amount: 50000, destinationId: ids.destination },
+  }), { code: 'ADAPTER_FAILED' });
+});
+
 test('earnings adapter rejects invalid money, balance math, query, and response before success', async () => {
   let calls = 0;
   const repository = new HttpApiEarningsRepository(apiClient(async () => { calls += 1; return response(200, summary); }));

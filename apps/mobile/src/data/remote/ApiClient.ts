@@ -248,6 +248,7 @@ function apiError(status: number, value: unknown): DomainError {
   if (status === 403 || code === 'FORBIDDEN') return new DomainError('FORBIDDEN', message);
   if (status === 404 || code === 'NOT_FOUND') return new DomainError('NOT_FOUND', message);
   if (code === 'IDEMPOTENCY_CONFLICT') return new DomainError('IDEMPOTENCY_CONFLICT', message);
+  if (code === 'WITHDRAWAL_FAILED') return new DomainError('ADAPTER_FAILED', message);
   if (status === 409) return new DomainError('VERSION_CONFLICT', message);
   if (status === 422) return new DomainError('INVALID_STATE', message);
   if (status === 429 || status >= 500) return new DomainError('SERVICE_UNAVAILABLE', message);

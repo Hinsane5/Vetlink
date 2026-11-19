@@ -55,6 +55,7 @@ NestJS melayani Swagger UI di `/docs` dan JSON di `/openapi.json`. Endpoint runt
 | `POST /v1/consultations/{consultationId}/messages` | `clientMessageId`, `text?`, `attachmentIds?` | 201 record pesan dan `deliveryStatus` | 400/401/403/404/409/422/503 |
 | `POST /v1/consultations/{consultationId}/messages/{messageId}/retry` | ID pesan pengirim | 200 record yang sama dan attempt terbaru | 401/403/404/422/503 |
 | `POST /v1/consultations/{consultationId}/review` | `{stars, text?}`; stars integer 1–5 dan text maksimal 1.000 karakter | 201 record Review tersimpan; retry payload sama mengembalikan record yang sama | 400/401/403/404/409/422/503 `ApiErrorResponseDto` |
+| `GET /v1/consultations/{consultationId}/review` | ID konsultasi UUID dari sesi aktif | 200 Review konsultasi milik Peternak; 404 bila belum ada atau bukan miliknya | 400/401/403/404/503 `ApiErrorResponseDto` |
 | `GET /v1/vets/{id}/reviews` | `cursor?`, `limit?` 1–100 (default 20) | 200 `{items,nextCursor,hasMore}`; hanya ulasan relasi valid dari konsultasi selesai | 400/401/403/404/503 `ApiErrorResponseDto` |
 
 ## Profil dan verifikasi BE-02
@@ -155,6 +156,8 @@ BE-07 memakai adapter filesystem privat lokal di luar static web root dan adapte
 
 Semua route memakai bearer dan active role membership. `POST /v1/consultations/{consultationId}/review` hanya menerima `{stars, text?}` dari Peternak pemilik setelah konsultasi berstatus `completed`; stars adalah integer 1–5 dan text opsional maksimal 1.000 karakter, dipangkas di tepi dan disimpan `null` bila kosong. Satu row Review immutable berlaku per Consultation. Request paralel/retry dengan isi ternormalisasi sama mengembalikan row yang sama; isi berbeda mengembalikan 409. Konsultasi milik akun lain disembunyikan sebagai 404.
 
+`GET /v1/consultations/{consultationId}/review` hanya tersedia untuk role Peternak dan mengembalikan ulasan bila konsultasi selesai dimiliki sesi aktif. Bila ulasan belum ada, konsultasi tidak ditemukan, atau pemilik berbeda, server mengembalikan 404. Dokter tidak dapat membaca ulasan pemilik melalui route ini; ulasan yang sudah dipublikasikan untuk agregat Dokter tetap dibaca melalui daftar publik.
+
 `GET /v1/vets/{id}/reviews` hanya menampilkan Review dengan FK Consultation/Peternak/Dokter yang cocok dan status Consultation masih `completed`; daftar memakai cursor stabil serta limit 1–100. Directory dan detail Dokter mengembalikan `ratingAverage` yang dibulatkan dua desimal dan `ratingCount`, dihitung dari row Review valid yang sama; tidak ada tabel saldo atau nilai rating yang dapat diedit client.
 
 ## Kelompok endpoint
@@ -184,7 +187,7 @@ Semua route memakai bearer dan active role membership. `POST /v1/consultations/{
 | Cart/checkout | GET `/me/cart`; PUT/DELETE `/me/cart/items/{productId}`; POST `/checkout-quotes`, `/orders` | Peternak saja; quantities, address, quote checked |
 | Bayar | POST `/payments`; GET `/payments?payableType=&payableId=`, `/payments/{id}`, `/payments/{id}/attempts` | Owner payable; status dan histori Attempt dibaca dari PostgreSQL, bukan klaim client |
 | Orders | GET `/orders`, `/orders/{id}`, `/orders/{id}/shipment` | Owner Peternak |
-| Ulasan | POST `/consultations/{id}/review`; GET `/vets/{id}/reviews` | Hanya Peternak pemilik setelah konsultasi `completed`; stars integer 1–5; satu Review immutable per konsultasi; retry isi sama mengembalikan record, isi berbeda 409 |
+| Ulasan | GET/POST `/consultations/{id}/review`; GET `/vets/{id}/reviews` | Baca/tulis konsultasi hanya Peternak pemilik setelah konsultasi `completed`; stars integer 1–5; satu Review immutable per konsultasi; retry isi sama mengembalikan record, isi berbeda 409 |
 | Pendapatan | GET `/me/vet/earnings?period=&from=&to=&cursor=&limit=`, `/me/vet/transactions/{id}` | Dokter own ledger projections; integer IDR, saldo semua periode dan transaksi per periode |
 | Tujuan pencairan | GET `/me/vet/payout-destinations` | Dokter sendiri; hanya tujuan aktif dengan rekening fiktif termasking |
 | Pencairan | GET/POST `/me/vet/withdrawals`; GET `.../{id}` | POST `{amount,destinationId}` + `Idempotency-Key`; positive ≤ available; reserve atomic; tidak menerima rekening mentah atau status paid dari client |

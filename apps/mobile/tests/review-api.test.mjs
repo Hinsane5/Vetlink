@@ -24,6 +24,24 @@ test('immutable review write sends only stars and text; public page keeps cursor
   assert.ok(calls[1].url.includes('cursor=opaque&limit=10'));
 });
 
+test('owner review read uses the consultation ID and treats only 404 as no review', async () => {
+  const calls = [];
+  const repository = new HttpApiReviewRepository(apiClient(async (url, init) => {
+    calls.push({ url, init });
+    return response(200, { ...review, consultationId });
+  }));
+  assert.deepEqual(await repository.getForConsultation(consultationId), { ...review, consultationId });
+  assert.equal(new URL(calls[0].url).pathname, `/v1/consultations/${consultationId}/review`);
+  assert.equal(calls[0].init.method, 'GET');
+
+  const missing = new HttpApiReviewRepository(apiClient(async () => response(404, { code: 'NOT_FOUND', message: 'Ulasan tidak ditemukan.' })));
+  assert.equal(await missing.getForConsultation(consultationId), null);
+  const mismatched = new HttpApiReviewRepository(apiClient(async () => response(200, {
+    ...review, consultationId: vetId,
+  })));
+  await assert.rejects(mismatched.getForConsultation(consultationId), { code: 'API_RESPONSE_INVALID' });
+});
+
 test('review adapter rejects invalid input, wrong consultation and malformed public page', async () => {
   let calls = 0;
   const repository = new HttpApiReviewRepository(apiClient(async () => { calls += 1; return response(201, review); }));

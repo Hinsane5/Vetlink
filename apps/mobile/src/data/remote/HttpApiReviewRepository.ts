@@ -1,11 +1,24 @@
 import type { ApiConsultationReview, ApiReview, ApiReviewRepository } from '../../application/ports/ApiReviewRepository';
 import { ApiClient } from './ApiClient';
+import { DomainError } from '../../domain/errors';
 import { invalidQuery, invalidResponse, isIsoTimestampWithTimezone, isRecord, isUuid,
   parseReadPage, validateOpaqueCursor, validatePageLimit } from './apiReadValidation';
 
 /** BE-13 immutable review write and public Vet review page. */
 export class HttpApiReviewRepository implements ApiReviewRepository {
   constructor(private readonly api: ApiClient) {}
+
+  async getForConsultation(consultationId: string): Promise<ApiConsultationReview | null> {
+    const id = resourceId(consultationId);
+    try {
+      const value = await this.api.request<unknown>(`/v1/consultations/${id}/review`);
+      if (!isRecord(value) || value.consultationId !== consultationId) throw invalidResponse('Ulasan tidak sesuai konsultasi.');
+      return { ...parseReview(value), consultationId };
+    } catch (error) {
+      if (error instanceof DomainError && error.code === 'NOT_FOUND') return null;
+      throw error;
+    }
+  }
 
   async create(consultationId: string, input: { stars: number; text?: string }): Promise<ApiConsultationReview> {
     const id = resourceId(consultationId);

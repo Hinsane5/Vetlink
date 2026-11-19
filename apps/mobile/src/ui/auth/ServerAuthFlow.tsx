@@ -24,6 +24,11 @@ import { ServerNotificationContextService } from '../../application/ServerNotifi
 import { ServerProfileService } from '../../application/ServerProfileService';
 import { ServerChatService } from '../../application/ServerChatService';
 import { ServerVetVerificationService } from '../../application/ServerVetVerificationService';
+import { ServerReviewService } from '../../application/ServerReviewService';
+import { ServerEarningsService } from '../../application/ServerEarningsService';
+import { ExpoPendingServerWithdrawalStore } from '../../data/remote/ExpoPendingServerWithdrawalStore';
+import { ServerCommerceService } from '../../application/ServerCommerceService';
+import { ExpoPendingServerOrderStore } from '../../data/remote/ExpoPendingServerOrderStore';
 import type { ApiFarmRecord } from '../../application/ports/FarmReadRepository';
 import type { AccountRole, SessionSnapshot } from '../../domain/auth';
 import { speciesLabel } from '../../domain/catalog';
@@ -40,13 +45,15 @@ import { ServerFarmAddressesSection } from '../farms/ServerFarmAddressesSection'
 import { ServerNotificationsSection } from '../notifications/ServerNotificationsSection';
 import { ServerProfileSection } from '../profile/ServerProfileSection';
 import { ServerHelpSection } from '../profile/ServerHelpSection';
+import { ServerEarningsSection } from '../earnings/ServerEarningsSection';
+import { ServerCommerceSection } from '../marketplace/ServerCommerceSection';
 import { colors, fonts, spacing, typeScale } from '../theme/tokens';
 
 type Screen = 'loading' | 'roles' | 'login' | 'register' | 'home';
 
 /** Server mode never opens the local fixture store or writes to SQLite. */
 export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
-  const { auth, farms, livestock, livestockHealth, patients, vets, vetSchedule, careCoordination, consultations, clinical, booking, notifications, notificationContext, profiles, chat, vetVerification, paymentGateway } = useMemo(() => {
+  const { auth, farms, livestock, livestockHealth, patients, vets, vetSchedule, careCoordination, consultations, clinical, booking, notifications, notificationContext, profiles, chat, vetVerification, paymentGateway, reviewService, earningsService, commerceService } = useMemo(() => {
     const adapters = createApiAdapters(baseUrl);
     const livestock = new ServerLivestockService(adapters.farms, adapters.livestock, adapters.livestockWrites);
     const vets = new ServerVetDirectoryService(adapters.vets);
@@ -54,6 +61,9 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
     return {
       auth: adapters.auth,
       paymentGateway: adapters.payments,
+      reviewService: new ServerReviewService(adapters.reviews),
+      earningsService: new ServerEarningsService(adapters.earnings, new ExpoPendingServerWithdrawalStore(baseUrl), () => Crypto.randomUUID()),
+      commerceService: new ServerCommerceService(adapters.catalog, adapters.commerce, adapters.farms, new ExpoPendingServerOrderStore(baseUrl)),
       farms: new ServerFarmService(adapters.farms, adapters.farmWrites),
       livestock,
       livestockHealth: new ServerLivestockHealthService(livestock, adapters.livestockHealth, adapters.livestockHealth, new ExpoPendingCareReportStore(), () => Crypto.randomUUID()),
@@ -84,6 +94,8 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [earningsOpen, setEarningsOpen] = useState(false);
+  const [commerceOpen, setCommerceOpen] = useState(false);
   const [error, setError] = useState('');
   const [farmList, setFarmList] = useState<ApiFarmRecord[]>([]);
   const [farmName, setFarmName] = useState('');
@@ -101,6 +113,8 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
   const notificationsBackHandler = useRef<(() => boolean) | null>(null);
   const profileBackHandler = useRef<(() => boolean) | null>(null);
   const helpBackHandler = useRef<(() => boolean) | null>(null);
+  const earningsBackHandler = useRef<(() => boolean) | null>(null);
+  const commerceBackHandler = useRef<(() => boolean) | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -131,6 +145,8 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
         if (profileBackHandler.current?.()) return true;
         if (notificationsBackHandler.current?.()) return true;
         if (helpBackHandler.current?.()) return true;
+        if (earningsBackHandler.current?.()) return true;
+        if (commerceBackHandler.current?.()) return true;
         if (farmAddressesBackHandler.current?.()) return true;
         if (patientBackHandler.current?.()) return true;
         if (consultationBackHandler.current?.()) return true;
@@ -216,6 +232,8 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
       setSelectedFarmId(null);
       setNotificationsOpen(false);
       setProfileOpen(false);
+      setEarningsOpen(false);
+      setCommerceOpen(false);
       setRole(next.activeRole);
       setPassword('');
       setConfirmation('');
@@ -242,6 +260,8 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
       setSelectedFarmId(null);
       setNotificationsOpen(false);
       setProfileOpen(false);
+      setEarningsOpen(false);
+      setCommerceOpen(false);
     } catch (cause) {
       setError(messageFor(cause));
     } finally {
@@ -262,6 +282,8 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
       setFarmLoadFailed(false);
       setFarmWriteUncertain(false);
       setSelectedFarmId(null);
+      setEarningsOpen(false);
+      setCommerceOpen(false);
       setPassword('');
       setScreen('roles');
     } catch (cause) {
@@ -299,12 +321,16 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
         {screen === 'home' && session && <>
           {profileOpen ? <ServerProfileSection service={profiles} verificationService={vetVerification} role={session.activeRole} userId={session.userId} onExit={() => setProfileOpen(false)} onNameSaved={(displayName) => setSession((current) => current ? { ...current, displayName } : current)} backHandlerRef={profileBackHandler} />
             : notificationsOpen ? <ServerNotificationsSection service={notifications} contextService={notificationContext} role={session.activeRole} onExit={() => setNotificationsOpen(false)} backHandlerRef={notificationsBackHandler} />
-            : helpOpen ? <ServerHelpSection role={session.activeRole} onExit={() => setHelpOpen(false)} backHandlerRef={helpBackHandler} /> : <>
+            : helpOpen ? <ServerHelpSection role={session.activeRole} onExit={() => setHelpOpen(false)} backHandlerRef={helpBackHandler} />
+            : earningsOpen ? <ServerEarningsSection service={earningsService} userId={session.userId} onExit={() => setEarningsOpen(false)} backHandlerRef={earningsBackHandler} />
+            : commerceOpen ? <ServerCommerceSection service={commerceService} paymentGateway={paymentGateway} userId={session.userId} onExit={() => setCommerceOpen(false)} backHandlerRef={commerceBackHandler} /> : <>
           <Text style={styles.heading}>Akun {session.activeRole === 'farmer' ? 'Peternak' : 'Dokter Hewan'}</Text>
           <Text style={styles.description}>{session.displayName}{'\n'}{session.email}</Text>
           <Button label="Kotak Masuk & Preferensi Notifikasi" role={session.activeRole} variant="secondary" onPress={() => setNotificationsOpen(true)} />
           <Button label="Profil dan verifikasi" role={session.activeRole} variant="secondary" onPress={() => setProfileOpen(true)} />
           <Button label="Bantuan" role={session.activeRole} variant="secondary" onPress={() => setHelpOpen(true)} />
+          {session.activeRole === 'vet' ? <Button label="Pendapatan dan pencairan" role="vet" variant="secondary" onPress={() => setEarningsOpen(true)} /> : null}
+          {session.activeRole === 'farmer' ? <Button label="Marketplace, keranjang, dan pesanan" role="farmer" variant="secondary" onPress={() => setCommerceOpen(true)} /> : null}
           {session.activeRole === 'farmer' && <>
             <Text style={styles.heading}>Peternakan saya</Text>
             {(!farmsLoaded || farmsBusy) && <LoadingState label="Memuat peternakan…" />}
@@ -323,7 +349,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
           </>}
           {session.activeRole === 'vet' && <ServerPatientsSection service={patients} backHandlerRef={patientBackHandler} />}
           {session.activeRole === 'farmer' && <ServerVetDirectorySection service={vets} bookingService={booking} livestockService={livestock} farms={farmList} userId={session.userId} backHandlerRef={directoryBackHandler} />}
-          <ServerConsultationSection key={session.activeRole} service={consultations} clinicalService={clinical} chatService={chat} scheduleService={vetSchedule} careService={careCoordination} paymentGateway={paymentGateway} role={session.activeRole} userId={session.userId} backHandlerRef={consultationBackHandler} />
+          <ServerConsultationSection key={session.activeRole} service={consultations} clinicalService={clinical} chatService={chat} scheduleService={vetSchedule} careService={careCoordination} paymentGateway={paymentGateway} reviewService={reviewService} role={session.activeRole} userId={session.userId} backHandlerRef={consultationBackHandler} />
           {session.roles.length > 1 && session.roles.map((availableRole) => <Button key={availableRole} label={`Ganti Peran: ${availableRole === 'farmer' ? 'Peternak' : 'Dokter Hewan'}`} role={availableRole} variant="secondary" disabled={busy || availableRole === session.activeRole} onPress={() => switchRole(availableRole)} />)}
           <Button label="Keluar" role={session.activeRole} variant="secondary" disabled={busy} onPress={() => setLogoutVisible(true)} />
           </>}

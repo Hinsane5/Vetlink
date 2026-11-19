@@ -7,6 +7,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { ConsultationService } from '../dist/consultation/consultation.service.js';
 import { ProfileController } from '../dist/profile/profile.controller.js';
 import { ProfileService } from '../dist/profile/profile.service.js';
+import { ReviewsController } from '../dist/reviews/reviews.controller.js';
 import { AUTH_ROLES_KEY } from '../dist/auth/auth.decorators.js';
 
 const methods = ['get', 'post', 'put', 'patch', 'delete'];
@@ -185,6 +186,7 @@ test('mobile workflow routes and data contracts are present', () => {
     ['post', '/v1/consultations'],
     ['post', '/v1/consultations/{consultationId}/visit/depart'],
     ['post', '/v1/consultations/{consultationId}/complete'],
+    ['get', '/v1/consultations/{consultationId}/review'],
     ['post', '/v1/payments'],
     ['get', '/v1/payments'],
     ['get', '/v1/payments/{id}'],
@@ -539,6 +541,13 @@ test('profile routes require the role named by their path', () => {
   for (const method of ['upload', 'submit', 'verification']) {
     assert.deepEqual(Reflect.getMetadata(AUTH_ROLES_KEY, ProfileController.prototype[method]), ['vet']);
   }
+});
+
+test('consultation review read requires Farmer role and returns the owner review DTO', () => {
+  assert.deepEqual(Reflect.getMetadata(AUTH_ROLES_KEY, ReviewsController.prototype.getForConsultation), ['farmer']);
+  const operation = openApi.paths['/v1/consultations/{consultationId}/review'].get;
+  assert.equal(operation.responses['200'].content['application/json'].schema.$ref, '#/components/schemas/ReviewResponseDto');
+  assert.ok(operation.security?.some((entry) => entry.bearer !== undefined));
 });
 
 test('professional document upload replays the same key and rejects changed bytes', async () => {
