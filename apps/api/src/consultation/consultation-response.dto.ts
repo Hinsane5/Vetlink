@@ -67,6 +67,7 @@ export class ConsultationResponseDto {
   @ApiProperty({ type: ConsultationVisitAddressSnapshotResponseDto, nullable: true }) visitAddressSnapshot!: ConsultationVisitAddressSnapshotResponseDto | null;
   @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'Waktu selesai Consultation; berbeda dari visitCompletedAt.' }) completionAt!: string | null;
   @ApiProperty({ type: String, nullable: true }) rejectionReason!: string | null;
+  @ApiProperty({ type: String, nullable: true, description: 'Alasan pembatalan dari Peternak; tidak berarti refund telah dikirim.' }) cancellationReason!: string | null;
   @ApiProperty({ enum: ['none', 'refund_needed'] }) refundStatus!: 'none' | 'refund_needed';
   @ApiProperty({ enum: ['requested', 'scheduled'], nullable: true }) reschedulePreviousStatus!: 'requested' | 'scheduled' | null;
   @ApiProperty({ type: 'integer', minimum: 1 }) version!: number;

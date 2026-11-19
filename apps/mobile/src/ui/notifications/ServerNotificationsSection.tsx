@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Switch, StyleSheet, Text, View } from 'react-native';
 import type { ApiNotification, ApiNotificationCategory, ApiNotificationContext, ApiNotificationPreferences } from '../../application/ports/ApiNotificationsRepository';
+import type { ServerNotificationContext, ServerNotificationContextService } from '../../application/ServerNotificationContextService';
 import type { ServerNotificationsService } from '../../application/ServerNotificationsService';
 import type { AccountRole } from '../../domain/auth';
 import { DomainError } from '../../domain/errors';
@@ -11,6 +12,7 @@ import { colors, fonts, roleTokens, spacing, typeScale } from '../theme/tokens';
 type Page = 'inbox' | 'preferences';
 type Props = {
   service: ServerNotificationsService;
+  contextService: ServerNotificationContextService;
   role: AccountRole;
   onExit: () => void;
   backHandlerRef: { current: (() => boolean) | null };
@@ -26,17 +28,42 @@ const contextLabels: Record<ApiNotificationContext, string> = {
   follow_up: 'Tindak lanjut', progress_report: 'Laporan perkembangan', reminder: 'Pengingat',
 };
 
-export function ServerNotificationsSection({ service, role, onExit, backHandlerRef }: Props) {
+export function ServerNotificationsSection({ service, contextService, role, onExit, backHandlerRef }: Props) {
   const [page, setPage] = useState<Page>('inbox');
   const [items, setItems] = useState<ApiNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [preferences, setPreferences] = useState<ApiNotificationPreferences | null>(null);
   const [openedContext, setOpenedContext] = useState<{ id: string; type: ApiNotificationContext } | null>(null);
+  const [contextResource, setContextResource] = useState<ServerNotificationContext | null>(null);
+  const [contextLoading, setContextLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [uncertain, setUncertain] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const contextRequest = useRef(0);
+
+  const loadContext = async (context: { id: string; type: ApiNotificationContext }) => {
+    const request = ++contextRequest.current;
+    setContextLoading(true);
+    setContextResource(null);
+    setError('');
+    try {
+      const resource = await contextService.get(role, context.type, context.id);
+      if (contextRequest.current === request) setContextResource(resource);
+    } catch (cause) {
+      if (contextRequest.current === request) setError(messageFor(cause, 'Konteks pembaruan belum dapat dimuat.'));
+    } finally {
+      if (contextRequest.current === request) setContextLoading(false);
+    }
+  };
+
+  const closeContext = useCallback(() => {
+    contextRequest.current++;
+    setOpenedContext(null);
+    setContextResource(null);
+    setContextLoading(false);
+  }, []);
 
   const reloadInbox = useCallback(async () => {
     setLoading(true);
@@ -68,12 +95,12 @@ export function ServerNotificationsSection({ service, role, onExit, backHandlerR
   }, [page, reloadInbox, reloadPreferences]);
 
   const back = useCallback(() => {
-    if (busy) return true;
-    if (openedContext) { setOpenedContext(null); return true; }
+    if (busy && !(openedContext && contextLoading)) return true;
+    if (openedContext) { closeContext(); return true; }
     if (page === 'preferences') { setPage('inbox'); setError(''); setNotice(''); return true; }
     onExit();
     return true;
-  }, [busy, onExit, openedContext, page]);
+  }, [busy, closeContext, contextLoading, onExit, openedContext, page]);
 
   useEffect(() => {
     backHandlerRef.current = back;
@@ -87,16 +114,17 @@ export function ServerNotificationsSection({ service, role, onExit, backHandlerR
       setNotice('Pembaruan ini belum memiliki konteks yang dapat dibuka.');
       return;
     }
-    if (item.readAt) {
-      setOpenedContext({ id: item.contextId, type: item.contextType });
-      return;
-    }
     setBusy(true);
     try {
-      const result = await service.markRead(role, item.id);
-      setItems((current) => current.map((row) => row.id === result.notification.id ? result.notification : row));
-      setUnreadCount((count) => Math.max(0, count - 1));
-      setOpenedContext({ id: result.contextId, type: result.contextType });
+      const context = item.readAt
+        ? { id: item.contextId, type: item.contextType }
+        : await service.markRead(role, item.id).then((result) => {
+          setItems((current) => current.map((row) => row.id === result.notification.id ? result.notification : row));
+          setUnreadCount((count) => Math.max(0, count - 1));
+          return { id: result.contextId, type: result.contextType };
+        });
+      setOpenedContext(context);
+      await loadContext(context);
     } catch (cause) {
       setError(messageFor(cause, 'Status baca belum tersimpan. Muat ulang sebelum mencoba lagi.'));
       if (cause instanceof DomainError && cause.code === 'SERVICE_UNAVAILABLE') setUncertain(true);
@@ -122,8 +150,8 @@ export function ServerNotificationsSection({ service, role, onExit, backHandlerR
   return <View style={styles.section}>
     <Text accessibilityRole="header" style={styles.heading}>{title}</Text>
     <View style={styles.actions}>
-      <Button label="Kotak Masuk" role={role} variant={page === 'inbox' ? 'primary' : 'secondary'} selected={page === 'inbox'} onPress={() => { setPage('inbox'); setOpenedContext(null); setError(''); setNotice(''); }} />
-      <Button label="Preferensi" role={role} variant={page === 'preferences' ? 'primary' : 'secondary'} selected={page === 'preferences'} onPress={() => { setPage('preferences'); setOpenedContext(null); setError(''); setNotice(''); }} />
+      <Button label="Kotak Masuk" role={role} variant={page === 'inbox' ? 'primary' : 'secondary'} selected={page === 'inbox'} onPress={() => { closeContext(); setPage('inbox'); setError(''); setNotice(''); }} />
+      <Button label="Preferensi" role={role} variant={page === 'preferences' ? 'primary' : 'secondary'} selected={page === 'preferences'} onPress={() => { closeContext(); setPage('preferences'); setError(''); setNotice(''); }} />
       <Button label="Kembali" role={role} variant="secondary" onPress={back} />
     </View>
     {page === 'inbox' ? <Text style={styles.body}>{unreadCount ? `${unreadCount} belum dibaca` : 'Semua pembaruan sudah dibaca'}</Text> : null}
@@ -131,20 +159,20 @@ export function ServerNotificationsSection({ service, role, onExit, backHandlerR
     {error ? <Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text> : null}
     {notice ? <Text accessibilityLiveRegion="polite" style={styles.notice}>{notice}</Text> : null}
     {loading ? <LoadingState label={page === 'inbox' ? 'Memuat kotak masuk…' : 'Memuat preferensi…'} /> : null}
-    {!loading && error ? <Button label={uncertain ? 'Muat ulang sebelum mencoba lagi' : 'Muat ulang'} role={role} variant="secondary" onPress={() => void (page === 'inbox' ? reloadInbox() : reloadPreferences())} /> : null}
+    {!loading && error && !openedContext ? <Button label={uncertain ? 'Muat ulang sebelum mencoba lagi' : 'Muat ulang'} role={role} variant="secondary" onPress={() => void (page === 'inbox' ? reloadInbox() : reloadPreferences())} /> : null}
     {!loading && page === 'inbox' && !error && items.length === 0 ? <Text style={styles.body}>Belum ada pembaruan untuk akun ini.</Text> : null}
-    {!loading && page === 'inbox' && !error && !openedContext ? items.map((item) => <View key={item.id} style={[styles.card, item.readAt === null && styles.unread]}>
+    {!loading && page === 'inbox' && !openedContext && !error ? items.map((item) => <View key={item.id} style={[styles.card, item.readAt === null && styles.unread]}>
       <Text style={styles.cardTitle}>{item.title}</Text>
       <Text style={styles.body}>{item.body}</Text>
       <Text style={styles.meta}>{formatDate(item.createdAt)} · {item.readAt ? 'Sudah dibaca' : 'Belum dibaca'}</Text>
       {item.contextId && item.contextType ? <Button label={busy ? 'Membuka…' : item.readAt ? 'Buka pembaruan' : 'Tandai dibaca dan buka'} role={role} variant="secondary" disabled={busy || uncertain} onPress={() => void openItem(item)} /> : <Text style={styles.meta}>Konteks pembaruan tidak tersedia.</Text>}
     </View>) : null}
     {!loading && page === 'inbox' && openedContext ? <View style={styles.card}>
-      <Text style={styles.cardTitle}>Konteks pembaruan</Text>
-      <Text style={styles.body}>{contextLabels[openedContext.type]}</Text>
-      <Text selectable style={styles.meta}>ID: {openedContext.id}</Text>
-      <Text style={styles.helper}>ID konteks telah diperiksa server. Layar detail konteks belum tersedia dalam mode API.</Text>
-      <Button label="Kembali ke kotak masuk" role={role} variant="secondary" onPress={() => setOpenedContext(null)} />
+      <Text style={styles.cardTitle}>{contextLabels[openedContext.type]}</Text>
+      {contextLoading ? <LoadingState label="Memuat detail server…" /> : null}
+      {!contextLoading && contextResource ? <ContextDetails context={contextResource} /> : null}
+      {!contextLoading && error ? <Button label="Muat ulang detail" role={role} variant="secondary" disabled={busy || contextLoading} onPress={() => { void loadContext(openedContext); }} /> : null}
+      <Button label="Kembali ke kotak masuk" role={role} variant="secondary" disabled={busy} onPress={closeContext} />
     </View> : null}
     {!loading && page === 'preferences' && !error && preferences ? <>
       <PreferenceRow role={role} title="Semua notifikasi" description="Aktifkan atau nonaktifkan seluruh kategori." value={preferences.enabled} disabled={busy || uncertain} onChange={(enabled) => void updatePreference({ enabled })} />
@@ -163,10 +191,47 @@ function PreferenceRow({ role, title, description, value, disabled, onChange }: 
   </View>;
 }
 
+function ContextDetails({ context }: { context: ServerNotificationContext }) {
+  if (context.type === 'follow_up') {
+    const item = context.resource;
+    return <>
+      <Text style={styles.meta}>Status: {item.status === 'scheduled' ? 'Terjadwal' : item.status === 'completed' ? 'Selesai' : 'Dibatalkan'}</Text>
+      <Text style={styles.body}>{formatContextDate(item.startsAt, item.timezone)} – {formatContextDate(item.endsAt, item.timezone)}</Text>
+      <Text style={styles.body}>{item.reason}</Text>
+      <Text selectable style={styles.meta}>ID layanan: {item.consultationId} · ID ternak: {item.animalId}</Text>
+    </>;
+  }
+  if (context.type === 'progress_report') {
+    const item = context.resource;
+    return <>
+      <Text style={styles.meta}>Dikirim {formatDate(item.submittedAt)}{item.viewedAt ? ' · sudah dibaca Dokter' : ' · menunggu dibaca Dokter'}</Text>
+      <Text style={styles.body}>{item.text}</Text>
+      {item.attachmentIds.length ? <Text style={styles.helper}>{item.attachmentIds.length} lampiran terkait. File tetap dilindungi akses layanan.</Text> : null}
+      <Text selectable style={styles.meta}>ID tindak lanjut: {item.followUpId} · ID ternak: {item.animalId}</Text>
+    </>;
+  }
+  const item = context.resource;
+  return <>
+    <Text style={styles.meta}>Jatuh tempo: {formatDate(item.dueAt)}</Text>
+    <Text style={styles.body}>{item.instructions}</Text>
+    <Text style={styles.meta}>Perawatan: {item.careStatus === 'done' ? 'Selesai' : 'Belum dikonfirmasi'} · Pengiriman: {item.deliveryStatus === 'sent' ? 'Terkirim' : item.deliveryStatus === 'failed' ? 'Gagal' : 'Menunggu'}</Text>
+    <Text selectable style={styles.meta}>ID ternak: {item.animalId}</Text>
+  </>;
+}
+
 function messageFor(cause: unknown, fallback: string): string { return cause instanceof Error ? cause.message : fallback; }
 function formatDate(value: string): string {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }).format(date);
+}
+function formatContextDate(value: string, timezone: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  try {
+    return new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: timezone }).format(date);
+  } catch {
+    return value;
+  }
 }
 
 const styles = StyleSheet.create({

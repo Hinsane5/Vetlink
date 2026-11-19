@@ -20,7 +20,7 @@ Tanggal baseline: 5 Oktober 2026. “Dipilih” berarti berasal dari jawaban/ins
 | DEC-14 | Reservasi saldo saat pengajuan pencairan berhasil; release bila gagal/ditolak | Usulan | Menghindari pengajuan melebihi saldo dan debit ganda |
 | DEC-15 | Verifikasi lokal fixture; produksi membutuhkan reviewer tepercaya | Terbuka untuk produksi | Tidak boleh ada self-verify oleh akun dokter |
 | DEC-16 | Tidak ada multi-device atau sync offline produksi pada tahap lokal | Usulan batas implementasi | Android data lokal dahulu; backend menyusul |
-| DEC-17 | Batas ukuran media produksi, minimum pencairan, masa slot hold, cancellation/refund | Terbuka | BE-07 memakai guardrail development configurable: JPEG/PNG/WebP 10 MiB dan MP4 50 MiB secara default; ini bukan kebijakan produk/produksi |
+| DEC-17 | Batas ukuran media produksi, minimum pencairan, masa slot hold, refund aktual | Terbuka | Pembatalan baseline oleh Peternak sudah dapat dilakukan sebelum layanan mulai dan hanya menandai `refund_needed`; BE-07 memakai guardrail development configurable: JPEG/PNG/WebP 10 MiB dan MP4 50 MiB secara default; batas produksi, refund provider/policy, minimum pencairan dan expiry hold belum dipilih |
 | DEC-18 | iOS, hosting, provider nyata dan operasional admin | Terbuka | Belum diminta sebagai tahap awal |
 | DEC-19 | Mulai implementasi dari tiket FE-00 | Dipilih | Instruksi pengguna 5 Oktober 2026; memulai scaffold mobile tanpa memilih backend atau memperluas fitur produk |
 | DEC-20 | Lanjut ke FE-02 setelah fondasi FE-01 | Diterapkan | Instruksi pengguna 5 Oktober 2026; fondasi domain, SQLite lokal, seed, repository dan event selesai dengan bukti di Testing |

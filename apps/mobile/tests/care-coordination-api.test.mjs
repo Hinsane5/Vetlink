@@ -56,6 +56,24 @@ test('follow-up read, create, and cancellation use BE-09 routes and allowlisted 
   assert.ok(calls[2].url.endsWith(`/v1/follow-ups/${id.followUp}`));
 });
 
+test('notification context resources are fetched by UUID through their read-only BE-09 routes', async () => {
+  const calls = [];
+  const repository = new HttpApiCareCoordinationRepository(apiClient(async (url, init) => {
+    calls.push({ url, init });
+    if (url.endsWith(`/v1/follow-ups/${id.followUp}`)) return response(200, followUp);
+    if (url.endsWith(`/v1/progress-reports/${id.report}`)) return response(200, report);
+    if (url.endsWith(`/v1/reminders/${id.reminder}`)) return response(200, reminder);
+    return response(404, {});
+  }));
+  assert.equal((await repository.getFollowUp(id.followUp)).id, id.followUp);
+  assert.equal((await repository.getProgressReport(id.report)).followUpId, id.followUp);
+  assert.equal((await repository.getReminder(id.reminder)).id, id.reminder);
+  assert.deepEqual(calls.map(({ init }) => init.method), ['GET', 'GET', 'GET']);
+  assert.ok(calls[0].url.endsWith(`/v1/follow-ups/${id.followUp}`));
+  assert.ok(calls[1].url.endsWith(`/v1/progress-reports/${id.report}`));
+  assert.ok(calls[2].url.endsWith(`/v1/reminders/${id.reminder}`));
+});
+
 test('progress reports remain separate from follow-up status and retry with the same key', async () => {
   const calls = [];
   const repository = new HttpApiCareCoordinationRepository(apiClient(async (url, init) => {
@@ -93,6 +111,8 @@ test('care adapter rejects invalid input and mismatched server responses before 
   const wrongReport = new HttpApiCareCoordinationRepository(apiClient(async () => response(200, operated({ ...report, followUpId: id.consultation }))));
   await assert.rejects(wrongReport.createProgressReport(id.followUp, { idempotencyKey: key,
     payload: { text: report.text } }), { code: 'API_RESPONSE_INVALID' });
+  const invalidZone = new HttpApiCareCoordinationRepository(apiClient(async () => response(200, { ...followUp, timezone: 'Invalid/Timezone' })));
+  await assert.rejects(invalidZone.getFollowUp(id.followUp), { code: 'API_RESPONSE_INVALID' });
 });
 
 test('reminder read, create, and delivery retry preserve separate care and delivery states', async () => {

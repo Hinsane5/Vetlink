@@ -16,7 +16,7 @@ Back dengan perubahan menawarkan simpan/buang/tetap mengedit; respons simpan yan
 
 `ServerNotificationsService` dan `ServerNotificationsSection` menghubungkan Kotak Masuk serta preferensi BE-14 di mode API, tanpa membaca/menulis SQLite. `apps/mobile npm run check` lulus: typecheck, Expo lint, dan 249/249 tes domain/repository. Empat tes baru mencakup role guard, ID unik/jumlah belum dibaca, kecocokan konteks mark-read, dan patch preferensi.
 
-Build Android, emulator/perangkat, Figma MCP, API server hidup, provider produksi, dan transaksi nyata tidak dijalankan. ID konteks yang lolos pemeriksaan server ditampilkan, tetapi belum membuka detail follow-up/laporan/pengingat; QA perangkat/visual tetap gate FE-22/FE-25.
+Build Android, emulator/perangkat, Figma MCP, API server hidup, provider produksi, dan transaksi nyata tidak dijalankan. QA sentuh, Back, keyboard, layar kecil/font besar, dan visual untuk inbox dan detail konteks masih gate FE-22/FE-25.
 
 FE-25 lanjutan, 19 November 2026 — detail konsultasi mode API kini membuka catatan klinis BE-08 untuk baca final Peternak dan draft/editor Dokter, finalisasi melalui review, serta rekomendasi draft/kirim dan baca hasil terkirim. Aplikasi menolak draft klinis/rekomendasi yang bocor ke Peternak; aksi tulis dibatasi role dan status layanan, sementara backend tetap memeriksa verified, pembayaran, assignment, dan immutable final. Penyimpanan/kirim dengan respons tidak pasti memblokir pengulangan hingga refresh. Empat tes use case memeriksa role, 404 normal untuk belum ada publikasi, penolakan draft bocor, batas field/version/rekomendasi; `apps/mobile npm run check` **lulus** (typecheck, Expo lint, 245/245 tes). Build Android dilewati atas arahan pengguna. API server hidup, dua akun/perangkat, emulator, screenshot/QA visual, dan Figma MCP tidak dijalankan; gate perangkat/visual FE-24/25 tetap terbuka.
 
@@ -1216,3 +1216,70 @@ Mode API mobile mengirim transisi Visit berurutan untuk Dokter terassign, lalu m
 | Tes FE-13 service baru | Dua tes memeriksa completion dengan dua versi resource, `confirmation: true`, pembacaan ulang stage/status, dan penolakan role, assignment, pembayaran, Visit stage, serta note non-final sebelum HTTP. Dua tes transisi berurutan ditambahkan pada checkpoint sebelumnya. |
 | `git diff --check` | Dijalankan setelah dokumentasi dan perubahan kode selesai. |
 | Runtime dan QA | API server hidup, Android build, emulator, Figma MCP, serta perangkat tidak digunakan. Sentuh, Back, keyboard, scroll, 390 × 844, layar kecil/font besar, dan QA visual masih harus diperiksa pada aplikasi/perangkat. FE-13/FE-25 belum selesai. |
+
+## FE-10/FE-25 — memulai chat terjadwal API BE-05 (19 November 2026)
+
+Mode API menampilkan aksi “Mulai konsultasi chat” hanya untuk Dokter terassign dan chat terjadwal dengan pembayaran berhasil. Aksi meminta konfirmasi eksplisit, mengirim versi Consultation serta `Idempotency-Key`, membaca ulang detail, dan hanya membuka chat setelah status server `in_progress`.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `cd apps/mobile && npm run check` | **Lulus**: typecheck, Expo lint, dan 273/273 tes domain/repository. Node memberi warning SQLite eksperimental dari suite lokal yang sudah ada. |
+| Dua tes service baru | Menguji role, assignment, tipe layanan, pembayaran, status, versi, serta muat ulang detail sebelum mengembalikan sukses. |
+| Integrasi/QA | Fake repository lokal; tidak memanggil API server hidup. Android build, emulator, Figma MCP, perangkat dan QA visual dilewati. Pada checkpoint ini accept/reject/proposal belum terhubung; accept/reject dan respons proposal dicatat di pemeriksaan berikutnya. |
+
+## FE-10/FE-25 — accept/reject dan respons proposal API BE-05 (19 November 2026)
+
+Mode API mobile menghubungkan penerimaan atau penolakan permintaan server (dengan alasan 3–1.000 karakter), serta keputusan Peternak pada satu proposal aktif. Accept dan proposal acceptance menunggu konfirmasi; semua mutasi mengirim versi dan key idempotensi, membaca ulang detail, dan menahan aksi setelah hasil jaringan tak pasti. API mengotorisasi role, assignment, verifikasi Dokter, slot, status, dan pembayaran.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `cd apps/mobile && npm run check` | **Lulus**: typecheck, Expo lint, dan 277/277 tes domain/repository. Node memberi warning SQLite eksperimental dari suite lokal yang sudah ada. |
+| Empat tes service baru | Memeriksa accept terjadwal dengan Visit, alasan reject yang dinormalisasi, consent proposal, reload versi/waktu server, serta penolakan pemilik/role/status tidak valid. |
+| Integrasi/QA | Fake repository lokal; tidak memanggil API server hidup. Pembuatan proposal Dokter serta pembacaan slot server dijelaskan pada pemeriksaan berikutnya. Android build, emulator, Figma MCP, perangkat dan QA visual dilewati. |
+
+## FE-10/FE-25 — proposal jadwal dari slot server BE-04/05 (19 November 2026)
+
+Dokter terassign dapat membuka slot server untuk 14 hari ke depan, dihitung dalam zona waktu pada availability Dokter. UI menampilkan rentang slot dan mengirim waktu yang dipilih bersama versi Consultation serta `Idempotency-Key`. Setelah POST, service membaca ulang proposal aktif dan status dari server. Peternak menerima atau menolak proposal lewat alur konfirmasi dan consent di atas.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `cd apps/mobile && npm run check` | **Lulus**: typecheck, Expo lint, dan 281/281 tes domain/repository. Node memberi warning SQLite eksperimental dari suite lokal yang sudah ada. |
+| Tes baru | Tiga tes slot memeriksa rentang tanggal 14 hari sesuai timezone Dokter, role/availability, pengurutan, dan penolakan slot duplikat/malformed. Satu tes service menguji proposal dengan expectedVersion dan pembacaan ulang proposal aktif. |
+| Integrasi/QA | Fake API repository; tidak menghubungi API hidup. Belum diuji pada perangkat, sentuh, Back, keyboard, layar kecil/font besar atau perbandingan visual. Android build/emulator/Figma MCP dilewati. Wiring follow-up API dan penerimaan end-to-end tetap terbuka. |
+
+## FE-10/FE-25 — detail aksi konsultasi dan zona waktu proposal (19 November 2026)
+
+Review wiring UI menemukan bahwa `Detail` belum dirender pada cabang daftar konsultasi server setelah penambahan modal aksi. Detail kini kembali tampil dengan entry point terima/tolak, start chat, proposal, respons proposal, Visit, catatan klinis, dan chat. Usulan Farmer menunggu zona waktu Dokter dari server; jika pembacaan gagal, waktu/keputusan tidak ditebak dan pengguna dapat memuat ulang. Daftar slot disortir sebagai instant absolut dan menolak waktu duplikat walau offset ISO berbeda.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `cd apps/mobile && npm run check` | **Lulus**: typecheck, Expo lint, kompilasi tes domain, dan 282/282 tes pada checkpoint sebelum pembatalan. Node mengeluarkan warning SQLite eksperimental dari suite lokal yang sudah ada. |
+| Tes zona waktu | Memeriksa timezone Farmer dari detail Vet, timezone Vet dari availability-nya sendiri, penolakan akun Vet lain, urutan absolut lintas offset ISO, dan duplikasi instant. |
+| `git diff --check` | **Lulus**. |
+| Integrasi/QA | Fake repository lokal; tidak menghubungi API hidup. Android build, emulator, Figma MCP dan perangkat tidak digunakan. Sentuh, Back, keyboard, scroll, 390 × 844, layar kecil/font besar dan visual tetap gate. Endpoint pembatalan API dan UI-nya dicatat pada checkpoint berikutnya. |
+
+## FE-10/BE-05 — pembatalan layanan API sebelum dimulai (19 November 2026)
+
+Route `POST /consultations/{id}/cancel` membatasi aksi ke Peternak pemilik dan status berbayar `requested`, `scheduled`, atau `reschedule_pending`. Reason 3–1.000 karakter, `expectedVersion`, key idempotensi, perubahan status, proposal `superseded`, `refund_needed`, dan action audit ditulis atomik. Kunjungan ditolak setelah Dokter mulai perjalanan/pemeriksaan; layanan `awaiting_payment` juga tidak dapat dibatalkan. Tidak ada proses refund uang.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `npm run check` di `apps/api` | **Lulus**: TypeScript dan Nest build. |
+| `npm run check` di `apps/mobile` | **Lulus**: typecheck, Expo lint, dan 285/285 tes domain/repository. Warning SQLite eksperimental dari suite lokal tetap muncul. |
+| `npm run api:contract` | **Lulus**: 10/10 tes; OpenAPI memuat route cancellation, header idempotensi, dan field `cancellationReason`. |
+| `db:migrate`, `db:seed`, `api:smoke` | **Lulus** pada cluster PostgreSQL 17 sementara di loopback. 20 migrasi diterapkan; smoke memeriksa cancellation bersama proposal aktif, retry paralel, owner/role, stale version, alasan tersimpan, layanan chat yang sudah dimulai, dan Visit `en_route`. Cluster dihentikan dan direktori sementara dihapus sesudahnya. |
+| Percobaan smoke awal | Dua percobaan awal tertahan oleh fixture: satu waktu usulan berbenturan dengan blokir smoke; percobaan berikut mengasumsikan array proposals ada pada action DTO. Slot dipindahkan ke waktu bebas dan assertion proposal mengambil detail GET; smoke akhir lulus. |
+| QA aplikasi | Android build, emulator, API/layanan produksi, Figma MCP, perangkat, dan transaksi nyata tidak digunakan. UI cancel dan proposal masih perlu diverifikasi pada perangkat; FE-10/FE-25 belum selesai. |
+
+## FE-22/FE-25 — detail konteks notifikasi server (19 November 2026)
+
+Inbox mode API menandai notifikasi dibaca melalui BE-14, lalu memuat resource yang ID dan tipenya sudah diotorisasi server: detail tindak lanjut, laporan perkembangan, atau pengingat BE-09. Tampilan laporan tidak membuka URL/lampiran privat tanpa akses media; pembacaan pertama oleh Dokter assigned mengisi `viewedAt`. Jika GET detail gagal, UI menawarkan retry GET tanpa mengulang mark-read. Endpoint pengambilan detail menegakkan owner/assignment dan menyembunyikan resource pihak lain dengan 404.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `cd apps/mobile && npm run check` | **Lulus**: typecheck, Expo lint tanpa warning proyek, dan 289/289 tes domain/repository. Tiga tes baru memeriksa resource menurut ID/jenis, role sebelum akses, dan ID respons yang cocok; tes adapter memeriksa tiga route GET serta penolakan timezone IANA yang tidak valid. Warning SQLite eksperimental dari suite lama tetap muncul. |
+| `cd apps/api && npm run check` | **Lulus**: TypeScript dan Nest build. |
+| `npm run api:contract` | **Lulus**: 10/10 tes; operasi baru terlindungi bearer dan muncul pada OpenAPI. |
+| `db:migrate`, `db:seed`, `api:smoke` | **Lulus** pada PostgreSQL 17 sementara, loopback port 55432, database baru; 20 migrasi dan fixture fiktif. Smoke memeriksa owner Farmer, Dokter assigned, outsider 404 untuk detail tindak lanjut/laporan/pengingat, serta `viewedAt` yang hanya berubah pada pembacaan Dokter. Cluster dihentikan dan direktori sementara dihapus. Percobaan smoke pertama menemukan urutan assertion lama yang mengharapkan laporan tetap belum dibaca sesudah request Dokter; assertion dipindah sebelum pembacaan Dokter lalu smoke penuh lulus. |
+| `git diff --check` | **Lulus** setelah kode dan dokumentasi diperbarui. |
+| QA aplikasi | Android build, emulator, API/provider produksi, Figma MCP, perangkat, dan transaksi nyata tidak digunakan. Sentuh, Back ketika detail sedang dimuat, keyboard, scroll, layar kecil/font besar, dua sesi, dan perbandingan visual masih gate FE-22/FE-24/FE-25. |

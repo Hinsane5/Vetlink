@@ -198,6 +198,10 @@ export class CareCoordinationService {
     return { items: rows.rows.map(followUpDto) };
   }
 
+  async getFollowUp(principal: AuthenticatedPrincipal, followUpId: string) {
+    return followUpDto(await this.followUpContext(this.database, principal, followUpId));
+  }
+
   async createFollowUp(principal: AuthenticatedPrincipal, consultationId: string, rawKey: string | undefined, input: CreateFollowUpDto) {
     const key = requiredKey(rawKey);
     const startsAt = dateInput(input.startsAt, 'startsAt');
@@ -305,6 +309,32 @@ export class CareCoordinationService {
     return { items: rows.rows.map(reportDto) };
   }
 
+  async getProgressReport(principal: AuthenticatedPrincipal, reportId: string) {
+    return this.database.transaction(async (client) => {
+      const column = principal.activeRole === 'vet' ? 'vet_id' : 'farmer_id';
+      const visible = await client.query<{ follow_up_id: string }>(
+        `SELECT follow_up_id FROM progress_reports WHERE id=$1 AND ${column}=$2 FOR UPDATE`,
+        [reportId, principal.userId],
+      );
+      const reportContext = visible.rows[0];
+      if (!reportContext) throw new NotFoundException(error('NOT_FOUND', 'Laporan perkembangan tidak ditemukan.'));
+      const followUp = await this.followUpContext(client, principal, reportContext.follow_up_id);
+      if (principal.activeRole === 'vet') {
+        await client.query('UPDATE progress_reports SET viewed_at=COALESCE(viewed_at,now()) WHERE id=$1 AND follow_up_id=$2', [reportId, followUp.id]);
+      }
+      const result = await client.query<ReportRow>(
+        `SELECT r.*,COALESCE(array_agg(a.attachment_id ORDER BY a.position) FILTER(WHERE a.attachment_id IS NOT NULL),'{}') AS attachment_ids
+         FROM progress_reports r LEFT JOIN progress_report_attachments a ON a.report_id=r.id
+         WHERE r.id=$1 AND r.follow_up_id=$2 AND r.farmer_id=$3 AND r.vet_id=$4 AND r.animal_id=$5
+         GROUP BY r.id`,
+        [reportId, followUp.id, followUp.farmer_id, followUp.vet_id, followUp.animal_id],
+      );
+      const report = result.rows[0];
+      if (!report) throw new NotFoundException(error('NOT_FOUND', 'Laporan perkembangan tidak ditemukan.'));
+      return reportDto(report);
+    });
+  }
+
   async createProgressReport(principal: AuthenticatedPrincipal, followUpId: string, rawKey: string | undefined, input: CreateProgressReportDto) {
     const key = requiredKey(rawKey);
     const text = normalizeText(input.text, 3, 2000, 'text');
@@ -366,6 +396,10 @@ export class CareCoordinationService {
       ? await this.database.query<ReminderRow>('SELECT * FROM reminders WHERE farmer_id=$1 ORDER BY due_at,id', [principal.userId])
       : await this.database.query<ReminderRow>('SELECT * FROM reminders WHERE vet_id=$1 ORDER BY due_at,id', [principal.userId]);
     return { items: rows.rows.map(reminderDto) };
+  }
+
+  async getReminder(principal: AuthenticatedPrincipal, reminderId: string) {
+    return reminderDto(await this.reminderForPrincipal(this.database, principal, reminderId));
   }
 
   async createReminder(principal: AuthenticatedPrincipal, rawKey: string | undefined, input: CreateReminderDto) {
@@ -576,9 +610,9 @@ export class CareCoordinationService {
     if (!allowed) ruleViolation('Slot tindak lanjut harus berada dalam jam kerja dokter.', 'OUTSIDE_VET_HOURS');
   }
 
-  private async reminderForPrincipal(client: PoolClient, principal: AuthenticatedPrincipal, reminderId: string): Promise<ReminderRow> {
+  private async reminderForPrincipal(db: DatabaseService | PoolClient, principal: AuthenticatedPrincipal, reminderId: string): Promise<ReminderRow> {
     const column = principal.activeRole === 'vet' ? 'vet_id' : 'farmer_id';
-    const result = await client.query<ReminderRow>(
+    const result = await this.query<ReminderRow>(db,
       `SELECT r.* FROM reminders r LEFT JOIN consultations c ON c.id=r.consultation_id
        WHERE r.id=$1 AND r.${column}=$2 AND (r.consultation_id IS NULL OR c.${principal.activeRole === 'vet' ? 'vet_id' : 'farmer_id'}=$2)`,
       [reminderId, principal.userId],

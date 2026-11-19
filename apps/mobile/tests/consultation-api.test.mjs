@@ -107,6 +107,33 @@ test('booking uses quote UUID and same key/payload for a caller-managed retry', 
   assert.deepEqual(JSON.parse(requests[1].init.body), JSON.parse(requests[0].init.body));
 });
 
+test('cancellation sends a trimmed reason, version, and stable idempotency key', async () => {
+  const requests = [];
+  const reason = 'Jadwal berubah.';
+  const api = apiClient(async (url, init) => {
+    requests.push({ url, init });
+    return response(200, {
+      operationId: ids.action,
+      replayed: false,
+      consultation: consultationFixture({ status: 'cancelled', cancellationReason: reason, refundStatus: 'refund_needed' }),
+    });
+  });
+  const repository = new HttpApiConsultationRepository(api);
+  const result = await repository.cancel(ids.consultation, {
+    idempotencyKey: 'consultation:cancel:op-1',
+    payload: { expectedVersion: 5, reason: '  Jadwal berubah.  ' },
+  });
+
+  assert.equal(result.consultation.status, 'cancelled');
+  assert.equal(result.consultation.cancellationReason, reason);
+  assert.equal(requests[0].url, `http://localhost:3000/v1/consultations/${ids.consultation}/cancel`);
+  assert.equal(requests[0].init.headers['Idempotency-Key'], 'consultation:cancel:op-1');
+  assert.deepEqual(JSON.parse(requests[0].init.body), { expectedVersion: 5, reason });
+  await assert.rejects(repository.cancel(ids.consultation, {
+    idempotencyKey: 'consultation:cancel:op-2', payload: { expectedVersion: 5, reason: '  ' },
+  }), { code: 'VALIDATION_FAILED' });
+});
+
 test('consultation list, detail, and visit preserve route-specific completion aliases', async () => {
   const requests = [];
   const listItem = listFixture();
@@ -340,6 +367,7 @@ function consultationFixture(overrides = {}) {
     visitAddressSnapshot: addressFixture(),
     completionAt: '2026-11-18T12:30:00.000Z',
     rejectionReason: null,
+    cancellationReason: null,
     refundStatus: 'none',
     reschedulePreviousStatus: null,
     version: 4,

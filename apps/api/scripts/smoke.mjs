@@ -226,6 +226,8 @@ try {
   assert.ok(openApi.paths['/v1/consultations']?.post);
   assert.ok(openApi.paths['/v1/consultations']?.get);
   assert.ok(openApi.paths['/v1/consultations/{consultationId}/accept']?.post);
+  assert.ok(openApi.paths['/v1/consultations/{consultationId}/cancel']?.post);
+  assert.ok(openApi.components.schemas.ConsultationResponseDto.properties.cancellationReason);
   assert.ok(openApi.paths['/v1/consultations/{consultationId}/schedule-proposals/{proposalId}/respond']?.post);
   assert.ok(openApi.paths['/v1/consultations/{consultationId}/visit/depart']?.post);
   assert.ok(openApi.paths['/v1/consultations/{consultationId}/complete']?.post);
@@ -233,11 +235,14 @@ try {
   assert.ok(openApi.paths['/v1/vets/{id}/reviews']?.get);
   assert.ok(openApi.paths['/v1/consultations/{consultationId}/follow-ups']?.get);
   assert.ok(openApi.paths['/v1/consultations/{consultationId}/follow-ups']?.post);
+  assert.ok(openApi.paths['/v1/follow-ups/{followUpId}']?.get);
   assert.ok(openApi.paths['/v1/follow-ups/{followUpId}']?.patch);
   assert.ok(openApi.paths['/v1/follow-ups/{followUpId}/progress-reports']?.get);
   assert.ok(openApi.paths['/v1/follow-ups/{followUpId}/progress-reports']?.post);
+  assert.ok(openApi.paths['/v1/progress-reports/{reportId}']?.get);
   assert.ok(openApi.paths['/v1/reminders']?.get);
   assert.ok(openApi.paths['/v1/reminders']?.post);
+  assert.ok(openApi.paths['/v1/reminders/{reminderId}']?.get);
   assert.ok(openApi.paths['/v1/reminders/{reminderId}']?.patch);
   assert.ok(openApi.paths['/v1/reminders/{reminderId}/complete']?.post);
   assert.ok(openApi.paths['/v1/me/notifications']?.get);
@@ -935,6 +940,44 @@ try {
       assert.equal(rejectedConsultation.refundStatus, 'refund_needed');
       assert.equal(rejectedConsultation.rejectionReason, 'Jadwal dokter berubah; silakan pilih dokter lain.');
 
+      const cancelStart = new Date(`${localDate}T14:00:00+07:00`).toISOString();
+      const cancelQuote = await addQuote(cancelStart, 'chat', 'Jadwal Peternak berubah; pembatalan fiktif');
+      const cancelBooking = await submitQuote(cancelQuote.quote);
+      assert.equal(cancelBooking.response.status, 201);
+      const cancelConsultationId = (await cancelBooking.response.json()).consultation.id;
+      consultationIds.push(cancelConsultationId);
+      await markPaid(cancelConsultationId, 125000);
+      const cancelRequested = await getConsultation(cancelConsultationId);
+      const cancelProposal = await sendJson(healthy.baseUrl, `/v1/consultations/${cancelConsultationId}/schedule-proposals`, vet.accessToken, 'POST',
+        { expectedVersion: cancelRequested.version, startsAt: new Date(`${localDate}T16:00:00+07:00`).toISOString() },
+        { 'idempotency-key': `be05-cancel-proposal-${randomUUID()}` });
+      assert.equal(cancelProposal.status, 200, await cancelProposal.clone().text());
+      const pendingCancel = (await cancelProposal.json()).consultation;
+      assert.equal(pendingCancel.status, 'reschedule_pending');
+      const cancelKey = `be05-cancel-${randomUUID()}`;
+      const cancelAttempts = await Promise.all([
+        sendJson(healthy.baseUrl, `/v1/consultations/${cancelConsultationId}/cancel`, farmer.accessToken, 'POST',
+          { expectedVersion: pendingCancel.version, reason: 'Jadwal Peternak berubah.' }, { 'idempotency-key': cancelKey }),
+        sendJson(healthy.baseUrl, `/v1/consultations/${cancelConsultationId}/cancel`, farmer.accessToken, 'POST',
+          { expectedVersion: pendingCancel.version, reason: 'Jadwal Peternak berubah.' }, { 'idempotency-key': cancelKey }),
+      ]);
+      assert.deepEqual(cancelAttempts.map((response) => response.status), [200, 200]);
+      const cancelResults = await Promise.all(cancelAttempts.map((response) => response.json()));
+      assert.equal(cancelResults[0].operationId, cancelResults[1].operationId);
+      assert.equal(cancelResults.filter((result) => result.replayed).length, 1);
+      assert.equal(cancelResults[0].consultation.status, 'cancelled');
+      assert.equal(cancelResults[0].consultation.cancellationReason, 'Jadwal Peternak berubah.');
+      assert.equal(cancelResults[0].consultation.refundStatus, 'refund_needed');
+      const cancelledDetailResponse = await sendJson(healthy.baseUrl, `/v1/consultations/${cancelConsultationId}`, farmer.accessToken, 'GET');
+      assert.equal(cancelledDetailResponse.status, 200);
+      assert.equal((await cancelledDetailResponse.json()).proposals[0].status, 'superseded');
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/consultations/${cancelConsultationId}/cancel`, vet.accessToken, 'POST',
+        { expectedVersion: cancelResults[0].consultation.version, reason: 'Alasan dokter' }, { 'idempotency-key': `be05-cancel-vet-${randomUUID()}` })).status, 403);
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/consultations/${cancelConsultationId}/cancel`, farmer.accessToken, 'POST',
+        { expectedVersion: pendingCancel.version, reason: 'Jadwal Peternak berubah.' }, { 'idempotency-key': `be05-cancel-stale-${randomUUID()}` })).status, 409);
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/consultations/${chatConsultationId}/cancel`, farmer.accessToken, 'POST',
+        { expectedVersion: 4, reason: 'Layanan sudah dimulai.' }, { 'idempotency-key': `be05-cancel-started-${randomUUID()}` })).status, 409);
+
       const unverifiedConsultationId = randomUUID();
       consultationIds.push(unverifiedConsultationId);
       const unverifiedStart = new Date(`${localDate}T17:00:00+07:00`).toISOString();
@@ -1025,6 +1068,9 @@ try {
       assert.equal(depart.status, 200, await depart.clone().text());
       const departed = await depart.json();
       assert.equal(departed.visit.stage, 'en_route');
+      const cancelDuringVisit = await sendJson(healthy.baseUrl, `/v1/consultations/${visitConsultationId}/cancel`, farmer.accessToken, 'POST',
+        { expectedVersion: departed.consultation.version, reason: 'Kunjungan sudah berjalan.' }, { 'idempotency-key': `be05-cancel-en-route-${randomUUID()}` });
+      assert.equal(cancelDuringVisit.status, 409);
       const arrive = await sendJson(healthy.baseUrl, `/v1/consultations/${visitConsultationId}/visit/arrive`, vet.accessToken, 'POST',
         { expectedVersion: departed.consultation.version, expectedVisitVersion: departed.visit.version }, { 'idempotency-key': `be05-arrive-${randomUUID()}` });
       assert.equal(arrive.status, 200);
@@ -1580,6 +1626,10 @@ try {
       assert.equal((await sendJson(healthy.baseUrl, followUpsPath, outsider.accessToken, 'GET')).status, 404);
       const followUpPage = await sendJson(healthy.baseUrl, followUpsPath, vet.accessToken, 'GET');
       assert.ok((await followUpPage.json()).items.some((item) => item.id === followUp.id));
+      const followUpById = await sendJson(healthy.baseUrl, `/v1/follow-ups/${followUp.id}`, farmer.accessToken, 'GET');
+      assert.equal(followUpById.status, 200);
+      assert.equal((await followUpById.json()).id, followUp.id);
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/follow-ups/${followUp.id}`, outsider.accessToken, 'GET')).status, 404);
       const slotsAfterFollowUp = await (await sendJson(healthy.baseUrl,
         `/v1/vets/${vet.user.id}/slots?dateFrom=${localDate}&dateTo=${localDate}&service=chat`, farmer.accessToken, 'GET')).json();
       assert.ok(!slotsAfterFollowUp.some((slot) => new Date(slot.startsAt).toISOString() === followUpStart));
@@ -1603,6 +1653,10 @@ try {
       assert.equal(report.farmerId, farmer.user.id);
       assert.equal(report.vetId, vet.user.id);
       assert.equal(report.viewedAt, null);
+      const farmerReportById = await sendJson(healthy.baseUrl, `/v1/progress-reports/${report.id}`, farmer.accessToken, 'GET');
+      assert.equal(farmerReportById.status, 200);
+      assert.equal((await farmerReportById.json()).viewedAt, null);
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/progress-reports/${report.id}`, outsider.accessToken, 'GET')).status, 404);
       const reportReplay = await sendJson(healthy.baseUrl, progressReportPath, farmer.accessToken, 'POST', reportBody, { 'idempotency-key': reportKey });
       assert.equal((await reportReplay.json()).id, report.id);
       assert.equal((await sendJson(healthy.baseUrl, progressReportPath, farmer.accessToken, 'POST', {
@@ -1612,6 +1666,9 @@ try {
       assert.equal((await sendJson(healthy.baseUrl, progressReportPath, outsider.accessToken, 'GET')).status, 404);
       const farmerReports = await (await sendJson(healthy.baseUrl, progressReportPath, farmer.accessToken, 'GET')).json();
       assert.equal(farmerReports.items.find((item) => item.id === report.id).viewedAt, null);
+      const vetReportById = await sendJson(healthy.baseUrl, `/v1/progress-reports/${report.id}`, vet.accessToken, 'GET');
+      assert.equal(vetReportById.status, 200);
+      assert.ok((await vetReportById.json()).viewedAt);
       const vetReports = await (await sendJson(healthy.baseUrl, progressReportPath, vet.accessToken, 'GET')).json();
       assert.ok(vetReports.items.find((item) => item.id === report.id).viewedAt);
       assert.equal((await database.query('SELECT status FROM follow_ups WHERE id=$1', [followUp.id])).rows[0].status, 'scheduled');
@@ -1676,6 +1733,12 @@ try {
       }, { 'idempotency-key': reminderKey })).status, 409);
       const reminderRead = await sendJson(healthy.baseUrl, '/v1/reminders', farmer.accessToken, 'GET');
       assert.ok((await reminderRead.json()).items.some((item) => item.id === reminder.id));
+      const farmerReminderById = await sendJson(healthy.baseUrl, `/v1/reminders/${reminder.id}`, farmer.accessToken, 'GET');
+      assert.equal(farmerReminderById.status, 200);
+      assert.equal((await farmerReminderById.json()).id, reminder.id);
+      const vetReminderById = await sendJson(healthy.baseUrl, `/v1/reminders/${reminder.id}`, vet.accessToken, 'GET');
+      assert.equal(vetReminderById.status, 200);
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/reminders/${reminder.id}`, outsider.accessToken, 'GET')).status, 404);
       const wrongOwnerCompletion = await sendJson(healthy.baseUrl, `/v1/reminders/${reminder.id}/complete`, outsider.accessToken, 'POST',
         { confirmation: true }, { 'idempotency-key': `be09-outsider-care-${randomUUID()}` });
       assert.equal(wrongOwnerCompletion.status, 404);

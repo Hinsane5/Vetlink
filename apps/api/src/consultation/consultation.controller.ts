@@ -5,6 +5,7 @@ import { AuthenticatedUser, RequireRoles } from '../auth/auth.decorators.js';
 import type { AuthenticatedPrincipal } from '../auth/auth.types.js';
 import {
   CompleteConsultationDto,
+  CancelConsultationDto,
   ConsultationListQueryDto,
   CreateConsultationDto,
   CreateConsultationQuoteDto,
@@ -99,6 +100,19 @@ export class ConsultationController {
     @Body() input: RejectConsultationDto,
   ) {
     return this.service.reject(principal, id, key, input);
+  }
+
+  @Post('consultations/:consultationId/cancel')
+  @RequireRoles('farmer')
+  @HttpCode(200)
+  @ApiOkResponse({ type: ConsultationActionResponseDto, description: 'Peternak membatalkan layanan sebelum dimulai; pembayaran sukses hanya ditandai refund_needed dan tidak ditransfer.' })
+  cancel(
+    @AuthenticatedUser() principal: AuthenticatedPrincipal,
+    @Param('consultationId', ParseUUIDPipe) id: string,
+    @Headers('idempotency-key') key: string | undefined,
+    @Body() input: CancelConsultationDto,
+  ) {
+    return this.service.cancel(principal, id, key, input);
   }
 
   @Post('consultations/:consultationId/schedule-proposals')

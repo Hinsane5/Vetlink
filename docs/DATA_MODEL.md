@@ -29,7 +29,7 @@ Entitas memiliki `id`, `createdAt`, `updatedAt`; entitas mutable memiliki `versi
 | HealthEvent | animalId, kind(examination/disease/vaccine/medication/care), occurredAt, description, actorId, clinicalNoteId/reminderId/attachment[] optional, provenance(farmer_report/clinical_note/reminder), sourceKey unik untuk proyeksi dan laporan idempotent |
 
 BE-03 memetakan `health_events` pada PostgreSQL dengan `source_key` unik per provenance dan `clinical_note_id` unik. Timeline mengambil laporan non-klinis dari event dan catatan klinis langsung dari note yang final; draft tidak pernah diserialisasi dan proyeksi note tidak ditampilkan dua kali. Daftar Dokter dibentuk dari join konsultasi assigned, sedangkan detail/timeline setiap ID menjalankan pemeriksaan scope yang sama. CRUD tulis ternak terbatas ke pemilik Peternak; perubahan memakai version dan penghapusan dibatasi oleh relasi riwayat.
-| Consultation | displayCode, farmerId, vetId, animalId, farmId/`contextId=farmId` pada mobile lokal, quoteId optional pada backend, type, complaint, attachmentIds[], startsAt/endsAt, status, fee/commission snapshots, visitAddressSnapshot optional, rejectionReason, refundStatus, completionAt, version |
+| Consultation | displayCode, farmerId, vetId, animalId, farmId/`contextId=farmId` pada mobile lokal, quoteId optional pada backend, type, complaint, attachmentIds[], startsAt/endsAt, status, fee/commission snapshots, visitAddressSnapshot optional, rejectionReason, cancellationReason, refundStatus, completionAt, version |
 | ScheduleProposal | consultationId, proposedByVetId, startsAt/endsAt, reason, previousStatus, status(pending/accepted/declined/superseded), respondedAt/respondedBy, version |
 | ConsultationDraft | ownerId Dokter, contextId consultationId, input(reason/startsAt/endsAt), status(draft/discarded/submitted), version |
 | ConsultationAction | actorId, contextId consultationId, role, action, actionScope, operationKey unik, fingerprint, fromStatus/toStatus, fromVisitStage/toVisitStage, details; append-only |
@@ -88,9 +88,9 @@ Payload JSON memberi bentuk fleksibel bagi entitas yang belum memiliki layar/use
 | reschedule_pending | Peternak menolak | Kembali previousStatus; jadwal lama tidak hilang |
 | scheduled | Dokter mulai chat, atau Visit mulai pemeriksaan | in_progress |
 | in_progress | Note final + explicit completion confirmation | completed |
-| requested/scheduled | Pembatalan diizinkan policy; simpan alasan | cancelled |
+| requested/scheduled | Peternak membatalkan sebelum layanan dimulai dengan alasan dan versi terbaru | cancelled |
 
-Completed/rejected/cancelled adalah terminal pada baseline. Tidak ada edit langsung enum oleh layar. Request yang sudah dibatalkan tidak dapat diterima walau layar dokter belum refresh. Kebijakan pembatalan selama perjalanan/pemeriksaan dan refund produksi masih terbuka; jangan menambahkan transisi tersebut tanpa policy.
+Completed/rejected/cancelled adalah terminal pada baseline. Tidak ada edit langsung enum oleh layar. Request yang sudah dibatalkan tidak dapat diterima walau layar dokter belum refresh. Pembatalan `awaiting_payment`, selama perjalanan/pemeriksaan, dan refund produksi belum disepakati; jangan menambahkan transisi tersebut tanpa policy.
 
 Filter Terjadwal mencakup scheduled; Berlangsung mencakup in_progress; Selesai completed; Dibatalkan cancelled. Request/rejected/reschedule_pending punya daftar/status sendiri; jangan menyamarkan rejected sebagai completed. Permintaan terbayar yang rejected/cancelled menandai kebutuhan refund sebagai data terpisah (`refund_needed`), tidak mengklaim uang sudah kembali.
 

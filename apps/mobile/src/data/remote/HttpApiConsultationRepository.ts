@@ -13,6 +13,7 @@ import type {
   ApiConsultationVisitActionResult,
   ApiConsultationVisitAddressSnapshot,
   ConsultationCreateInput,
+  ConsultationCancelInput,
   ConsultationCompleteInput,
   ConsultationListQuery,
   ConsultationQuoteInput,
@@ -84,10 +85,22 @@ export class HttpApiConsultationRepository implements ApiConsultationRepository 
   async reject(id: string, operation: IdempotentApiOperation<ConsultationRejectInput>): Promise<ApiConsultationActionResult> {
     return this.postAction(id, 'reject', operation, (input) => {
       const body = versionPayload(input);
-      if (typeof input.reason !== 'string' || !input.reason.trim() || input.reason.length > 500) {
-        throw invalidQuery('Alasan penolakan harus berisi 1 sampai 500 karakter.');
+      const reason = typeof input.reason === 'string' ? input.reason.trim() : '';
+      if (reason.length < 3 || reason.length > 1000) {
+        throw invalidQuery('Alasan penolakan harus berisi 3 sampai 1.000 karakter.');
       }
-      return { ...body, reason: input.reason };
+      return { ...body, reason };
+    });
+  }
+
+  async cancel(id: string, operation: IdempotentApiOperation<ConsultationCancelInput>): Promise<ApiConsultationActionResult> {
+    return this.postAction(id, 'cancel', operation, (input) => {
+      const body = versionPayload(input);
+      const reason = typeof input.reason === 'string' ? input.reason.trim() : '';
+      if (reason.length < 3 || reason.length > 1000) {
+        throw invalidQuery('Alasan pembatalan harus berisi 3 sampai 1.000 karakter.');
+      }
+      return { ...body, reason };
     });
   }
 
@@ -303,7 +316,8 @@ export function parseApiConsultationRecord(value: unknown): ApiConsultationRecor
     || !bigintMatches(value.feeIdr, value.feeAmountIdr)
     || !bigintMatches(value.commissionIdr, value.commissionAmountIdr)
     || !(value.completionAt === null || isIsoTimestampWithTimezone(value.completionAt))
-    || !(value.rejectionReason === null || isNonEmptyText(value.rejectionReason, 500))
+    || !(value.rejectionReason === null || isNonEmptyText(value.rejectionReason, 1000))
+    || !(value.cancellationReason === null || isNonEmptyText(value.cancellationReason, 1000))
     || !isOneOf(value.refundStatus, ['none', 'refund_needed'])
     || !(value.reschedulePreviousStatus === null || isOneOf(value.reschedulePreviousStatus, ['requested', 'scheduled']))
     || !isPositiveSafeInteger(value.version)
@@ -339,6 +353,7 @@ export function parseApiConsultationRecord(value: unknown): ApiConsultationRecor
     visitAddressSnapshot: address,
     completionAt: value.completionAt as string | null,
     rejectionReason: value.rejectionReason as string | null,
+    cancellationReason: value.cancellationReason as string | null,
     refundStatus: value.refundStatus as 'none' | 'refund_needed',
     reschedulePreviousStatus: value.reschedulePreviousStatus as 'requested' | 'scheduled' | null,
     version: value.version,

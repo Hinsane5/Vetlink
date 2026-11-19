@@ -13,10 +13,12 @@ import { ServerLivestockService } from '../../application/ServerLivestockService
 import { ServerLivestockHealthService } from '../../application/ServerLivestockHealthService';
 import { ServerPatientService } from '../../application/ServerPatientService';
 import { ServerVetDirectoryService } from '../../application/ServerVetDirectoryService';
+import { ServerVetScheduleService } from '../../application/ServerVetScheduleService';
 import { ServerConsultationService } from '../../application/ServerConsultationService';
 import { ServerClinicalService } from '../../application/ServerClinicalService';
 import { ServerBookingService } from '../../application/ServerBookingService';
 import { ServerNotificationsService } from '../../application/ServerNotificationsService';
+import { ServerNotificationContextService } from '../../application/ServerNotificationContextService';
 import { ServerProfileService } from '../../application/ServerProfileService';
 import { ServerChatService } from '../../application/ServerChatService';
 import { ServerVetVerificationService } from '../../application/ServerVetVerificationService';
@@ -41,20 +43,23 @@ type Screen = 'loading' | 'roles' | 'login' | 'register' | 'home';
 
 /** Server mode never opens the local fixture store or writes to SQLite. */
 export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
-  const { auth, farms, livestock, livestockHealth, patients, vets, consultations, clinical, booking, notifications, profiles, chat, vetVerification } = useMemo(() => {
+  const { auth, farms, livestock, livestockHealth, patients, vets, vetSchedule, consultations, clinical, booking, notifications, notificationContext, profiles, chat, vetVerification } = useMemo(() => {
     const adapters = createApiAdapters(baseUrl);
     const livestock = new ServerLivestockService(adapters.farms, adapters.livestock, adapters.livestockWrites);
+    const vets = new ServerVetDirectoryService(adapters.vets);
     return {
       auth: adapters.auth,
       farms: new ServerFarmService(adapters.farms, adapters.farmWrites),
       livestock,
       livestockHealth: new ServerLivestockHealthService(livestock, adapters.livestockHealth, adapters.livestockHealth, new ExpoPendingCareReportStore(), () => Crypto.randomUUID()),
       patients: new ServerPatientService(adapters.patients, adapters.livestockHealth),
-      vets: new ServerVetDirectoryService(adapters.vets),
+      vets,
+      vetSchedule: new ServerVetScheduleService(adapters.vetSchedule, vets),
       consultations: new ServerConsultationService(adapters.consultations, () => Crypto.randomUUID()),
       clinical: new ServerClinicalService(adapters.clinical),
       booking: new ServerBookingService(adapters.farms, adapters.livestock, adapters.vets, adapters.consultations, new ExpoPendingServerBookingStore()),
       notifications: new ServerNotificationsService(adapters.notifications),
+      notificationContext: new ServerNotificationContextService(adapters.careCoordination),
       profiles: new ServerProfileService(adapters.profiles),
       chat: new ServerChatService(adapters.chat, new ExpoServerChatStateStore(), () => Crypto.randomUUID(), adapters.media, new ExpoServerChatMediaStore()),
       vetVerification: new ServerVetVerificationService(adapters.profiles, new ExpoServerVetVerificationStore(), () => Crypto.randomUUID()),
@@ -284,7 +289,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
         </>}
         {screen === 'home' && session && <>
           {profileOpen ? <ServerProfileSection service={profiles} verificationService={vetVerification} role={session.activeRole} userId={session.userId} onExit={() => setProfileOpen(false)} onNameSaved={(displayName) => setSession((current) => current ? { ...current, displayName } : current)} backHandlerRef={profileBackHandler} />
-            : notificationsOpen ? <ServerNotificationsSection service={notifications} role={session.activeRole} onExit={() => setNotificationsOpen(false)} backHandlerRef={notificationsBackHandler} /> : <>
+            : notificationsOpen ? <ServerNotificationsSection service={notifications} contextService={notificationContext} role={session.activeRole} onExit={() => setNotificationsOpen(false)} backHandlerRef={notificationsBackHandler} /> : <>
           <Text style={styles.heading}>Akun {session.activeRole === 'farmer' ? 'Peternak' : 'Dokter Hewan'}</Text>
           <Text style={styles.description}>{session.displayName}{'\n'}{session.email}</Text>
           <Button label="Kotak Masuk & Preferensi Notifikasi" role={session.activeRole} variant="secondary" onPress={() => setNotificationsOpen(true)} />
@@ -307,7 +312,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
           </>}
           {session.activeRole === 'vet' && <ServerPatientsSection service={patients} backHandlerRef={patientBackHandler} />}
           {session.activeRole === 'farmer' && <ServerVetDirectorySection service={vets} bookingService={booking} livestockService={livestock} farms={farmList} userId={session.userId} backHandlerRef={directoryBackHandler} />}
-          <ServerConsultationSection key={session.activeRole} service={consultations} clinicalService={clinical} chatService={chat} role={session.activeRole} userId={session.userId} backHandlerRef={consultationBackHandler} />
+          <ServerConsultationSection key={session.activeRole} service={consultations} clinicalService={clinical} chatService={chat} scheduleService={vetSchedule} role={session.activeRole} userId={session.userId} backHandlerRef={consultationBackHandler} />
           {session.roles.length > 1 && session.roles.map((availableRole) => <Button key={availableRole} label={`Ganti Peran: ${availableRole === 'farmer' ? 'Peternak' : 'Dokter Hewan'}`} role={availableRole} variant="secondary" disabled={busy || availableRole === session.activeRole} onPress={() => switchRole(availableRole)} />)}
           <Button label="Keluar" role={session.activeRole} variant="secondary" disabled={busy} onPress={() => setLogoutVisible(true)} />
           </>}

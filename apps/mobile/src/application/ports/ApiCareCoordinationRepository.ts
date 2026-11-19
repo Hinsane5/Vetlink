@@ -69,11 +69,14 @@ export interface CareApiOperation<T> {
 
 export interface ApiCareCoordinationRepository {
   listFollowUps(consultationId: string): Promise<ApiFollowUp[]>;
+  getFollowUp(followUpId: string): Promise<ApiFollowUp>;
   createFollowUp(consultationId: string, operation: CareApiOperation<{ startsAt: string; endsAt: string; reason: string }>): Promise<ApiFollowUp>;
   cancelFollowUp(followUpId: string, operation: CareApiOperation<{ expectedVersion: number }>): Promise<ApiFollowUp>;
   listProgressReports(followUpId: string): Promise<ApiProgressReport[]>;
+  getProgressReport(reportId: string): Promise<ApiProgressReport>;
   createProgressReport(followUpId: string, operation: CareApiOperation<{ text: string; attachmentIds?: string[] }>): Promise<ApiProgressReport>;
   listReminders(): Promise<ApiReminder[]>;
+  getReminder(reminderId: string): Promise<ApiReminder>;
   createReminder(operation: CareApiOperation<{ animalId?: string; consultationId?: string; followUpId?: string; kind: 'care' | 'follow_up'; dueAt: string; instructions: string }>): Promise<ApiReminder>;
   retryReminderDelivery(reminderId: string, idempotencyKey: string): Promise<ApiReminder>;
   completeCare(reminderId: string, operation: CareApiOperation<{ confirmation: true }>): Promise<ApiCareCompletion>;

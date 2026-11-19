@@ -18,7 +18,11 @@ export class ExpectedVersionDto {
 }
 
 export class RejectConsultationDto extends ExpectedVersionDto {
-  @IsString() @MinLength(1) @MaxLength(500) reason!: string;
+  @IsString() @MinLength(3) @MaxLength(1000) reason!: string;
+}
+
+export class CancelConsultationDto extends ExpectedVersionDto {
+  @IsString() @MinLength(3) @MaxLength(1000) reason!: string;
 }
 
 export class ScheduleProposalDto extends ExpectedVersionDto {

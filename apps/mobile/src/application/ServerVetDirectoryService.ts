@@ -41,6 +41,12 @@ export class ServerVetDirectoryService {
     return this.directory.getSlots(vetId, { service, dateFrom, dateTo });
   }
 
+  async getOwnProposalSlots(role: AccountRole, userId: string, service: DirectoryServiceType, dateFrom: string, dateTo: string): Promise<ApiVetSlot[]> {
+    if (role !== 'vet') throw new DomainError('FORBIDDEN', 'Slot usulan hanya dapat dibaca oleh Dokter.');
+    if (service !== 'chat' && service !== 'visit') throw new DomainError('VALIDATION_FAILED', 'Jenis layanan Dokter tidak tersedia.');
+    return this.directory.getSlots(userId, { service, dateFrom, dateTo });
+  }
+
   private requireFarmer(role: AccountRole): void {
     if (role !== 'farmer') throw new DomainError('FORBIDDEN', 'Direktori layanan hanya tersedia untuk Peternak.');
   }

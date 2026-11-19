@@ -13,6 +13,13 @@ export class HttpApiCareCoordinationRepository implements ApiCareCoordinationRep
     return value.items.map((item: unknown) => parseFollowUp(item, consultationId));
   }
 
+  async getFollowUp(followUpId: string): Promise<ApiFollowUp> {
+    const id = resourceId(followUpId);
+    const result = parseFollowUp(await this.api.request<unknown>(`/v1/follow-ups/${id}`));
+    if (result.id !== followUpId) throw invalidResponse('Tindak lanjut server tidak sesuai ID yang diminta.');
+    return result;
+  }
+
   async createFollowUp(consultationId: string, operation: CareApiOperation<{ startsAt: string; endsAt: string; reason: string }>): Promise<ApiFollowUp> {
     const id = resourceId(consultationId);
     const { key, payload } = validateOperation(operation);
@@ -46,6 +53,13 @@ export class HttpApiCareCoordinationRepository implements ApiCareCoordinationRep
     return value.items.map((item: unknown) => parseReport(item, followUpId));
   }
 
+  async getProgressReport(reportId: string): Promise<ApiProgressReport> {
+    const id = resourceId(reportId);
+    const result = parseReport(await this.api.request<unknown>(`/v1/progress-reports/${id}`));
+    if (result.id !== reportId) throw invalidResponse('Laporan perkembangan server tidak sesuai ID yang diminta.');
+    return result;
+  }
+
   async createProgressReport(followUpId: string, operation: CareApiOperation<{ text: string; attachmentIds?: string[] }>): Promise<ApiProgressReport> {
     const id = resourceId(followUpId);
     const { key, payload } = validateOperation(operation);
@@ -67,6 +81,13 @@ export class HttpApiCareCoordinationRepository implements ApiCareCoordinationRep
     const value = await this.api.request<unknown>('/v1/reminders');
     if (!isRecord(value) || !Array.isArray(value.items)) throw invalidResponse('Daftar pengingat tidak sesuai kontrak BE-09.');
     return value.items.map((item: unknown) => parseReminder(item));
+  }
+
+  async getReminder(reminderId: string): Promise<ApiReminder> {
+    const id = resourceId(reminderId);
+    const result = parseReminder(await this.api.request<unknown>(`/v1/reminders/${id}`));
+    if (result.id !== reminderId) throw invalidResponse('Pengingat server tidak sesuai ID yang diminta.');
+    return result;
   }
 
   async createReminder(operation: CareApiOperation<{ animalId?: string; consultationId?: string; followUpId?: string; kind: 'care' | 'follow_up'; dueAt: string; instructions: string }>): Promise<ApiReminder> {
@@ -150,7 +171,7 @@ function parseFollowUp(value: unknown, consultationId?: string, operation = fals
     || !isUuid(value.farmerId) || !isUuid(value.vetId) || !isUuid(value.animalId)
     || !isIsoTimestampWithTimezone(value.startsAt) || !isIsoTimestampWithTimezone(value.endsAt)
     || Date.parse(value.startsAt) >= Date.parse(value.endsAt)
-    || !isNonEmptyText(value.timezone, 80) || value.kind !== 'recheck'
+    || !isNonEmptyText(value.timezone, 80) || !isIanaTimezone(value.timezone) || value.kind !== 'recheck'
     || (value.status !== 'scheduled' && value.status !== 'completed' && value.status !== 'cancelled')
     || !isNonEmptyText(value.reason, 1000)
     || !(value.followUpConsultationId === null || isUuid(value.followUpConsultationId))
@@ -166,9 +187,18 @@ function parseFollowUp(value: unknown, consultationId?: string, operation = fals
     ...parseOperation(value, operation) };
 }
 
-function parseReport(value: unknown, followUpId: string, operation = false): ApiProgressReport {
+function isIanaTimezone(value: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function parseReport(value: unknown, followUpId?: string, operation = false): ApiProgressReport {
   if (!isRecord(value) || !isUuid(value.id) || !isUuid(value.consultationId)
-    || value.followUpId !== followUpId || !isUuid(value.farmerId)
+    || !isUuid(value.followUpId) || (followUpId !== undefined && value.followUpId !== followUpId) || !isUuid(value.farmerId)
     || !isUuid(value.vetId) || !isUuid(value.animalId)
     || !isNonEmptyText(value.text, 2000) || !Array.isArray(value.attachmentIds)
     || value.attachmentIds.length > 5 || !value.attachmentIds.every(isUuid)
@@ -176,7 +206,7 @@ function parseReport(value: unknown, followUpId: string, operation = false): Api
     || !(value.viewedAt === null || isIsoTimestampWithTimezone(value.viewedAt))) {
     throw invalidResponse('Laporan perkembangan tidak sesuai kontrak BE-09.');
   }
-  return { id: value.id, consultationId: value.consultationId, followUpId,
+  return { id: value.id, consultationId: value.consultationId, followUpId: value.followUpId,
     farmerId: value.farmerId, vetId: value.vetId, animalId: value.animalId,
     text: value.text, attachmentIds: value.attachmentIds, submittedAt: value.submittedAt,
     viewedAt: value.viewedAt as string | null, ...parseOperation(value, operation) };

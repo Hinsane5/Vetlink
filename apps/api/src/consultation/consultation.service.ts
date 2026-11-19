@@ -24,6 +24,7 @@ import type { ConsultationPaymentSucceededPort } from './consultation-payment.po
 import { CONSULTATION_PAYMENT_SUCCEEDED } from './consultation-payment.port.js';
 import type {
   CompleteConsultationDto,
+  CancelConsultationDto,
   CreateConsultationDto,
   CreateConsultationQuoteDto,
   ConsultationListQueryDto,
@@ -53,6 +54,7 @@ type Context = {
   completion_at: Date | null;
   version: number;
   rejection_reason: string | null;
+  cancellation_reason: string | null;
   refund_status: 'none' | 'refund_needed';
   reschedule_previous_status: 'requested' | 'scheduled' | null;
   verification_status: string;
@@ -337,7 +339,7 @@ export class ConsultationService implements ConsultationPaymentSucceededPort {
     this.vet(principal);
     const idempotencyKey = this.requireKey(key);
     const reason = input.reason.trim();
-    if (!reason) validation('reason', 'Alasan penolakan wajib diisi.');
+    if (reason.length < 3 || reason.length > 1000) validation('reason', 'Alasan penolakan harus berisi 3–1.000 karakter.');
     const scope = `consultation:${consultationId}:reject`;
     const fingerprint = sha256({ consultationId, expectedVersion: input.expectedVersion, reason });
     return this.database.transaction(async (client) => {
@@ -348,10 +350,52 @@ export class ConsultationService implements ConsultationPaymentSucceededPort {
       if (context.status !== 'requested') this.statusConflict('Hanya permintaan aktif yang dapat ditolak.');
       await this.assertPaid(client, context);
       await client.query(
-        `UPDATE consultations SET status='rejected',rejection_reason=$2,refund_status='refund_needed',
+         `UPDATE consultations SET status='rejected',rejection_reason=$2,refund_status='refund_needed',
           updated_at=now(),version=version+1 WHERE id=$1`, [context.id, reason]);
       const action = await this.recordAction(client, this.actionInput(principal, context, 'RequestRejected', scope, idempotencyKey, fingerprint, {
         fromStatus: 'requested', toStatus: 'rejected', details: { reason, refundStatus: 'refund_needed' },
+      }));
+      return { operationId: action.id, replayed: false, consultation: await this.detailRow(client, principal, context.id) };
+    });
+  }
+
+  async cancel(principal: AuthenticatedPrincipal, consultationId: string, key: string | undefined, input: CancelConsultationDto) {
+    this.farmer(principal);
+    const idempotencyKey = this.requireKey(key);
+    const reason = input.reason.trim();
+    if (reason.length < 3 || reason.length > 1000) validation('reason', 'Alasan pembatalan harus berisi 3–1.000 karakter.');
+    const scope = `consultation:${consultationId}:cancel`;
+    const fingerprint = sha256({ consultationId, expectedVersion: input.expectedVersion, reason });
+    return this.database.transaction(async (client) => {
+      const context = await this.context(principal, consultationId, client, true);
+      const replay = await this.replay(client, principal, context, scope, idempotencyKey, fingerprint);
+      if (replay) return replay;
+      await this.assertVersion(context, input.expectedVersion);
+      if (!['requested', 'scheduled', 'reschedule_pending'].includes(context.status)) {
+        this.statusConflict('Layanan ini sudah tidak dapat dibatalkan.');
+      }
+      await this.assertPaid(client, context);
+      if (context.service_type === 'visit') {
+        const visit = await client.query<{ stage: string }>(
+          'SELECT stage FROM consultation_visits WHERE consultation_id=$1 FOR UPDATE', [context.id]);
+        const visitMustExist = context.status === 'scheduled'
+          || (context.status === 'reschedule_pending' && context.reschedule_previous_status === 'scheduled');
+        if ((visitMustExist && !visit.rows[0]) || (visit.rows[0] && visit.rows[0].stage !== 'scheduled')) {
+          this.statusConflict('Kunjungan tidak dapat dibatalkan setelah Dokter mulai perjalanan atau pemeriksaan.');
+        }
+      }
+      await client.query(
+        `UPDATE consultation_schedule_proposals SET status='superseded',responded_by=$2,responded_at=now(),
+          updated_at=now(),version=version+1 WHERE consultation_id=$1 AND status='pending'`,
+        [context.id, principal.userId]);
+      await client.query(
+        `UPDATE consultations SET status='cancelled',cancellation_reason=$2,refund_status='refund_needed',
+          reschedule_previous_status=NULL,updated_at=now(),version=version+1 WHERE id=$1`,
+        [context.id, reason]);
+      const action = await this.recordAction(client, this.actionInput(principal, context, 'ConsultationCancelled', scope, idempotencyKey, fingerprint, {
+        fromStatus: context.status,
+        toStatus: 'cancelled',
+        details: { reason, refundStatus: 'refund_needed' },
       }));
       return { operationId: action.id, replayed: false, consultation: await this.detailRow(client, principal, context.id) };
     });
@@ -728,7 +772,7 @@ export class ConsultationService implements ConsultationPaymentSucceededPort {
         c.animal_id AS "animalId",l.display_code AS "animalCode",l.name AS "animalName",l.species,
         c.service_type AS "serviceType",c.complaint,c.status,c.starts_at AS "startsAt",c.ends_at AS "endsAt",
         c.fee_snapshot_idr AS "feeIdr",c.commission_snapshot_idr AS "commissionIdr",c.visit_address_snapshot AS "visitAddressSnapshot",
-        c.completion_at AS "completionAt",c.rejection_reason AS "rejectionReason",c.refund_status AS "refundStatus",
+        c.completion_at AS "completionAt",c.rejection_reason AS "rejectionReason",c.cancellation_reason AS "cancellationReason",c.refund_status AS "refundStatus",
         c.reschedule_previous_status AS "reschedulePreviousStatus",c.version,v.stage AS "visitStage",
         v.departure_at AS "departureAt",v.arrival_at AS "arrivalAt",v.examination_started_at AS "examinationStartedAt",
         v.completed_at AS "visitCompletedAt",v.version AS "visitVersion",p.status AS "paymentStatus"

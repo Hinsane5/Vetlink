@@ -25,6 +25,7 @@ const idempotentOperations = [
   ['post', '/v1/consultations'],
   ['post', '/v1/consultations/{consultationId}/accept'],
   ['post', '/v1/consultations/{consultationId}/reject'],
+  ['post', '/v1/consultations/{consultationId}/cancel'],
   ['post', '/v1/consultations/{consultationId}/schedule-proposals'],
   ['post', '/v1/consultations/{consultationId}/schedule-proposals/{proposalId}/respond'],
   ['post', '/v1/consultations/{consultationId}/start'],
@@ -193,6 +194,9 @@ test('mobile workflow routes and data contracts are present', () => {
     ['get', '/v1/me/vet/earnings'],
     ['post', '/v1/me/vet/withdrawals'],
     ['get', '/v1/me/notifications'],
+    ['get', '/v1/follow-ups/{followUpId}'],
+    ['get', '/v1/progress-reports/{reportId}'],
+    ['get', '/v1/reminders/{reminderId}'],
     ['get', '/v1/orders/{id}/shipment'],
   ];
   for (const [method, path] of requiredOperations) {
@@ -423,9 +427,10 @@ test('BE-05 consultation success responses describe the service projections', ()
   assert.equal(listItem.visitAddressSnapshot, undefined);
   assert.equal(listItem.completionAt, undefined);
 
-  const detailFields = ['id', 'displayCode', 'farmerId', 'vetId', 'animalId', 'animalCode', 'animalName', 'species', 'serviceType', 'complaint', 'status', 'startsAt', 'endsAt', 'feeIdr', 'commissionIdr', 'feeAmountIdr', 'commissionAmountIdr', 'visitAddressSnapshot', 'completionAt', 'rejectionReason', 'refundStatus', 'reschedulePreviousStatus', 'version', 'visitStage', 'departureAt', 'arrivalAt', 'examinationStartedAt', 'visitCompletedAt', 'visitVersion', 'paymentStatus', 'proposals', 'actions'];
+  const detailFields = ['id', 'displayCode', 'farmerId', 'vetId', 'animalId', 'animalCode', 'animalName', 'species', 'serviceType', 'complaint', 'status', 'startsAt', 'endsAt', 'feeIdr', 'commissionIdr', 'feeAmountIdr', 'commissionAmountIdr', 'visitAddressSnapshot', 'completionAt', 'rejectionReason', 'cancellationReason', 'refundStatus', 'reschedulePreviousStatus', 'version', 'visitStage', 'departureAt', 'arrivalAt', 'examinationStartedAt', 'visitCompletedAt', 'visitVersion', 'paymentStatus', 'proposals', 'actions'];
   for (const field of detailFields) assert.ok(detail[field], `ConsultationDetailResponseDto is missing ${field}`);
   assert.equal(detail.completionAt.nullable, true);
+  assert.equal(detail.cancellationReason.nullable, true);
   assert.equal(detail.visitCompletedAt.nullable, true);
   assert.equal(detail.feeIdr.type, 'string');
   assert.equal(detail.feeAmountIdr.type, 'integer');
@@ -446,10 +451,12 @@ test('BE-05 consultation success responses describe the service projections', ()
   assert.equal(created.status, undefined, 'Action results do not invent a success/status field.');
   assert.equal(created.success, undefined, 'Action results do not invent a speculative success flag.');
   assert.equal(created.consultation.$ref, '#/components/schemas/ConsultationResponseDto');
+  assert.ok(openApi.components.schemas.ConsultationResponseDto.properties.cancellationReason);
 
   for (const [path, schemaName] of [
     ['/v1/consultations/{consultationId}/accept', 'ConsultationActionResponseDto'],
     ['/v1/consultations/{consultationId}/reject', 'ConsultationActionResponseDto'],
+    ['/v1/consultations/{consultationId}/cancel', 'ConsultationActionResponseDto'],
     ['/v1/consultations/{consultationId}/schedule-proposals', 'ConsultationScheduleProposalActionResponseDto'],
     ['/v1/consultations/{consultationId}/schedule-proposals/{proposalId}/respond', 'ConsultationScheduleProposalDecisionResponseDto'],
     ['/v1/consultations/{consultationId}/start', 'ConsultationActionResponseDto'],

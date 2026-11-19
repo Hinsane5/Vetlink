@@ -34,6 +34,12 @@ export class CareCoordinationController {
     return this.service.listFollowUps(principal, consultationId);
   }
 
+  @Get('follow-ups/:followUpId')
+  @ApiOkResponse({ type: FollowUpResponseDto })
+  getFollowUp(@AuthenticatedUser() principal: AuthenticatedPrincipal, @Param('followUpId', ParseUUIDPipe) followUpId: string) {
+    return this.service.getFollowUp(principal, followUpId);
+  }
+
   @Post('consultations/:consultationId/follow-ups')
   @RequireRoles('vet')
   @ApiHeader({ name: 'Idempotency-Key', required: true, description: 'Retry memakai key dan payload yang sama.' })
@@ -65,6 +71,12 @@ export class CareCoordinationController {
     return this.service.listProgressReports(principal, followUpId);
   }
 
+  @Get('progress-reports/:reportId')
+  @ApiOkResponse({ type: ProgressReportResponseDto })
+  getProgressReport(@AuthenticatedUser() principal: AuthenticatedPrincipal, @Param('reportId', ParseUUIDPipe) reportId: string) {
+    return this.service.getProgressReport(principal, reportId);
+  }
+
   @Post('follow-ups/:followUpId/progress-reports')
   @RequireRoles('farmer')
   @ApiHeader({ name: 'Idempotency-Key', required: true })
@@ -82,6 +94,12 @@ export class CareCoordinationController {
   @ApiOkResponse({ type: ReminderListResponseDto })
   listReminders(@AuthenticatedUser() principal: AuthenticatedPrincipal) {
     return this.service.listReminders(principal);
+  }
+
+  @Get('reminders/:reminderId')
+  @ApiOkResponse({ type: ReminderResponseDto })
+  getReminder(@AuthenticatedUser() principal: AuthenticatedPrincipal, @Param('reminderId', ParseUUIDPipe) reminderId: string) {
+    return this.service.getReminder(principal, reminderId);
   }
 
   @Post('reminders')

@@ -30,6 +30,7 @@ export interface ConsultationCreateInput {
 
 export interface ConsultationVersionInput { expectedVersion: number; }
 export interface ConsultationRejectInput extends ConsultationVersionInput { reason: string; }
+export interface ConsultationCancelInput extends ConsultationVersionInput { reason: string; }
 export interface ConsultationScheduleInput extends ConsultationVersionInput { startsAt: string; }
 export interface ConsultationScheduleDecisionInput extends ConsultationVersionInput {
   decision: 'accept' | 'decline';
@@ -101,6 +102,7 @@ export interface ApiConsultationRecord {
   visitAddressSnapshot: ApiConsultationVisitAddressSnapshot | null;
   completionAt: string | null;
   rejectionReason: string | null;
+  cancellationReason: string | null;
   refundStatus: 'none' | 'refund_needed';
   reschedulePreviousStatus: 'requested' | 'scheduled' | null;
   version: number;
@@ -114,7 +116,7 @@ export interface ApiConsultationRecord {
 }
 
 export interface ApiConsultationListItem extends Omit<ApiConsultationRecord,
-  'visitAddressSnapshot' | 'completionAt' | 'reschedulePreviousStatus' | 'departureAt' | 'arrivalAt'
+  'visitAddressSnapshot' | 'completionAt' | 'cancellationReason' | 'reschedulePreviousStatus' | 'departureAt' | 'arrivalAt'
   | 'examinationStartedAt' | 'visitCompletedAt' | 'visitVersion'> {
   /** List projection alias; detail uses completionAt. */
   completedAt: string | null;
@@ -188,6 +190,7 @@ export interface ApiConsultationRepository {
   getVisit(consultationId: string): Promise<ApiConsultationVisit>;
   accept(consultationId: string, operation: IdempotentApiOperation<ConsultationVersionInput>): Promise<ApiConsultationActionResult>;
   reject(consultationId: string, operation: IdempotentApiOperation<ConsultationRejectInput>): Promise<ApiConsultationActionResult>;
+  cancel(consultationId: string, operation: IdempotentApiOperation<ConsultationCancelInput>): Promise<ApiConsultationActionResult>;
   proposeSchedule(consultationId: string, operation: IdempotentApiOperation<ConsultationScheduleInput>): Promise<ApiConsultationScheduleActionResult>;
   respondScheduleProposal(consultationId: string, proposalId: string, operation: IdempotentApiOperation<ConsultationScheduleDecisionInput>): Promise<ApiConsultationScheduleDecisionResult>;
   startChat(consultationId: string, operation: IdempotentApiOperation<ConsultationVersionInput>): Promise<ApiConsultationActionResult>;

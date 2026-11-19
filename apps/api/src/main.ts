@@ -151,6 +151,7 @@ async function bootstrap(): Promise<void> {
     ['/v1/consultations', 'post'],
     ['/v1/consultations/{consultationId}/accept', 'post'],
     ['/v1/consultations/{consultationId}/reject', 'post'],
+    ['/v1/consultations/{consultationId}/cancel', 'post'],
     ['/v1/consultations/{consultationId}/schedule-proposals', 'post'],
     ['/v1/consultations/{consultationId}/schedule-proposals/{proposalId}/respond', 'post'],
     ['/v1/consultations/{consultationId}/start', 'post'],
