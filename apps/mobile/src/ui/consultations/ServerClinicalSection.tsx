@@ -20,10 +20,11 @@ const emptyNote = (): NoteFields => ({ complaint: '', findings: '', assessment: 
 const noteFrom = (note: ApiClinicalNote): NoteFields => ({ complaint: note.complaint, findings: note.findings, assessment: note.assessment, actions: note.actions, careInstructions: note.careInstructions });
 const emptyItems = (): RecommendationDraftItem[] => [];
 
-export function ServerClinicalSection({ service, role, consultation, onExit, backHandlerRef }: {
+export function ServerClinicalSection({ service, role, consultation, onCompleteVisit, onExit, backHandlerRef }: {
   service: ServerClinicalService;
   role: AccountRole;
   consultation: ApiConsultationDetail;
+  onCompleteVisit: (note: ApiClinicalNote) => Promise<void>;
   onExit: () => void;
   backHandlerRef: { current: (() => boolean) | null };
 }) {
@@ -45,6 +46,8 @@ export function ServerClinicalSection({ service, role, consultation, onExit, bac
   const [leave, setLeave] = useState(false);
   const [finalizeVisible, setFinalizeVisible] = useState(false);
   const [sendRecommendationVisible, setSendRecommendationVisible] = useState(false);
+  const [completeVisitVisible, setCompleteVisitVisible] = useState(false);
+  const [completionError, setCompletionError] = useState('');
 
   const noteWindow = role === 'vet' && consultation.status === 'in_progress'
     && consultation.paymentStatus === 'succeeded'
@@ -56,6 +59,8 @@ export function ServerClinicalSection({ service, role, consultation, onExit, bac
   const dirty = !!noteDirty || !!recommendationDirty;
   const canFinalize = noteEditable && note?.id !== null && noteOrder.every((field) => fields[field].trim().length > 0);
   const canSendRecommendation = recommendationEditable && items.length > 0 && items.every((item) => item.title.trim().length > 0);
+  const canCompleteVisit = role === 'vet' && consultation.serviceType === 'visit' && consultation.status === 'in_progress'
+    && consultation.paymentStatus === 'succeeded' && consultation.visitStage === 'examining' && note?.status === 'final';
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -94,12 +99,13 @@ export function ServerClinicalSection({ service, role, consultation, onExit, bac
 
   const requestExit = useCallback(() => {
     if (busy) return true;
+    if (completeVisitVisible) { setCompleteVisitVisible(false); return true; }
     if (review) { setReview(false); return true; }
     if (recommendationReview) { setRecommendationReview(false); return true; }
     if (dirty) { setLeave(true); return true; }
     onExit();
     return true;
-  }, [busy, dirty, onExit, recommendationReview, review]);
+  }, [busy, completeVisitVisible, dirty, onExit, recommendationReview, review]);
 
   useEffect(() => {
     backHandlerRef.current = requestExit;
@@ -192,6 +198,18 @@ export function ServerClinicalSection({ service, role, consultation, onExit, bac
     } finally { setBusy(false); }
   };
 
+  const completeVisit = async () => {
+    if (!note || !canCompleteVisit || busy || uncertain) return;
+    setBusy(true); setCompletionError('');
+    try {
+      await onCompleteVisit(note);
+      setCompleteVisitVisible(false);
+      setNotice('Kunjungan dan layanan telah diselesaikan pada server.');
+    } catch (cause) {
+      setCompletionError(messageFor(cause));
+    } finally { setBusy(false); }
+  };
+
   const openRecommendationReview = async () => {
     if (!recommendationEditable || !canSendRecommendation || busy || uncertain) return;
     setBusy(true); setRecommendationError(''); setNotice('');
@@ -225,6 +243,11 @@ export function ServerClinicalSection({ service, role, consultation, onExit, bac
     <Text accessibilityRole="header" style={styles.heading}>Catatan klinis dan rekomendasi</Text>
     {loading ? <LoadingState label="Memuat data klinis server…" /> : null}
     {notice ? <Text accessibilityLiveRegion="polite" style={styles.notice}>{notice}</Text> : null}
+    {completionError ? <>
+      <Text accessibilityLiveRegion="polite" style={styles.error}>{completionError}</Text>
+      <Text style={styles.body}>Muat ulang status server sebelum mencoba tindakan lain.</Text>
+      <Button role={role} variant="secondary" label="Kembali ke detail untuk memuat ulang" onPress={onExit} />
+    </> : null}
     {uncertain ? <Text style={styles.body}>Hasil simpan belum pasti. Muat ulang data server sebelum melanjutkan; permintaan tidak akan diulang otomatis.</Text> : null}
     {uncertain ? <Button role={role} variant="secondary" label="Muat ulang data klinis" loading={loading} disabled={busy} onPress={() => { void reload(); }} /> : null}
     {!loading && noteError ? <Text accessibilityLiveRegion="polite" style={styles.error}>{noteError}</Text> : null}
@@ -284,6 +307,12 @@ export function ServerClinicalSection({ service, role, consultation, onExit, bac
       </View>)}
       <Text style={styles.body}>Rekomendasi bukan pesanan. Peternak menentukan sendiri apakah akan membeli melalui checkout.</Text>
     </View> : null}
+    {!loading && canCompleteVisit ? <View style={styles.card}>
+      <Text style={styles.heading}>Penyelesaian kunjungan</Text>
+      <Text style={styles.body}>Catatan final tersimpan. Status kunjungan hanya berubah setelah Dokter mengonfirmasi penyelesaian.</Text>
+      <Button role="vet" label="Selesaikan kunjungan" disabled={busy || uncertain || !!completionError} onPress={() => setCompleteVisitVisible(true)} />
+    </View> : null}
+    {!loading && role === 'vet' && consultation.status === 'completed' && consultation.serviceType === 'visit' ? <Text style={styles.body}>Kunjungan selesai. Catatan final tetap hanya baca.</Text> : null}
 
     <Modal visible={leave} transparent animationType="fade" onRequestClose={() => { if (!busy) setLeave(false); }}>
       <View style={[styles.backdrop, { paddingTop: insets.top + spacing[4], paddingBottom: insets.bottom + spacing[4] }]}>
@@ -300,6 +329,7 @@ export function ServerClinicalSection({ service, role, consultation, onExit, bac
     </Modal>
     <ConfirmationDialog visible={finalizeVisible} title="Finalisasi catatan?" message="Catatan yang telah final hanya dapat dibaca dan tidak mengubah status layanan." role="vet" confirmLabel="Finalisasi" cancelLabel="Kembali mengedit" onConfirm={() => { void finalize(); }} onCancel={() => setFinalizeVisible(false)} loading={busy} confirmDisabled={!canFinalize || uncertain} />
     <ConfirmationDialog visible={sendRecommendationVisible} title="Kirim rekomendasi kepada Peternak?" message="Rekomendasi akan dikirim untuk dibaca. Peternak memilih sendiri apakah akan membeli melalui checkout." role="vet" confirmLabel="Kirim rekomendasi" cancelLabel="Tinjau lagi" onConfirm={() => { void sendRecommendation(); }} onCancel={() => setSendRecommendationVisible(false)} loading={busy} confirmDisabled={!canSendRecommendation || uncertain} />
+    <ConfirmationDialog visible={completeVisitVisible} title="Selesaikan kunjungan?" message="Catatan final sudah tersimpan. Konfirmasi ini akan menandai layanan dan kunjungan selesai pada server." role="vet" confirmLabel="Ya, selesaikan kunjungan" cancelLabel="Kembali" onConfirm={() => { void completeVisit(); }} onCancel={() => setCompleteVisitVisible(false)} loading={busy} confirmDisabled={!canCompleteVisit || uncertain} />
   </View>;
 }
 

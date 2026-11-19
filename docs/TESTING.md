@@ -1205,3 +1205,14 @@ FE-25 tetap **Sedang dikerjakan** sampai API server/dua perangkat dan QA Android
 | Batas QA | Build Android dilewati sesuai arahan pengguna. Tidak ada API server hidup, emulator, Figma MCP, provider produksi, secret, deployment, atau transaksi finansial nyata. Picker dan transfer file harus diverifikasi pengguna pada app/perangkat; sentuh, Back Android, keyboard, scroll, viewport 390 × 844, layar kecil, font besar, serta pembandingan visual masih gate. |
 
 Mode default tetap lokal. Untuk melihat UI baru, aplikasi harus dijalankan pada mode API development yang dikonfigurasi dengan `EXPO_PUBLIC_API_BASE_URL`, lalu masuk menggunakan akun Dokter yang dimiliki pengguna. Dokumen yang dipilih dikirim ke backend yang dikonfigurasi; jangan gunakan akun atau dokumen nyata saat hanya memeriksa layout.
+
+## FE-13/FE-25 — progres dan penyelesaian Visit API BE-05 (19 November 2026)
+
+Mode API mobile mengirim transisi Visit berurutan untuk Dokter terassign, lalu mengizinkan penyelesaian hanya pada Visit `examining` dengan pembayaran berhasil dan note final. Penyelesaian meminta konfirmasi eksplisit, mengirim versi Consultation/Visit dan `Idempotency-Key`, membaca ulang status detail serta Visit, dan mengunci tindakan berikutnya ketika hasil request belum pasti. API backend tetap memeriksa assignment, verifikasi, pembayaran, note final, dan tahap.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `cd apps/mobile && npm run check` | **Lulus**: typecheck, Expo lint, dan 271/271 tes domain/repository. Node tetap mengeluarkan warning SQLite eksperimental dari suite lokal yang sudah ada. |
+| Tes FE-13 service baru | Dua tes memeriksa completion dengan dua versi resource, `confirmation: true`, pembacaan ulang stage/status, dan penolakan role, assignment, pembayaran, Visit stage, serta note non-final sebelum HTTP. Dua tes transisi berurutan ditambahkan pada checkpoint sebelumnya. |
+| `git diff --check` | Dijalankan setelah dokumentasi dan perubahan kode selesai. |
+| Runtime dan QA | API server hidup, Android build, emulator, Figma MCP, serta perangkat tidak digunakan. Sentuh, Back, keyboard, scroll, 390 × 844, layar kecil/font besar, dan QA visual masih harus diperiksa pada aplikasi/perangkat. FE-13/FE-25 belum selesai. |
