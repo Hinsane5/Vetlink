@@ -90,7 +90,7 @@ DEC-27 memperluas konteks lokal: satu `FarmerProfile` dapat memiliki banyak `Far
 | --- | --- |
 | Profil Peternak | `ProfileService` menyimpan nama, foto opsional, farm, species, wilayah, alamat, telepon, dan penerima; perubahan profil/farm/alamat disatukan dalam transaksi SQLite |
 | Profil Dokter | Nama profesional, nomor registrasi, pengalaman, layanan, species, lokasi praktik, wilayah kunjungan, dan foto tersimpan di `vetProfile` |
-| Dokumen | `expo-image-picker ~57.0.20`, `expo-document-picker ~57.0.3`, `expo-file-system ~57.0.7`; foto/dokumen disalin ke direktori privat, metadata `Attachment` tersimpan lokal, tanpa unggah jaringan |
+| Dokumen dan media | `expo-image-picker ~57.0.20`, `expo-document-picker ~57.0.3`, `expo-file-system ~57.0.7`, `expo-video ~57.0.5`; foto/dokumen/video disalin ke direktori privat, metadata `Attachment` tersimpan lokal, tanpa unggah jaringan pada mode lokal |
 | Verifikasi | Pengajuan pemilik menghasilkan `VerificationSubmission.status=pending` dan `VetProfile.verificationStatus=pending`; tidak ada kontrol self-verify |
 | Review status | UI menangani `not_submitted/pending/revision_required/verified`; tidak ada reviewer lokal tepercaya pada fase ini, jadi akun baru hanya bisa menghasilkan pending |
 | Draft | Isian profil dan lampiran terpilih dapat disimpan sebagai entity `profileDraft`; perubahan profil menggunakan optimistic version dan transaksi batch |
@@ -203,7 +203,7 @@ Pertanyaan ini tidak menghambat pekerjaan fondasi backend. Catat keputusan baru 
 
 ## Realisasi FE-09: booking
 
-Tidak ada dependency atau kode Kotlin aplikasi baru. Photo/video memakai `expo-image-picker` yang sudah terpasang; file disalin lewat adapter `expo-file-system`. `SelectedAsset` kini mengenal video untuk booking, sedangkan validator foto profil/ternak dan dokumen verifikasi tetap membatasi jenis sebelumnya. Booking memakai React Native ScrollView/TextInput/Modal, tokens Inter/Lucide, safe-area provider Modal dan keyboard avoidance shell aktif. Penyimpanan draft/quote/consultation memakai adapter SQLite tunggal; tes integrasi transaksi menggunakan `node:sqlite` in-memory, bukan SQLite mock yang menggantikan SQL. Status/perintah pemeriksaan aktual ada di Testing.
+Tidak ada kode Kotlin aplikasi baru. Photo/video memakai `expo-image-picker`; file disalin lewat adapter `expo-file-system`. `expo-video` memutar attachment MP4 dari URI ruang privat di chat, laporan, dan detail pasien. Binary Android harus dibangun ulang untuk memasukkan modul native ini. `SelectedAsset` mengenal video untuk booking, sedangkan validator foto profil/ternak dan dokumen verifikasi tetap membatasi jenis sebelumnya. Booking memakai React Native ScrollView/TextInput/Modal, tokens Inter/Lucide, safe-area provider Modal dan keyboard avoidance shell aktif. Penyimpanan draft/quote/consultation memakai adapter SQLite tunggal; tes integrasi transaksi menggunakan `node:sqlite` in-memory, bukan SQLite mock yang menggantikan SQL. Status/perintah pemeriksaan aktual ada di Testing.
 
 ## Realisasi FE-10 dan iterasi cepat
 

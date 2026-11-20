@@ -12,7 +12,8 @@
           "cameraPermission": false,
           "microphonePermission": false
         }
-      ]
+      ],
+      "expo-video"
     ],
     "ios": {
       "bundleIdentifier": "com.vetlink.mobile",

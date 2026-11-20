@@ -11,6 +11,7 @@ import { LoadingState } from '../components/Feedback';
 import { Icon } from '../components/Icon';
 import { TextArea } from '../components/TextField';
 import { colors, fonts, spacing, typeScale } from '../theme/tokens';
+import { PrivateVideoPlayer } from '../components/PrivateVideoPlayer';
 
 type Props = {
   service: ServerChatService;
@@ -238,7 +239,7 @@ export function ServerChatSection({ service, role, userId, consultation, onExit,
           <Text accessibilityRole="header" style={styles.dialogTitle}>{viewer?.filename ?? 'Lampiran'}</Text>
           {viewer?.kind === 'image'
             ? <Image accessibilityLabel={`Lampiran ${viewer.filename}`} source={{ uri: viewer.localUri }} resizeMode="contain" style={styles.viewerImage} />
-            : viewer ? <View style={styles.videoPreview}><Icon name="video" size={42} color={colors.brown} /><Text style={styles.messageText}>Video sudah diunduh ke ruang privat aplikasi.</Text><Text selectable style={styles.helper}>{viewer.filename}</Text></View> : null}
+            : viewer ? <View style={styles.videoPreview}><PrivateVideoPlayer uri={viewer.localUri} label={`Video ${viewer.filename}`} /><Text selectable style={styles.helper}>{viewer.filename}</Text></View> : null}
           <Button label="Tutup lampiran" role={role} variant="secondary" onPress={() => setViewer(null)} />
         </View>
       </View>

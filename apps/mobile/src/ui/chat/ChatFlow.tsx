@@ -13,6 +13,7 @@ import { EmptyState, ErrorState, InlineFeedback, LoadingState } from '../compone
 import { Icon } from '../components/Icon';
 import { StatusBadge } from '../components/StatusBadge';
 import { colors, fonts, radii, roleTokens, spacing, typeScale } from '../theme/tokens';
+import { PrivateVideoPlayer } from '../components/PrivateVideoPlayer';
 
 type Viewer = { messageId: string; attachment: ChatAttachment };
 
@@ -182,7 +183,7 @@ export function ChatFlow({ store, session, consultationId, onExit }: { store: Lo
     <Modal visible={!!viewer} animationType="fade" onRequestClose={() => setViewer(null)}>
       <SafeAreaProvider><SafeAreaView style={styles.viewerSafe} edges={['top', 'bottom']}>
         <View style={styles.viewerHeader}><Text style={styles.viewerTitle} numberOfLines={2}>{viewer?.attachment.filename ?? 'Lampiran'}</Text><Pressable accessibilityRole="button" accessibilityLabel="Tutup lampiran" onPress={() => setViewer(null)} style={styles.closeViewer}><Icon name="x" size={24} color={colors.brown} /></Pressable></View>
-        {viewer?.attachment.kind === 'image' ? <Image source={{ uri: viewer.attachment.localUri }} style={styles.fullImage} resizeMode="contain" onError={() => setError('Foto lokal tidak dapat dibuka.')} /> : viewer ? <View style={styles.videoViewer}><Icon name="video" color={colors.brown} size={52} /><Text style={styles.contextTitle}>Video tersimpan</Text><Text style={styles.viewerBody}>{viewer.attachment.filename}</Text><Text style={styles.viewerBody}>Video dapat dibuka kembali dari percakapan ini.</Text></View> : null}
+        {viewer?.attachment.kind === 'image' ? <Image source={{ uri: viewer.attachment.localUri }} style={styles.fullImage} resizeMode="contain" onError={() => setError('Foto lokal tidak dapat dibuka.')} /> : viewer ? <View style={styles.videoViewer}><PrivateVideoPlayer uri={viewer.attachment.localUri} label={`Video ${viewer.attachment.filename}`} /><Text style={styles.viewerBody}>{viewer.attachment.filename}</Text></View> : null}
       </SafeAreaView></SafeAreaProvider>
     </Modal>
 

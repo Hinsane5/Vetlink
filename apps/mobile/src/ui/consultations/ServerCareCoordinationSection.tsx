@@ -15,6 +15,7 @@ import { EmptyState, InlineFeedback, LoadingState } from '../components/Feedback
 import { StatusBadge } from '../components/StatusBadge';
 import { TextArea, TextField } from '../components/TextField';
 import { colors, fonts, layout, radii, spacing, typeScale } from '../theme/tokens';
+import { PrivateVideoPlayer } from '../components/PrivateVideoPlayer';
 
 type FormPage = 'overview' | 'follow_up' | 'reminder' | 'report';
 type Props = {
@@ -337,7 +338,7 @@ function ReportCard({ item, timezone, role, service, userId, consultation }: {
     {item.attachmentIds.map((id) => <View key={id} style={styles.itemCard}>
       <Text style={styles.helper}>{opened[id]?.filename ?? `Lampiran ${id.slice(0, 8)}`}</Text>
       {opened[id]?.kind === 'image' ? <Image source={{ uri: opened[id].uri }} accessibilityLabel={`Lampiran ${opened[id].filename}`} resizeMode="contain" style={styles.mediaPreview} /> : null}
-      {opened[id]?.kind === 'video' ? <Text style={styles.helper}>Video diunduh privat; pemutaran video belum tersedia.</Text> : null}
+      {opened[id]?.kind === 'video' ? <PrivateVideoPlayer uri={opened[id].uri} label={`Video laporan ${opened[id].filename}`} /> : null}
       {mediaError ? <InlineFeedback message={mediaError} tone="error" /> : null}
       <Button role={role} variant="secondary" label={opened[id] ? 'Lampiran dibuka' : mediaBusyId === id ? 'Membuka lampiran…' : 'Buka lampiran privat'} disabled={!!mediaBusyId} onPress={() => {
         setMediaBusyId(id); setMediaError('');

@@ -1,5 +1,11 @@
 # Strategi pengujian VetLink
 
+## FE-25 — pemutaran video lampiran privat (20 November 2026)
+
+`expo-video ~57.0.5` kini memutar file MP4 setelah repository menyimpannya di direktori privat aplikasi. Player dipakai oleh chat lokal/server, laporan perkembangan, dan detail pasien; sumber video tetap URL lokal privat, bukan URL attachment server.
+
+`cd apps/mobile && npm run check` **lulus**: TypeScript typecheck, Expo lint, dan 319/319 tes domain/repository. Build Android dan QA pemutaran di perangkat tidak dijalankan; SDK Android eksternal belum tersedia. Binary Android perlu dibangun ulang sebelum kode player dapat ditinjau pada HP. `expo install` melaporkan 17 advisori dependency yang sudah ada/transitif; tidak menjalankan `npm audit fix`.
+
 ## FE-12/FE-25 — chat server BE-07 (19 November 2026)
 
 `ServerChatService`, `ExpoServerChatStateStore`, `ExpoServerChatMediaStore`, dan `ServerChatSection` menghubungkan daftar/paging, draft, pesan teks dan lampiran, retry pesan gagal, serta recovery `clientMessageId`. Sampai checkpoint media, `cd apps/mobile && npm run check` lulus: typecheck, Expo lint, dan 267/267 tes domain/repository. Tes terbaru membuktikan file media disalin ke ruang privat aplikasi, key upload dan file sama digunakan saat response upload hilang, commit tidak diulang, payload pesan dengan ID lampiran yang sama dipakai sesudah response POST hilang, duplicate submit pada service yang sama ditolak, serta unduhan memeriksa attachment terhadap pesan peserta dan metadata server.

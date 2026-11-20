@@ -8,6 +8,7 @@ import { Button } from '../components/Button';
 import { LoadingState } from '../components/Feedback';
 import { TextField } from '../components/TextField';
 import { colors, fonts, spacing, typeScale } from '../theme/tokens';
+import { PrivateVideoPlayer } from '../components/PrivateVideoPlayer';
 
 export function ServerPatientsSection({ service, userId, backHandlerRef }: {
   service: ServerPatientService;
@@ -99,8 +100,8 @@ export function ServerPatientsSection({ service, userId, backHandlerRef }: {
         <Text style={styles.cardTitle}>{item.source === 'message' ? 'Pesan konsultasi' : 'Laporan perkembangan'} · {item.filename}</Text>
         <Text style={styles.body}>{item.kind === 'image' ? 'Foto' : 'Video'} · {formatDate(item.createdAt)}</Text>
         {mediaUris[item.id] && item.kind === 'image' ? <Image source={{ uri: mediaUris[item.id] }} accessibilityLabel={`Lampiran ${item.filename}`} resizeMode="contain" style={styles.mediaPreview} /> : null}
+        {mediaUris[item.id] && item.kind === 'video' ? <PrivateVideoPlayer uri={mediaUris[item.id]} label={`Video pasien ${item.filename}`} /> : null}
         {mediaError ? <Text accessibilityRole="alert" style={styles.error}>{mediaError}</Text> : null}
-        {item.kind === 'video' ? <Text style={styles.body}>Pemutaran video belum tersedia. Metadata dan akses file tetap dibatasi server.</Text> : null}
         <Button label={mediaUris[item.id] ? 'Foto dibuka' : mediaBusyId === item.id ? 'Membuka foto…' : item.kind === 'image' ? 'Buka foto privat' : 'Unduh video privat'} role="vet" variant="secondary" disabled={!!mediaBusyId} onPress={() => {
           setMediaBusyId(item.id);
           setMediaState((current) => ({ ...current, [selectedId]: { ...(current[selectedId] ?? { uris: {}, error: '' }), error: '' } }));
