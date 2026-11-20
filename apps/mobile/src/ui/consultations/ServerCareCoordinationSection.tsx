@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import type { ApiFollowUp, ApiProgressReport, ApiReminder } from '../../application/ports/ApiCareCoordinationRepository';
 import type { ApiConsultationDetail } from '../../application/ports/ApiConsultationRepository';
 import type { PendingCareCoordinationOperation, ServerCareCoordinationService, ServerCareCoordinationSnapshot } from '../../application/ServerCareCoordinationService';
 import type { ServerClinicalService } from '../../application/ServerClinicalService';
 import type { AccountRole } from '../../domain/auth';
+import type { SelectedAsset } from '../../domain/profiles';
 import { DomainError } from '../../domain/errors';
 import { localDisplay } from '../../domain/availability';
 import { Button } from '../components/Button';
@@ -49,11 +51,12 @@ export function ServerCareCoordinationSection({ service, clinicalService, consul
   const [reminderKey, setReminderKey] = useState(() => service.newOperationKey());
   const [reportFollowUp, setReportFollowUp] = useState<ApiFollowUp | null>(null);
   const [reportText, setReportText] = useState('');
+  const [reportMedia, setReportMedia] = useState<SelectedAsset[]>([]);
   const [reportKey, setReportKey] = useState(() => service.newOperationKey());
 
   const dirty = page === 'follow_up' ? Boolean(followUpStart.trim() || followUpEnd.trim() || followUpReason.trim())
     : page === 'reminder' ? Boolean(reminderDueAt.trim() || reminderInstructions.trim() || reminderFollowUpId)
-      : page === 'report' ? Boolean(reportText.trim()) : false;
+      : page === 'report' ? Boolean(reportText.trim() || reportMedia.length) : false;
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -90,6 +93,7 @@ export function ServerCareCoordinationSection({ service, clinicalService, consul
           const pending = result.pending;
           setReportFollowUp(result.followUps.find((item) => item.id === pending.followUpId) ?? null);
           setReportText(pending.text);
+          setReportMedia((pending.attachments ?? []).map(({ file }) => ({ ...file, kind: file.mimeType === 'video/mp4' ? 'video' : 'image' })));
           setReportKey(pending.idempotencyKey);
           setPage('report');
         } else {
@@ -115,7 +119,7 @@ export function ServerCareCoordinationSection({ service, clinicalService, consul
 
   const clearFollowUp = () => { setFollowUpStart(''); setFollowUpEnd(''); setFollowUpReason(''); setFollowUpKey(service.newOperationKey()); };
   const clearReminder = () => { setReminderFollowUpId(null); setReminderKind('care'); setReminderDueAt(''); setReminderInstructions(''); setReminderKey(service.newOperationKey()); };
-  const clearReport = () => { setReportFollowUp(null); setReportText(''); setReportKey(service.newOperationKey()); };
+  const clearReport = () => { setReportFollowUp(null); setReportText(''); setReportMedia([]); setReportKey(service.newOperationKey()); };
   const back = useCallback(() => {
     if (busy) return true;
     if (completeReminder) { setCompleteReminder(null); return true; }
@@ -146,10 +150,12 @@ export function ServerCareCoordinationSection({ service, clinicalService, consul
       await reload();
       return true;
     } catch (cause) {
-      setError(messageFor(cause, 'Perubahan belum berhasil.'));
+      const failureMessage = messageFor(cause, 'Perubahan belum berhasil.');
+      setError(failureMessage);
       if (cause instanceof DomainError && ['SERVICE_UNAVAILABLE', 'API_RESPONSE_INVALID', 'IDEMPOTENCY_CONFLICT', 'SESSION_STORAGE_FAILED'].includes(cause.code)) {
         setUncertain(true);
-        if (cause.code === 'IDEMPOTENCY_CONFLICT') await reload();
+        await reload();
+        setError(failureMessage);
       } else {
         setPendingOperation(null);
         setUncertain(false);
@@ -179,8 +185,30 @@ export function ServerCareCoordinationSection({ service, clinicalService, consul
   const saveReport = () => runMutation(async () => {
     if (pendingOperation) { await service.retryPending(role, userId, consultation); return; }
     if (!reportFollowUp) throw new DomainError('INVALID_STATE', 'Pilih tindak lanjut untuk laporan.');
-    await service.submitReport(role, userId, consultation, reportFollowUp, { text: reportText, operationKey: reportKey });
+    await service.submitReport(role, userId, consultation, reportFollowUp, { text: reportText, operationKey: reportKey, attachments: reportMedia });
   }, 'Laporan perkembangan terkirim kepada Dokter yang menangani.');
+
+  const pickReportMedia = async () => {
+    if (busy || uncertain || reportMedia.length >= 5) return;
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images', 'videos'], allowsMultipleSelection: true,
+        selectionLimit: 5 - reportMedia.length, quality: 0.9,
+      });
+      if (result.canceled) return;
+      const selected: SelectedAsset[] = result.assets.map((asset) => ({
+        uri: asset.uri,
+        filename: asset.fileName ?? (asset.type === 'video' ? 'video.mp4' : 'foto.jpg'),
+        mimeType: asset.mimeType ?? (asset.type === 'video' ? 'video/mp4' : 'image/jpeg'),
+        byteSize: asset.fileSize ?? null,
+        kind: asset.type === 'video' ? 'video' : 'image',
+      }));
+      setReportMedia((current) => [...current, ...selected].slice(0, 5));
+      setError('');
+    } catch (cause) {
+      setError(messageFor(cause, 'Pemilih foto/video belum dapat dibuka.'));
+    }
+  };
 
   const completeCare = () => {
     const reminder = completeReminder;
@@ -210,7 +238,7 @@ export function ServerCareCoordinationSection({ service, clinicalService, consul
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Pemeriksaan ulang</Text>
             <Text style={styles.helper}>Waktu memakai zona {snapshot.timezone}. Penjadwalan dan kelayakan diperiksa server.</Text>
-            {snapshot.followUps.length ? snapshot.followUps.map((item) => <FollowUpCard key={item.id} item={item} timezone={snapshot.timezone} role={role} onReport={() => { setReportFollowUp(item); setReportText(''); setReportKey(service.newOperationKey()); setPage('report'); setError(''); setNotice(''); }} />)
+            {snapshot.followUps.length ? snapshot.followUps.map((item) => <FollowUpCard key={item.id} item={item} timezone={snapshot.timezone} role={role} onReport={() => { setReportFollowUp(item); setReportText(''); setReportMedia([]); setReportKey(service.newOperationKey()); setPage('report'); setError(''); setNotice(''); }} />)
               : <EmptyState title="Belum ada tindak lanjut" description={role === 'vet' ? 'Dokter dapat menjadwalkan pemeriksaan ulang setelah catatan final tersimpan.' : 'Dokter belum menjadwalkan pemeriksaan ulang.'} role={role} />}
             {role === 'vet' && writeReady && finalNoteExists ? <Button role={role} label="Jadwalkan pemeriksaan ulang" disabled={busy || uncertain} onPress={() => { setPage('follow_up'); setError(''); setNotice(''); }} /> : null}
             {role === 'vet' && writeReady && !finalNoteExists ? <Text style={styles.helper}>Catatan klinis final diperlukan sebelum jadwal tindak lanjut dibuat.</Text> : null}
@@ -225,7 +253,7 @@ export function ServerCareCoordinationSection({ service, clinicalService, consul
           <View style={styles.card}>
             <Text style={styles.cardTitle}>{role === 'vet' ? 'Laporan Peternak' : 'Laporan perkembangan'}</Text>
             <Text style={styles.helper}>Laporan disimpan terpisah dari catatan klinis dan riwayat kesehatan.</Text>
-            {snapshot.reports.length ? snapshot.reports.map((item) => <ReportCard key={item.id} item={item} timezone={snapshot.timezone} role={role} />)
+            {snapshot.reports.length ? snapshot.reports.map((item) => <ReportCard key={item.id} item={item} timezone={snapshot.timezone} role={role} service={service} userId={userId} consultation={consultation} />)
               : <EmptyState title="Belum ada laporan" description={role === 'farmer' ? 'Kirim laporan setelah Dokter menjadwalkan tindak lanjut.' : 'Laporan Peternak akan tampil di sini.'} role={role} />}
           </View>
         </> : null}
@@ -254,6 +282,11 @@ export function ServerCareCoordinationSection({ service, clinicalService, consul
           <Text style={styles.helper}>Laporan ini dikirim ke Dokter yang menangani, bukan sebagai catatan pemeriksaan.</Text>
           {reportFollowUp ? <Text style={styles.helper}>Tindak lanjut {formatDate(reportFollowUp.startsAt, snapshot.timezone)}</Text> : null}
           <TextArea label="Perkembangan ternak" value={reportText} onChangeText={setReportText} editable={!busy && !uncertain} maxLength={2000} helperText="3–2.000 karakter." />
+          {reportMedia.map((asset, index) => <View key={`${asset.uri}-${index}`} style={styles.row}>
+            <Text style={styles.helper}>{asset.kind === 'video' ? 'Video' : 'Foto'} · {asset.filename}</Text>
+            <Button role={role} variant="secondary" label="Hapus lampiran" disabled={busy || uncertain} onPress={() => setReportMedia((current) => current.filter((_, itemIndex) => itemIndex !== index))} />
+          </View>)}
+          <Button role={role} variant="secondary" label={`Tambah foto/video (${reportMedia.length}/5)`} disabled={busy || uncertain || reportMedia.length >= 5} onPress={() => { void pickReportMedia(); }} />
           <Button role={role} label={uncertain ? 'Kirim ulang laporan yang sama' : 'Kirim laporan'} loading={busy} disabled={busy || uncertain && !reportFollowUp} onPress={() => { void saveReport(); }} />
         </View> : null}
       </ScrollView>
@@ -291,11 +324,29 @@ function ReminderCard({ item, timezone, role, onComplete }: { item: ApiReminder;
   </View>;
 }
 
-function ReportCard({ item, timezone, role }: { item: ApiProgressReport; timezone: string; role: AccountRole }) {
+function ReportCard({ item, timezone, role, service, userId, consultation }: {
+  item: ApiProgressReport; timezone: string; role: AccountRole; service: ServerCareCoordinationService;
+  userId: string; consultation: ApiConsultationDetail;
+}) {
+  const [mediaBusyId, setMediaBusyId] = useState<string | null>(null);
+  const [opened, setOpened] = useState<Record<string, { uri: string; kind: 'image' | 'video'; filename: string }>>({});
+  const [mediaError, setMediaError] = useState('');
   return <View style={styles.itemCard}>
     <Text style={styles.helper}>{role === 'vet' ? `Diterima ${formatDate(item.submittedAt, timezone)}` : `Dikirim ${formatDate(item.submittedAt, timezone)}`}{role === 'vet' ? item.viewedAt ? ' · sudah dibaca' : ' · belum dibaca' : ''}</Text>
     <Text selectable style={styles.body}>{item.text}</Text>
-    {item.attachmentIds.length ? <Text style={styles.helper}>{item.attachmentIds.length} lampiran terkait; tautan file tidak dibuka oleh layar ini.</Text> : null}
+    {item.attachmentIds.map((id) => <View key={id} style={styles.itemCard}>
+      <Text style={styles.helper}>{opened[id]?.filename ?? `Lampiran ${id.slice(0, 8)}`}</Text>
+      {opened[id]?.kind === 'image' ? <Image source={{ uri: opened[id].uri }} accessibilityLabel={`Lampiran ${opened[id].filename}`} resizeMode="contain" style={styles.mediaPreview} /> : null}
+      {opened[id]?.kind === 'video' ? <Text style={styles.helper}>Video diunduh privat; pemutaran video belum tersedia.</Text> : null}
+      {mediaError ? <InlineFeedback message={mediaError} tone="error" /> : null}
+      <Button role={role} variant="secondary" label={opened[id] ? 'Lampiran dibuka' : mediaBusyId === id ? 'Membuka lampiran…' : 'Buka lampiran privat'} disabled={!!mediaBusyId} onPress={() => {
+        setMediaBusyId(id); setMediaError('');
+        service.downloadReportAttachment(role, userId, consultation, item, id).then(
+          (result) => setOpened((current) => ({ ...current, [id]: { uri: result.localUri, kind: result.attachment.kind, filename: result.attachment.filename } })),
+          (cause) => setMediaError(messageFor(cause, 'Lampiran laporan belum dapat dibuka.')),
+        ).finally(() => setMediaBusyId(null));
+      }} />
+    </View>)}
   </View>;
 }
 
@@ -321,6 +372,7 @@ const styles = StyleSheet.create({
   itemCard: { padding: spacing[3], gap: spacing[2], borderRadius: radii.button, backgroundColor: colors.cream },
   cardTitle: { color: colors.dark, fontFamily: fonts.semiBold, fontSize: typeScale.body, lineHeight: 22, flexShrink: 1 },
   helper: { color: colors.muted, fontFamily: fonts.regular, fontSize: typeScale.label, lineHeight: 19 },
+  mediaPreview: { width: '100%', height: 220, borderRadius: 12, backgroundColor: colors.cream },
   body: { color: colors.dark, fontFamily: fonts.regular, fontSize: typeScale.body, lineHeight: 22, flexShrink: 1 },
   row: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing[2] },
   choiceRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },

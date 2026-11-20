@@ -66,3 +66,33 @@ test('proposal decisions use the assigned vet timezone and reject unrelated acco
   assert.equal(await service.timezoneFor('vet', ids.vet, ids.vet), 'Asia/Jakarta');
   await assert.rejects(service.timezoneFor('vet', 'another-vet', ids.vet), { code: 'FORBIDDEN' });
 });
+
+test('server schedule editor scopes the vet, checks availability version, and delegates blocked times/calendar', async () => {
+  const calls = [];
+  const current = { ...availability, version: 4 };
+  const block = { id: 'block-1', vetId: ids.vet, startsAt: '2026-11-21T02:00:00.000Z', endsAt: '2026-11-21T03:00:00.000Z', reason: 'Izin', status: 'active', version: 1 };
+  const schedule = {
+    getAvailability: async () => current,
+    updateAvailability: async (input) => { calls.push(['availability', input]); return { operationId: 'operation-1', status: 'succeeded', occurredAt: '2026-11-20T00:00:00.000Z', value: { ...current, version: 5 } }; },
+    getBlockedTimes: async () => { calls.push(['list-blocks']); return [block]; },
+    createBlockedTime: async (input) => { calls.push(['create-block', input]); return { operationId: 'operation-2', status: 'succeeded', occurredAt: '2026-11-20T00:00:00.000Z', value: block }; },
+    updateBlockedTime: async (id, input) => { calls.push(['update-block', id, input]); return { ...block, ...input, version: 2 }; },
+    cancelBlockedTime: async (id, expectedVersion) => { calls.push(['cancel-block', id, expectedVersion]); return { ...block, status: 'cancelled', version: 2 }; },
+    getSchedule: async (from, to) => { calls.push(['calendar', from, to]); return { appointments: [], followUps: [], blockedTimes: [block] }; },
+  };
+  const service = new ServerVetScheduleService(schedule, {});
+  const input = { expectedVersion: 4, acceptingNewRequests: true };
+
+  assert.equal((await service.ownAvailability('vet', ids.vet)).version, 4);
+  await assert.rejects(service.ownAvailability('farmer', ids.vet), { code: 'FORBIDDEN' });
+  await assert.rejects(service.ownAvailability('vet', 'another-vet'), { code: 'FORBIDDEN' });
+  await assert.rejects(service.saveOwnAvailability('vet', ids.vet, { ...input, expectedVersion: 3 }), { code: 'VERSION_CONFLICT' });
+  assert.equal((await service.saveOwnAvailability('vet', ids.vet, input)).value.version, 5);
+  assert.deepEqual(await service.ownBlockedTimes('vet', ids.vet), [block]);
+  assert.equal((await service.createOwnBlockedTime('vet', ids.vet, { startsAt: block.startsAt, endsAt: block.endsAt, reason: 'Izin' })).value.id, block.id);
+  assert.equal((await service.updateOwnBlockedTime('vet', ids.vet, block.id, { startsAt: block.startsAt, endsAt: block.endsAt, reason: 'Izin', expectedVersion: 1 })).version, 2);
+  assert.equal((await service.cancelOwnBlockedTime('vet', ids.vet, block.id, 1)).status, 'cancelled');
+  assert.deepEqual(await service.ownSchedule('vet', ids.vet, '2026-11-20T00:00:00Z', '2026-11-27T00:00:00Z'), { appointments: [], followUps: [], blockedTimes: [block] });
+  assert.equal(calls.filter(([kind]) => kind === 'availability').length, 1);
+  assert.deepEqual(calls.find(([kind]) => kind === 'calendar'), ['calendar', '2026-11-20T00:00:00Z', '2026-11-27T00:00:00Z']);
+});

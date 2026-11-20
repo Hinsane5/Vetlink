@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 import { filterServerPatients, type ServerPatientDetail, type ServerPatientService } from '../../application/ServerPatientService';
 import type { ApiPatientRecord } from '../../application/ports/PatientReadRepository';
 import type { ApiHealthEvent } from '../../application/ports/LivestockHealthRepository';
@@ -9,8 +9,9 @@ import { LoadingState } from '../components/Feedback';
 import { TextField } from '../components/TextField';
 import { colors, fonts, spacing, typeScale } from '../theme/tokens';
 
-export function ServerPatientsSection({ service, backHandlerRef }: {
+export function ServerPatientsSection({ service, userId, backHandlerRef }: {
   service: ServerPatientService;
+  userId: string;
   backHandlerRef: { current: (() => boolean) | null };
 }) {
   const [patients, setPatients] = useState<ApiPatientRecord[]>([]);
@@ -23,6 +24,11 @@ export function ServerPatientsSection({ service, backHandlerRef }: {
   const [detailRevision, setDetailRevision] = useState(0);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState('');
+  const [mediaBusyId, setMediaBusyId] = useState<string | null>(null);
+  const [mediaState, setMediaState] = useState<Record<string, { uris: Record<string, string>; error: string }>>({});
+  const currentMediaState = selectedId ? mediaState[selectedId] : undefined;
+  const mediaUris = currentMediaState?.uris ?? {};
+  const mediaError = currentMediaState?.error ?? '';
 
   useEffect(() => {
     let active = true;
@@ -88,7 +94,26 @@ export function ServerPatientsSection({ service, backHandlerRef }: {
         <ClinicalField label="Tindakan" value={note.actions} />
         <ClinicalField label="Instruksi perawatan" value={note.careInstructions} />
       </View>)}
-      <Text style={styles.body}>Catatan final hanya baca dan dibatasi ke layanan Dokter ini. Lampiran media belum tersedia di proyeksi API.</Text>
+      <Text style={styles.heading}>Foto dan Lampiran Layanan</Text>
+      {detail.media?.length ? detail.media.map((item) => <View key={item.id} style={styles.card}>
+        <Text style={styles.cardTitle}>{item.source === 'message' ? 'Pesan konsultasi' : 'Laporan perkembangan'} · {item.filename}</Text>
+        <Text style={styles.body}>{item.kind === 'image' ? 'Foto' : 'Video'} · {formatDate(item.createdAt)}</Text>
+        {mediaUris[item.id] && item.kind === 'image' ? <Image source={{ uri: mediaUris[item.id] }} accessibilityLabel={`Lampiran ${item.filename}`} resizeMode="contain" style={styles.mediaPreview} /> : null}
+        {mediaError ? <Text accessibilityRole="alert" style={styles.error}>{mediaError}</Text> : null}
+        {item.kind === 'video' ? <Text style={styles.body}>Pemutaran video belum tersedia. Metadata dan akses file tetap dibatasi server.</Text> : null}
+        <Button label={mediaUris[item.id] ? 'Foto dibuka' : mediaBusyId === item.id ? 'Membuka foto…' : item.kind === 'image' ? 'Buka foto privat' : 'Unduh video privat'} role="vet" variant="secondary" disabled={!!mediaBusyId} onPress={() => {
+          setMediaBusyId(item.id);
+          setMediaState((current) => ({ ...current, [selectedId]: { ...(current[selectedId] ?? { uris: {}, error: '' }), error: '' } }));
+          service.downloadPatientMedia('vet', userId, item).then(
+            (uri) => setMediaState((current) => {
+              const patientState = current[selectedId] ?? { uris: {}, error: '' };
+              return { ...current, [selectedId]: { ...patientState, uris: { ...patientState.uris, [item.id]: uri } } };
+            }),
+            (cause) => setMediaState((current) => ({ ...current, [selectedId]: { ...(current[selectedId] ?? { uris: {}, error: '' }), error: cause instanceof Error ? cause.message : 'Lampiran pasien belum dapat dibuka.' } })),
+          ).finally(() => setMediaBusyId(null));
+        }} />
+      </View>) : <Text style={styles.body}>Belum ada foto atau lampiran pada pesan dan laporan pasien ini.</Text>}
+      <Text style={styles.body}>Catatan final hanya baca; lampiran hanya berasal dari layanan yang ditugaskan dan diunduh privat.</Text>
       <Button label="Muat ulang riwayat" role="vet" variant="secondary" disabled={detailLoading} onPress={() => { setDetail(null); setDetailRevision((value) => value + 1); }} />
     </> : null}
   </View>;
@@ -160,6 +185,7 @@ const styles = StyleSheet.create({
   card: { backgroundColor: colors.white, borderRadius: 14, padding: spacing[4], gap: spacing[2] },
   cardTitle: { color: colors.dark, fontFamily: fonts.semiBold, fontSize: typeScale.body },
   clinicalField: { gap: spacing[1] },
+  mediaPreview: { width: '100%', height: 220, borderRadius: 12, backgroundColor: colors.cream },
   clinicalLabel: { color: colors.muted, fontFamily: fonts.semiBold, fontSize: typeScale.small },
   error: { color: colors.orange, fontFamily: fonts.medium, fontSize: typeScale.body },
 });

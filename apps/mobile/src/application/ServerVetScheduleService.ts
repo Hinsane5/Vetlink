@@ -1,7 +1,7 @@
 import type { AccountRole } from '../domain/auth';
 import type { DirectoryServiceType } from '../domain/directory';
 import { DomainError } from '../domain/errors';
-import type { ApiVetScheduleRepository } from './ports/ApiVetScheduleRepository';
+import type { ApiVetAvailability, ApiVetAvailabilityInput, ApiVetBlockedTime, ApiVetBlockedTimeInput, ApiVetSchedule, ApiVetScheduleRepository } from './ports/ApiVetScheduleRepository';
 import type { ApiVetSlot } from './ports/VetDirectoryReadRepository';
 import type { ServerVetDirectoryService } from './ServerVetDirectoryService';
 
@@ -12,6 +12,53 @@ export class ServerVetScheduleService {
     private readonly directory: ServerVetDirectoryService,
     private readonly now: () => Date = () => new Date(),
   ) {}
+
+  async ownAvailability(role: AccountRole, userId: string): Promise<ApiVetAvailability | null> {
+    assertVet(role);
+    const value = await this.schedule.getAvailability();
+    if (value && value.vetId !== userId) throw forbiddenSchedule();
+    return value;
+  }
+
+  async saveOwnAvailability(role: AccountRole, userId: string, input: ApiVetAvailabilityInput) {
+    assertVet(role);
+    const current = await this.ownAvailability(role, userId);
+    if (input.expectedVersion !== (current?.version ?? 1)) throw new DomainError('VERSION_CONFLICT', 'Jadwal berubah. Muat ulang sebelum menyimpan.');
+    const result = await this.schedule.updateAvailability(input);
+    if (result.value.vetId !== userId) throw new DomainError('API_RESPONSE_INVALID', 'Jadwal hasil simpan tidak terkait akun Dokter ini.');
+    return result;
+  }
+
+  async ownBlockedTimes(role: AccountRole, userId: string): Promise<ApiVetBlockedTime[]> {
+    assertVet(role);
+    const availability = await this.ownAvailability(role, userId);
+    if (!availability) return [];
+    return this.schedule.getBlockedTimes();
+  }
+
+  async createOwnBlockedTime(role: AccountRole, userId: string, input: ApiVetBlockedTimeInput) {
+    assertVet(role);
+    await this.requireOwnAvailability(role, userId);
+    return this.schedule.createBlockedTime(input);
+  }
+
+  async updateOwnBlockedTime(role: AccountRole, userId: string, id: string, input: ApiVetBlockedTimeInput & { expectedVersion: number }) {
+    assertVet(role);
+    await this.requireOwnAvailability(role, userId);
+    return this.schedule.updateBlockedTime(id, input);
+  }
+
+  async cancelOwnBlockedTime(role: AccountRole, userId: string, id: string, expectedVersion: number) {
+    assertVet(role);
+    await this.requireOwnAvailability(role, userId);
+    return this.schedule.cancelBlockedTime(id, expectedVersion);
+  }
+
+  async ownSchedule(role: AccountRole, userId: string, from: string, to: string): Promise<ApiVetSchedule> {
+    assertVet(role);
+    await this.requireOwnAvailability(role, userId);
+    return this.schedule.getSchedule(from, to);
+  }
 
   async timezoneFor(role: AccountRole, userId: string, vetId: string): Promise<string> {
     if (role === 'farmer') return (await this.directory.getDetail(role, vetId)).timezone;
@@ -42,6 +89,20 @@ export class ServerVetScheduleService {
     }
     return { timezone: availability.timezone, slots: [...slots].sort((left, right) => Date.parse(left.startsAt) - Date.parse(right.startsAt)) };
   }
+
+  private async requireOwnAvailability(role: AccountRole, userId: string): Promise<ApiVetAvailability> {
+    const value = await this.ownAvailability(role, userId);
+    if (!value) throw new DomainError('INVALID_STATE', 'Atur jadwal Dokter terlebih dahulu.');
+    return value;
+  }
+}
+
+function assertVet(role: AccountRole): asserts role is 'vet' {
+  if (role !== 'vet') throw forbiddenSchedule();
+}
+
+function forbiddenSchedule(): DomainError {
+  return new DomainError('FORBIDDEN', 'Jadwal hanya dapat dibuka oleh Dokter pemilik akun.');
 }
 
 function localDate(value: Date, timezone: string): string {

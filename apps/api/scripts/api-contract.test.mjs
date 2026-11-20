@@ -361,6 +361,17 @@ test('BE-16 patient and health event responses describe the runtime projections'
   assert.ok(paths['/v1/patients/{id}/clinical-notes'].get.security?.some((entry) => entry.bearer !== undefined));
   assert.ok(paths['/v1/patients/{id}/clinical-notes'].get.responses['200'].description.includes('catatan layanan Dokter lain'));
 
+  const patientMedia = arrayItem('/v1/patients/{id}/media', 'get', '200', 'PatientMediaResponseDto');
+  const patientMediaFields = ['id', 'consultationId', 'recordId', 'source', 'kind', 'mimeType', 'filename', 'byteSize', 'url', 'createdAt'];
+  assert.deepEqual(Object.keys(patientMedia.properties).sort(), [...patientMediaFields].sort());
+  assert.deepEqual([...patientMedia.required].sort(), [...patientMediaFields].sort());
+  assert.deepEqual(patientMedia.properties.source.enum, ['message', 'progress_report']);
+  assert.deepEqual(patientMedia.properties.kind.enum, ['image', 'video']);
+  assert.deepEqual(patientMedia.properties.mimeType.enum, ['image/jpeg', 'image/png', 'image/webp', 'video/mp4']);
+  assert.equal(patientMedia.properties.url.format, 'uri-reference');
+  assert.equal(patientMedia.properties.ownerId, undefined);
+  assert.ok(paths['/v1/patients/{id}/media'].get.security?.some((entry) => entry.bearer !== undefined));
+
   const timeline = arrayItem('/v1/livestock/{id}/health-events', 'get', '200', 'LivestockHealthEventResponseDto');
   const timelineFields = ['id', 'kind', 'occurredAt', 'description', 'provenance', 'createdAt'];
   assert.deepEqual(Object.keys(timeline.properties).sort(), [...timelineFields].sort());

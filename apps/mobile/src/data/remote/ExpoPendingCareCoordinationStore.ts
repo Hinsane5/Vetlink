@@ -72,9 +72,33 @@ function isOperation(value: unknown): value is PendingCareCoordinationOperation 
   if (item.type === 'follow_up') return hasKeys(item, ['type', 'idempotencyKey', 'startsAt', 'endsAt', 'reason']) && isIso(item.startsAt) && isIso(item.endsAt) && isText(item.reason, 3, 1000);
   if (item.type === 'reminder') return hasKeys(item, ['type', 'idempotencyKey', 'followUpId', 'kind', 'dueAt', 'instructions']) && (item.followUpId === null || isUuid(item.followUpId))
     && (item.kind === 'care' || item.kind === 'follow_up') && isIso(item.dueAt) && isText(item.instructions, 3, 500);
-  if (item.type === 'progress_report') return hasKeys(item, ['type', 'idempotencyKey', 'followUpId', 'text']) && isUuid(item.followUpId) && isText(item.text, 3, 2000);
+  if (item.type === 'progress_report') {
+    const base = hasKeys(item, ['type', 'idempotencyKey', 'followUpId', 'text']);
+    const withAttachments = hasKeys(item, ['type', 'idempotencyKey', 'followUpId', 'text', 'attachments']);
+    return (base || withAttachments) && isUuid(item.followUpId) && isText(item.text, 3, 2000)
+      && (item.attachments === undefined || (Array.isArray(item.attachments) && item.attachments.length <= 5
+        && item.attachments.every(isPendingReportAttachment)
+        && new Set(item.attachments.map((attachment) => attachment.idempotencyKey)).size === item.attachments.length
+        && !item.attachments.some((attachment) => attachment.idempotencyKey === item.idempotencyKey)));
+  }
   if (item.type === 'care_completion') return hasKeys(item, ['type', 'idempotencyKey', 'reminderId']) && isUuid(item.reminderId);
   return false;
+}
+
+function isPendingReportAttachment(value: unknown): value is { file: { uri: string; filename: string; mimeType: string; byteSize: number }; idempotencyKey: string } {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const item = value as Record<string, unknown>;
+  if (Object.keys(item).sort().join('|') !== 'file|idempotencyKey' || typeof item.idempotencyKey !== 'string'
+    || !/^[A-Za-z0-9][A-Za-z0-9_-]{7,79}$/.test(item.idempotencyKey)
+    || !item.file || typeof item.file !== 'object' || Array.isArray(item.file)) return false;
+  const file = item.file as Record<string, unknown>;
+  if (Object.keys(file).sort().join('|') !== 'byteSize|filename|mimeType|uri'
+    || typeof file.uri !== 'string' || !/^(file|content):\/\//.test(file.uri)
+    || typeof file.filename !== 'string' || !file.filename.trim() || file.filename.length > 255
+    || !['image/jpeg', 'image/png', 'image/webp', 'video/mp4'].includes(file.mimeType as string)
+    || !Number.isSafeInteger(file.byteSize) || Number(file.byteSize) < 1) return false;
+  const maximum = file.mimeType === 'video/mp4' ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
+  return Number(file.byteSize) <= maximum;
 }
 
 function hasKeys(item: Record<string, unknown>, expected: string[]): boolean {

@@ -6,7 +6,7 @@ import type { AuthenticatedPrincipal } from '../auth/auth.types.js';
 import { ApiErrorResponseDto } from '../common/http/api-error.dto.js';
 import { CareEventDto, CreateLivestockDto, PatchLivestockDto } from './livestock.dto.js';
 import { LivestockListQueryDto, LivestockPageResponseDto, LivestockResponseDto } from './livestock-read.dto.js';
-import { CareEventResponseDto, LivestockHealthEventResponseDto, PatientClinicalNoteResponseDto, PatientResponseDto } from './livestock-response.dto.js';
+import { CareEventResponseDto, LivestockHealthEventResponseDto, PatientClinicalNoteResponseDto, PatientMediaResponseDto, PatientResponseDto } from './livestock-response.dto.js';
 import { LivestockService } from './livestock.service.js';
 
 @ApiTags('Livestock') @ApiBearerAuth('bearer') @Controller() @UseGuards(AccessTokenGuard,RoleGuard)
@@ -44,4 +44,9 @@ export class LivestockController {
   @ApiOkResponse({ type:[PatientClinicalNoteResponseDto], description:'Catatan klinis final baca-saja dari layanan Dokter yang ditugaskan untuk pasien ini; draft dan catatan layanan Dokter lain tidak disertakan.' })
   @ApiUnauthorizedResponse({type:ApiErrorResponseDto}) @ApiForbiddenResponse({type:ApiErrorResponseDto}) @ApiNotFoundResponse({type:ApiErrorResponseDto})
   patientClinicalNotes(@AuthenticatedUser() p:AuthenticatedPrincipal,@Param('id',ParseUUIDPipe) id:string){return this.service.patientClinicalNotes(p,id);}
+
+  @Get('patients/:id/media') @RequireRoles('vet')
+  @ApiOkResponse({ type:[PatientMediaResponseDto], description:'Metadata media privat pada pesan terkirim dan laporan perkembangan pasien yang ditugaskan; file tetap harus diunduh melalui endpoint privat.' })
+  @ApiUnauthorizedResponse({type:ApiErrorResponseDto}) @ApiForbiddenResponse({type:ApiErrorResponseDto}) @ApiNotFoundResponse({type:ApiErrorResponseDto})
+  patientMedia(@AuthenticatedUser() p:AuthenticatedPrincipal,@Param('id',ParseUUIDPipe) id:string){return this.service.patientMedia(p,id);}
 }

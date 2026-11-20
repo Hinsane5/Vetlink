@@ -1360,3 +1360,17 @@ Detail pasien Dokter kini memuat catatan klinis final dari `GET /v1/patients/{id
 | `npm run api:contract` | **Lulus**: 11/11 tes; OpenAPI memuat array DTO catatan final, field yang diwajibkan, bearer, dan tidak mengekspos actor/attachment. |
 | `db:migrate`, `db:seed`, `api:smoke` | **Lulus** di PostgreSQL 17 sementara pada loopback port 55432 dengan database baru: 20 migrasi, seed fiktif; smoke memeriksa Dokter assigned, 403 Peternak, 404 Dokter lain, serta field/isi note final. Cluster dihentikan dan direktori sementara dihapus. |
 | QA aplikasi | Build Android, emulator, perangkat, Figma MCP, API/provider produksi, dan transaksi nyata tidak digunakan. Ketukan/tampilan detail pasien, Back, scroll, font besar, serta QA visual masih gate penerimaan FE-24/25. Foto dan lampiran pasien belum tersedia. |
+
+
+## FE-11/16/25 — jadwal Dokter dan media pasien API (20 November 2026)
+
+Mode API ditambah editor jadwal/ketersediaan Dokter, kalender dari server, lampiran foto/video pada laporan perkembangan Peternak, dan unduhan privat media terkait pasien Dokter yang ditugaskan. Operasi laporan menyimpan salinan file dan key upload untuk retry identik; scope lampiran pasien diperiksa ulang pada backend. Pasien tidak memperoleh foto profil karena BE belum menyediakan model media profil.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `cd apps/mobile && npm run check` | **Lulus**: typecheck, Expo lint, dan 319/319 tes domain/repository. Lima tes baru memeriksa parsing media pasien, metadata invalid, validasi list assigned, unduhan privat, serta guard/versi editor jadwal Dokter. Warning SQLite eksperimental yang sudah ada tetap muncul. |
+| `cd apps/api && npm run typecheck && npm run build` | **Lulus**: TypeScript dan Nest build. |
+| `cd apps/api && npm run api:contract` | **Lulus**: 11/11 tes. Assertion DTO BE-16 mencakup field/enum media pasien, bearer, dan larangan owner ID pada response. |
+| `api:smoke` | **Tidak dijalankan** pada checkpoint ini; tidak ada database/API runtime uji baru diakses. |
+| `git diff --check` | **Lulus** pada diff akhir kode dan dokumentasi. |
+| QA aplikasi | ADB menampilkan `List of devices attached` tanpa perangkat. `ANDROID_HOME`/`ANDROID_SDK_ROOT` menunjuk `/Volumes/HowSSD/AndroidStudio/SDK/sdk`, direktori SDK tersebut tidak tersedia. Tidak membangun APK, tidak menjalankan emulator, dan tidak memakai Figma MCP. API hidup, pemasangan APK, transfer media perangkat, interaksi sentuh/Back/keyboard/scroll, 390 × 844, layar kecil/font besar, visual, dan alur dua sesi tetap gate review pengguna. Tidak memakai provider produksi, secret, deployment, atau transaksi uang nyata. |

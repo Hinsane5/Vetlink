@@ -52,6 +52,18 @@ interface PatientClinicalNoteProjectionRow {
   finalizedAt: Date | string;
 }
 
+interface PatientMediaProjectionRow {
+  id: string;
+  consultationId: string;
+  recordId: string;
+  source: 'message' | 'progress_report';
+  kind: 'image' | 'video';
+  mimeType: string;
+  filename: string;
+  byteSize: string | number;
+  createdAt: Date | string;
+}
+
 interface LivestockCursor {
   createdAt: string;
   id: string;
@@ -176,6 +188,36 @@ export class LivestockService {
     return result.rows.map((row) => ({
       ...row,
       finalizedAt: row.finalizedAt instanceof Date ? row.finalizedAt.toISOString() : new Date(row.finalizedAt).toISOString(),
+    }));
+  }
+
+  async patientMedia(p: AuthenticatedPrincipal,id: string) {
+    this.requireVet(p);
+    // Conceal unrelated patient IDs before projecting any private attachment metadata.
+    await this.get(p,id);
+    const result = await this.db.query<PatientMediaProjectionRow>(`SELECT a.id,a.consultation_id AS "consultationId",m.id AS "recordId",
+        'message'::text AS source,a.kind,a.mime_type AS "mimeType",a.filename,a.byte_size AS "byteSize",a.created_at AS "createdAt"
+      FROM attachments a
+      JOIN message_attachments ma ON ma.attachment_id=a.id AND ma.consultation_id=a.consultation_id
+      JOIN consultation_messages m ON m.id=ma.message_id AND m.consultation_id=ma.consultation_id
+      JOIN consultations c ON c.id=a.consultation_id
+      WHERE c.animal_id=$1 AND c.vet_id=$2 AND c.status NOT IN ('draft','awaiting_payment')
+        AND m.delivery_status='sent' AND a.upload_status='committed'
+      UNION ALL
+      SELECT a.id,a.consultation_id AS "consultationId",r.id AS "recordId",
+        'progress_report'::text AS source,a.kind,a.mime_type AS "mimeType",a.filename,a.byte_size AS "byteSize",a.created_at AS "createdAt"
+      FROM attachments a
+      JOIN progress_report_attachments pra ON pra.attachment_id=a.id AND pra.consultation_id=a.consultation_id
+      JOIN progress_reports r ON r.id=pra.report_id AND r.consultation_id=pra.consultation_id
+      JOIN consultations c ON c.id=a.consultation_id
+      WHERE c.animal_id=$1 AND c.vet_id=$2 AND c.status NOT IN ('draft','awaiting_payment')
+        AND a.upload_status='committed'
+      ORDER BY "createdAt" DESC,id`,[id,p.userId]);
+    return result.rows.map((row) => ({
+      ...row,
+      byteSize: Number(row.byteSize),
+      url: `/v1/attachments/${row.id}/content`,
+      createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : new Date(row.createdAt).toISOString(),
     }));
   }
 

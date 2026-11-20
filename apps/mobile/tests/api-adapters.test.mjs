@@ -14,6 +14,7 @@ import { HttpApiLivestockWriteRepository } from '../.test-build/src/data/remote/
 import { HttpApiLivestockHealthRepository } from '../.test-build/src/data/remote/HttpApiLivestockHealthRepository.js';
 import { HttpApiPatientReadRepository } from '../.test-build/src/data/remote/HttpApiPatientReadRepository.js';
 import { HttpApiPatientClinicalReadRepository } from '../.test-build/src/data/remote/HttpApiPatientClinicalReadRepository.js';
+import { HttpApiPatientMediaReadRepository } from '../.test-build/src/data/remote/HttpApiPatientMediaReadRepository.js';
 import { HttpApiPaymentRepository } from '../.test-build/src/data/remote/HttpApiPaymentRepository.js';
 import { HttpApiVetDirectoryReadRepository } from '../.test-build/src/data/remote/HttpApiVetDirectoryReadRepository.js';
 
@@ -969,6 +970,46 @@ test('BE-16 patient clinical adapter rejects malformed final-note projections', 
   const api = new ApiClient('http://localhost:3000', new MemoryServerSessionStore({ ...tokenSet(), activeRole: 'vet' }), async () => response(200, { items: [note] }));
   await assert.rejects(new HttpApiPatientClinicalReadRepository(api).listFinalNotes(animalId), { code: 'API_RESPONSE_INVALID' });
   await assert.rejects(new HttpApiPatientClinicalReadRepository(api).listFinalNotes('not-a-uuid'), { code: 'VALIDATION_FAILED' });
+});
+
+test('BE-16 patient media adapter reads only assigned-patient attachment metadata', async () => {
+  const animalId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const attachmentId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  const media = {
+    id: attachmentId,
+    consultationId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+    recordId: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+    source: 'progress_report', kind: 'image', mimeType: 'image/jpeg', filename: 'foto-fiktif.jpg', byteSize: 1234,
+    url: `/v1/attachments/${attachmentId}/content`, createdAt: '2026-11-19T01:00:00.000Z',
+  };
+  const requests = [];
+  const api = new ApiClient('http://localhost:3000', new MemoryServerSessionStore({ ...tokenSet(), activeRole: 'vet' }), async (url, init) => {
+    requests.push({ url, init });
+    return response(200, [media]);
+  });
+  const records = await new HttpApiPatientMediaReadRepository(api).listForPatient(animalId);
+
+  assert.deepEqual(records, [media]);
+  assert.equal(requests[0].url, `http://localhost:3000/v1/patients/${animalId}/media`);
+  assert.equal(requests[0].init.method, 'GET');
+  assert.equal(requests[0].init.headers.Authorization, `Bearer ${'access-token-1'}`);
+});
+
+test('BE-16 patient media adapter rejects malformed metadata, envelopes, and patient IDs', async () => {
+  const animalId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const attachmentId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  const media = {
+    id: attachmentId, consultationId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+    recordId: 'ffffffff-ffff-4fff-8fff-ffffffffffff', source: 'message', kind: 'image', mimeType: 'image/jpeg',
+    filename: 'foto-fiktif.jpg', byteSize: 1234, url: `/v1/attachments/${attachmentId}/content`, createdAt: '2026-11-19T01:00:00.000Z',
+  };
+  for (const invalid of [{ ...media, id: 'not-a-uuid' }, { ...media, kind: 'video' }, { ...media, byteSize: Number.MAX_SAFE_INTEGER + 1 }, { ...media, url: 'https://example.test/photo.jpg' }]) {
+    const api = new ApiClient('http://localhost:3000', new MemoryServerSessionStore({ ...tokenSet(), activeRole: 'vet' }), async () => response(200, [invalid]));
+    await assert.rejects(new HttpApiPatientMediaReadRepository(api).listForPatient(animalId), { code: 'API_RESPONSE_INVALID' });
+  }
+  const envelopeApi = new ApiClient('http://localhost:3000', new MemoryServerSessionStore({ ...tokenSet(), activeRole: 'vet' }), async () => response(200, { items: [media] }));
+  await assert.rejects(new HttpApiPatientMediaReadRepository(envelopeApi).listForPatient(animalId), { code: 'API_RESPONSE_INVALID' });
+  await assert.rejects(new HttpApiPatientMediaReadRepository(envelopeApi).listForPatient('not-a-uuid'), { code: 'VALIDATION_FAILED' });
 });
 
 test('BE-03 health, care, and patient adapters reject malformed actual service projections', async () => {

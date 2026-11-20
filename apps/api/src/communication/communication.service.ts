@@ -529,9 +529,14 @@ export class CommunicationService {
         `SELECT 1
          FROM message_attachments ma
          JOIN consultation_messages m ON m.id = ma.message_id
-         WHERE ma.attachment_id = $1 AND m.delivery_status = 'sent'
+         WHERE ma.attachment_id = $1 AND ma.consultation_id = $2 AND m.delivery_status = 'sent'
+         UNION ALL
+         SELECT 1
+         FROM progress_report_attachments pra
+         JOIN progress_reports r ON r.id = pra.report_id AND r.consultation_id = pra.consultation_id
+         WHERE pra.attachment_id = $1 AND pra.consultation_id = $2
          LIMIT 1`,
-        [row.id],
+        [row.id, row.consultation_id],
       );
       if (link.rowCount !== 1) throw new NotFoundException({ code: 'NOT_FOUND', message: 'Lampiran tidak ditemukan.' });
     }

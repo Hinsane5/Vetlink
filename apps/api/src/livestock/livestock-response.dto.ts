@@ -35,6 +35,20 @@ export class PatientClinicalNoteResponseDto {
   @ApiProperty({ type: String, format: 'date-time' }) finalizedAt!: string;
 }
 
+/** Private media attached to a delivered message or progress report for an assigned patient. */
+export class PatientMediaResponseDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty({ format: 'uuid' }) consultationId!: string;
+  @ApiProperty({ format: 'uuid' }) recordId!: string;
+  @ApiProperty({ enum: ['message', 'progress_report'] }) source!: 'message' | 'progress_report';
+  @ApiProperty({ enum: ['image', 'video'] }) kind!: 'image' | 'video';
+  @ApiProperty({ enum: ['image/jpeg', 'image/png', 'image/webp', 'video/mp4'] }) mimeType!: string;
+  @ApiProperty({ maxLength: 255 }) filename!: string;
+  @ApiProperty({ type: 'integer', format: 'int64' }) byteSize!: number;
+  @ApiProperty({ format: 'uri-reference' }) url!: string;
+  @ApiProperty({ format: 'date-time' }) createdAt!: string;
+}
+
 /** Public timeline projection; drafts and private actor/note metadata are excluded. */
 export class LivestockHealthEventResponseDto {
   @ApiProperty({ format: 'uuid' }) id!: string;

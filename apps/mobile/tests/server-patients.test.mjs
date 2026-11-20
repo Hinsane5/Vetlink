@@ -54,6 +54,50 @@ test('server patient detail rejects duplicate timeline IDs', async () => {
   await assert.rejects(service.getAssignedDetail('vet', assigned.id), { code: 'API_RESPONSE_INVALID' });
 });
 
+test('server patient detail validates scoped media records and downloads them privately', async () => {
+  const assigned = { ...patient('animal-1'), farmerId: 'farmer-1', farmId: 'farm-1' };
+  const media = {
+    id: 'media-1', consultationId: 'consultation-1', recordId: 'report-1', source: 'progress_report',
+    kind: 'image', mimeType: 'image/jpeg', filename: 'foto-fiktif.jpg', byteSize: 1234,
+    url: '/v1/attachments/media-1/content', createdAt: '2026-11-19T01:00:00.000Z',
+  };
+  const stored = [];
+  const service = new ServerPatientService(
+    { listPatients: async () => [assigned] }, noHealth, noClinicalNotes,
+    { listForPatient: async () => [media] },
+    { download: async (id) => ({ attachment: { ...media, uploadStatus: 'committed' }, bytes: new ArrayBuffer(4) }) },
+    { storeDownloadedFile: async (userId, attachment, bytes) => { stored.push({ userId, attachment, bytes }); return 'file:///private/foto-fiktif.jpg'; } },
+  );
+
+  assert.deepEqual((await service.getAssignedDetail('vet', assigned.id)).media, [media]);
+  await assert.rejects(service.downloadPatientMedia('farmer', 'farmer-1', media), { code: 'FORBIDDEN' });
+  assert.equal(await service.downloadPatientMedia('vet', 'vet-1', media), 'file:///private/foto-fiktif.jpg');
+  assert.equal(stored[0].userId, 'vet-1');
+  assert.equal(stored[0].attachment.id, media.id);
+  assert.equal(stored[0].bytes.byteLength, 4);
+});
+
+test('server patient detail rejects duplicate media IDs and mismatched private download metadata', async () => {
+  const assigned = { ...patient('animal-1'), farmerId: 'farmer-1', farmId: 'farm-1' };
+  const media = {
+    id: 'media-1', consultationId: 'consultation-1', recordId: 'message-1', source: 'message',
+    kind: 'image', mimeType: 'image/jpeg', filename: 'foto-fiktif.jpg', byteSize: 1234,
+    url: '/v1/attachments/media-1/content', createdAt: '2026-11-19T01:00:00.000Z',
+  };
+  const duplicateService = new ServerPatientService(
+    { listPatients: async () => [assigned] }, noHealth, noClinicalNotes,
+    { listForPatient: async () => [media, media] },
+  );
+  await assert.rejects(duplicateService.getAssignedDetail('vet', assigned.id), { code: 'API_RESPONSE_INVALID' });
+  const mismatchService = new ServerPatientService(
+    { listPatients: async () => [assigned] }, noHealth, noClinicalNotes,
+    { listForPatient: async () => [media] },
+    { download: async (id) => ({ attachment: { ...media, id: `${id}-other`, uploadStatus: 'committed' }, bytes: new ArrayBuffer(4) }) },
+    { storeDownloadedFile: async () => 'file:///private/unused.jpg' },
+  );
+  await assert.rejects(mismatchService.downloadPatientMedia('vet', 'vet-1', media), { code: 'API_RESPONSE_INVALID' });
+});
+
 test('server patient rejects malformed clinical note projections', async () => {
   const assigned = { ...patient('animal-1'), farmerId: 'farmer-1', farmId: 'farm-1' };
   const service = new ServerPatientService(

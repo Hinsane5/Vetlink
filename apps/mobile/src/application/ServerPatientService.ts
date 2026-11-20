@@ -2,11 +2,16 @@ import type { AccountRole } from '../domain/auth';
 import { DomainError } from '../domain/errors';
 import type { ApiPatientClinicalNote, ApiPatientRecord, PatientClinicalReadRepository, PatientReadRepository } from './ports/PatientReadRepository';
 import type { ApiHealthEvent, LivestockHealthReadRepository } from './ports/LivestockHealthRepository';
+import type { ApiMediaRepository } from './ports/ApiMediaRepository';
+import type { PatientMediaReadRepository, ApiPatientMediaRecord } from './ports/PatientMediaReadRepository';
+import type { ServerChatMediaStore } from './ports/ServerChatMediaStore';
+import type { ApiMessageAttachment } from './ports/ApiChatRepository';
 
 export interface ServerPatientDetail {
   patient: ApiPatientRecord;
   events: ApiHealthEvent[];
   clinicalNotes: ApiPatientClinicalNote[];
+  media?: ApiPatientMediaRecord[];
 }
 
 /** BE-16 patient rows are already scoped by veterinarian assignment on the server. */
@@ -15,6 +20,9 @@ export class ServerPatientService {
     private readonly patients: PatientReadRepository,
     private readonly health: LivestockHealthReadRepository,
     private readonly clinicalNotes: PatientClinicalReadRepository,
+    private readonly patientMedia?: PatientMediaReadRepository,
+    private readonly media?: ApiMediaRepository,
+    private readonly mediaStore?: ServerChatMediaStore,
   ) {}
 
   async listAssigned(role: AccountRole): Promise<ApiPatientRecord[]> {
@@ -31,9 +39,10 @@ export class ServerPatientService {
   async getAssignedDetail(role: AccountRole, animalId: string): Promise<ServerPatientDetail> {
     const patient = (await this.listAssigned(role)).find((record) => record.id === animalId);
     if (!patient) throw new DomainError('NOT_FOUND', 'Pasien tidak ditemukan pada layanan Dokter ini.');
-    const [events, clinicalNotes] = await Promise.all([
+    const [events, clinicalNotes, media] = await Promise.all([
       this.health.listHealthEvents(patient.id),
       this.clinicalNotes.listFinalNotes(patient.id),
+      this.patientMedia ? this.patientMedia.listForPatient(patient.id) : Promise.resolve(undefined),
     ]);
     const eventIds = new Set<string>();
     for (const event of events) {
@@ -48,8 +57,33 @@ export class ServerPatientService {
       }
       noteIds.add(note.id);
     }
+    if (media) {
+      const mediaIds = new Set<string>();
+      for (const item of media) {
+        if (!item.id || !item.consultationId || !item.recordId || mediaIds.has(item.id))
+          throw new DomainError('API_RESPONSE_INVALID', 'Lampiran pasien server memuat metadata tidak valid atau ID ganda.');
+        mediaIds.add(item.id);
+      }
+    }
     clinicalNotes.sort((left, right) => Date.parse(right.finalizedAt ?? '') - Date.parse(left.finalizedAt ?? ''));
-    return { patient, events, clinicalNotes };
+    return { patient, events, clinicalNotes, ...(media ? { media } : {}) };
+  }
+
+  async downloadPatientMedia(role: AccountRole, userId: string, item: ApiPatientMediaRecord): Promise<string> {
+    if (role !== 'vet') throw new DomainError('FORBIDDEN', 'Hanya Dokter terkait yang dapat membuka lampiran pasien.');
+    if (!this.patientMedia || !this.media || !this.mediaStore) throw new DomainError('INVALID_STATE', 'Lampiran pasien belum tersedia pada sesi ini.');
+    if (!item || !item.id || !item.consultationId || !item.recordId) throw new DomainError('VALIDATION_FAILED', 'Lampiran pasien tidak valid.');
+    const downloaded = await this.media.download(item.id);
+    if (downloaded.attachment.id !== item.id || downloaded.attachment.uploadStatus !== 'committed'
+      || downloaded.attachment.kind !== item.kind || downloaded.attachment.mimeType !== item.mimeType
+      || downloaded.attachment.filename !== item.filename || downloaded.attachment.byteSize !== item.byteSize
+      || downloaded.attachment.url !== item.url) {
+      throw new DomainError('API_RESPONSE_INVALID', 'Metadata file tidak cocok dengan projection pasien.');
+    }
+    const localUri = await this.mediaStore.storeDownloadedFile(userId, {
+      id: item.id, kind: item.kind, mimeType: item.mimeType, filename: item.filename, byteSize: item.byteSize, url: item.url,
+    } satisfies ApiMessageAttachment, downloaded.bytes);
+    return localUri;
   }
 }
 

@@ -47,6 +47,7 @@ import { ServerProfileSection } from '../profile/ServerProfileSection';
 import { ServerHelpSection } from '../profile/ServerHelpSection';
 import { ServerEarningsSection } from '../earnings/ServerEarningsSection';
 import { ServerCommerceSection } from '../marketplace/ServerCommerceSection';
+import { ServerVetScheduleSection } from '../availability/ServerVetScheduleSection';
 import { colors, fonts, spacing, typeScale } from '../theme/tokens';
 
 type Screen = 'loading' | 'roles' | 'login' | 'register' | 'home';
@@ -58,6 +59,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
     const livestock = new ServerLivestockService(adapters.farms, adapters.livestock, adapters.livestockWrites);
     const vets = new ServerVetDirectoryService(adapters.vets);
     const vetSchedule = new ServerVetScheduleService(adapters.vetSchedule, vets);
+    const chatMediaStore = new ExpoServerChatMediaStore();
     return {
       auth: adapters.auth,
       paymentGateway: adapters.payments,
@@ -67,17 +69,17 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
       farms: new ServerFarmService(adapters.farms, adapters.farmWrites),
       livestock,
       livestockHealth: new ServerLivestockHealthService(livestock, adapters.livestockHealth, adapters.livestockHealth, new ExpoPendingCareReportStore(), () => Crypto.randomUUID()),
-      patients: new ServerPatientService(adapters.patients, adapters.livestockHealth, adapters.patientClinical),
+      patients: new ServerPatientService(adapters.patients, adapters.livestockHealth, adapters.patientClinical, adapters.patientMedia, adapters.media, chatMediaStore),
       vets,
       vetSchedule,
-      careCoordination: new ServerCareCoordinationService(adapters.careCoordination, vetSchedule, () => Crypto.randomUUID(), () => new Date(), new ExpoPendingCareCoordinationStore(baseUrl)),
+      careCoordination: new ServerCareCoordinationService(adapters.careCoordination, vetSchedule, () => Crypto.randomUUID(), () => new Date(), new ExpoPendingCareCoordinationStore(baseUrl), adapters.media, chatMediaStore),
       consultations: new ServerConsultationService(adapters.consultations, () => Crypto.randomUUID()),
       clinical: new ServerClinicalService(adapters.clinical),
       booking: new ServerBookingService(adapters.farms, adapters.livestock, adapters.vets, adapters.consultations, new ExpoPendingServerBookingStore()),
       notifications: new ServerNotificationsService(adapters.notifications),
       notificationContext: new ServerNotificationContextService(adapters.careCoordination),
       profiles: new ServerProfileService(adapters.profiles),
-      chat: new ServerChatService(adapters.chat, new ExpoServerChatStateStore(), () => Crypto.randomUUID(), adapters.media, new ExpoServerChatMediaStore()),
+      chat: new ServerChatService(adapters.chat, new ExpoServerChatStateStore(), () => Crypto.randomUUID(), adapters.media, chatMediaStore),
       vetVerification: new ServerVetVerificationService(adapters.profiles, new ExpoServerVetVerificationStore(), () => Crypto.randomUUID()),
     };
   }, [baseUrl]);
@@ -96,6 +98,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
   const [helpOpen, setHelpOpen] = useState(false);
   const [earningsOpen, setEarningsOpen] = useState(false);
   const [commerceOpen, setCommerceOpen] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const [error, setError] = useState('');
   const [farmList, setFarmList] = useState<ApiFarmRecord[]>([]);
   const [farmName, setFarmName] = useState('');
@@ -115,6 +118,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
   const helpBackHandler = useRef<(() => boolean) | null>(null);
   const earningsBackHandler = useRef<(() => boolean) | null>(null);
   const commerceBackHandler = useRef<(() => boolean) | null>(null);
+  const scheduleBackHandler = useRef<(() => boolean) | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -147,6 +151,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
         if (helpBackHandler.current?.()) return true;
         if (earningsBackHandler.current?.()) return true;
         if (commerceBackHandler.current?.()) return true;
+        if (scheduleBackHandler.current?.()) return true;
         if (farmAddressesBackHandler.current?.()) return true;
         if (patientBackHandler.current?.()) return true;
         if (consultationBackHandler.current?.()) return true;
@@ -234,6 +239,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
       setProfileOpen(false);
       setEarningsOpen(false);
       setCommerceOpen(false);
+      setScheduleOpen(false);
       setRole(next.activeRole);
       setPassword('');
       setConfirmation('');
@@ -262,6 +268,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
       setProfileOpen(false);
       setEarningsOpen(false);
       setCommerceOpen(false);
+      setScheduleOpen(false);
     } catch (cause) {
       setError(messageFor(cause));
     } finally {
@@ -284,6 +291,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
       setSelectedFarmId(null);
       setEarningsOpen(false);
       setCommerceOpen(false);
+      setScheduleOpen(false);
       setPassword('');
       setScreen('roles');
     } catch (cause) {
@@ -323,13 +331,15 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
             : notificationsOpen ? <ServerNotificationsSection service={notifications} contextService={notificationContext} role={session.activeRole} onExit={() => setNotificationsOpen(false)} backHandlerRef={notificationsBackHandler} />
             : helpOpen ? <ServerHelpSection role={session.activeRole} onExit={() => setHelpOpen(false)} backHandlerRef={helpBackHandler} />
             : earningsOpen ? <ServerEarningsSection service={earningsService} userId={session.userId} onExit={() => setEarningsOpen(false)} backHandlerRef={earningsBackHandler} />
-            : commerceOpen ? <ServerCommerceSection service={commerceService} paymentGateway={paymentGateway} userId={session.userId} onExit={() => setCommerceOpen(false)} backHandlerRef={commerceBackHandler} /> : <>
+            : commerceOpen ? <ServerCommerceSection service={commerceService} paymentGateway={paymentGateway} userId={session.userId} onExit={() => setCommerceOpen(false)} backHandlerRef={commerceBackHandler} />
+            : scheduleOpen ? <ServerVetScheduleSection service={vetSchedule} userId={session.userId} onExit={() => setScheduleOpen(false)} backHandlerRef={scheduleBackHandler} /> : <>
           <Text style={styles.heading}>Akun {session.activeRole === 'farmer' ? 'Peternak' : 'Dokter Hewan'}</Text>
           <Text style={styles.description}>{session.displayName}{'\n'}{session.email}</Text>
           <Button label="Kotak Masuk & Preferensi Notifikasi" role={session.activeRole} variant="secondary" onPress={() => setNotificationsOpen(true)} />
           <Button label="Profil dan verifikasi" role={session.activeRole} variant="secondary" onPress={() => setProfileOpen(true)} />
           <Button label="Bantuan" role={session.activeRole} variant="secondary" onPress={() => setHelpOpen(true)} />
           {session.activeRole === 'vet' ? <Button label="Pendapatan dan pencairan" role="vet" variant="secondary" onPress={() => setEarningsOpen(true)} /> : null}
+          {session.activeRole === 'vet' ? <Button label="Jadwal dan ketersediaan" role="vet" variant="secondary" onPress={() => setScheduleOpen(true)} /> : null}
           {session.activeRole === 'farmer' ? <Button label="Marketplace, keranjang, dan pesanan" role="farmer" variant="secondary" onPress={() => setCommerceOpen(true)} /> : null}
           {session.activeRole === 'farmer' && <>
             <Text style={styles.heading}>Peternakan saya</Text>
@@ -347,7 +357,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
             <ServerFarmAddressesSection service={farms} farms={farmList} onFarmsChanged={setFarmList} backHandlerRef={farmAddressesBackHandler} />
             {selectedFarm ? <ServerLivestockSection key={selectedFarm.id} service={livestock} healthService={livestockHealth} farm={selectedFarm} userId={session.userId} backHandlerRef={livestockBackHandler} /> : null}
           </>}
-          {session.activeRole === 'vet' && <ServerPatientsSection service={patients} backHandlerRef={patientBackHandler} />}
+          {session.activeRole === 'vet' && <ServerPatientsSection service={patients} userId={session.userId} backHandlerRef={patientBackHandler} />}
           {session.activeRole === 'farmer' && <ServerVetDirectorySection service={vets} bookingService={booking} livestockService={livestock} farms={farmList} userId={session.userId} backHandlerRef={directoryBackHandler} />}
           <ServerConsultationSection key={session.activeRole} service={consultations} clinicalService={clinical} chatService={chat} scheduleService={vetSchedule} careService={careCoordination} paymentGateway={paymentGateway} reviewService={reviewService} role={session.activeRole} userId={session.userId} backHandlerRef={consultationBackHandler} />
           {session.roles.length > 1 && session.roles.map((availableRole) => <Button key={availableRole} label={`Ganti Peran: ${availableRole === 'farmer' ? 'Peternak' : 'Dokter Hewan'}`} role={availableRole} variant="secondary" disabled={busy || availableRole === session.activeRole} onPress={() => switchRole(availableRole)} />)}
