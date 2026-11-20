@@ -1348,3 +1348,15 @@ Menu akun Peternak membuka UI katalog, keranjang, checkout, pembayaran pending, 
 | `git diff --check` | **Lulus** setelah kode dan dokumentasi diperbarui. |
 | API backend | Tidak berubah pada slice ini. Kontrak dan smoke BE-10–12 yang tercatat pada bukti backend sebelumnya tidak dijalankan ulang pada sesi ini. |
 | QA aplikasi | Android build, emulator, Figma MCP, API live, perangkat, provider dan transaksi nyata tidak digunakan. Sentuh, Back, keyboard/scroll, ukuran layar/font, runtime API dua perangkat dan visual tetap gate FE-17/18/20/24/25. |
+
+## FE-25 — catatan klinis final pada detail pasien API BE-03/16 (20 November 2026)
+
+Detail pasien Dokter kini memuat catatan klinis final dari `GET /v1/patients/{id}/clinical-notes`. Server memeriksa kembali role Dokter dan assignment pasien; query hanya memilih catatan final untuk konsultasi `in_progress`/`completed` yang cocok pada animal, farmer, dan vet. Respons dan UI hanya baca-saja: complaint, findings, assessment, actions, careInstructions, consultation ID, dan finalizedAt; draft, aktor, serta media tidak dikirim. Endpoint mengembalikan semua catatan pasien dalam satu request agar layar tidak membuat request per konsultasi.
+
+| Pemeriksaan | Hasil dan batas bukti |
+| --- | --- |
+| `cd apps/mobile && npm run check` | **Lulus**: TypeScript, Expo lint, dan 314/314 tes domain/repository. Fake HTTP memeriksa bearer/path/allowlist, batas field dan timestamp, malformed response, UUID path, serta validasi service. Suite mengeluarkan warning SQLite eksperimental yang sudah ada. |
+| `cd apps/api && npm run check` | **Lulus**: typecheck dan Nest build. |
+| `npm run api:contract` | **Lulus**: 11/11 tes; OpenAPI memuat array DTO catatan final, field yang diwajibkan, bearer, dan tidak mengekspos actor/attachment. |
+| `db:migrate`, `db:seed`, `api:smoke` | **Lulus** di PostgreSQL 17 sementara pada loopback port 55432 dengan database baru: 20 migrasi, seed fiktif; smoke memeriksa Dokter assigned, 403 Peternak, 404 Dokter lain, serta field/isi note final. Cluster dihentikan dan direktori sementara dihapus. |
+| QA aplikasi | Build Android, emulator, perangkat, Figma MCP, API/provider produksi, dan transaksi nyata tidak digunakan. Ketukan/tampilan detail pasien, Back, scroll, font besar, serta QA visual masih gate penerimaan FE-24/25. Foto dan lampiran pasien belum tersedia. |

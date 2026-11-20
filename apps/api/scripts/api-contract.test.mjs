@@ -347,6 +347,20 @@ test('BE-16 patient and health event responses describe the runtime projections'
   assert.ok(paths['/v1/patients'].get.responses['200'].description.includes('draft dan awaiting_payment'));
   assert.ok(paths['/v1/patients'].get.security?.some((entry) => entry.bearer !== undefined));
 
+  const clinicalNotes = arrayItem('/v1/patients/{id}/clinical-notes', 'get', '200', 'PatientClinicalNoteResponseDto');
+  const clinicalNoteFields = ['id', 'consultationId', 'complaint', 'findings', 'assessment', 'actions', 'careInstructions', 'finalizedAt'];
+  assert.deepEqual(Object.keys(clinicalNotes.properties).sort(), [...clinicalNoteFields].sort());
+  assert.deepEqual([...clinicalNotes.required].sort(), [...clinicalNoteFields].sort());
+  assert.equal(clinicalNotes.properties.id.format, 'uuid');
+  assert.equal(clinicalNotes.properties.consultationId.format, 'uuid');
+  assert.equal(clinicalNotes.properties.complaint.maxLength, 4000);
+  assert.equal(clinicalNotes.properties.findings.maxLength, 8000);
+  assert.equal(clinicalNotes.properties.finalizedAt.format, 'date-time');
+  assert.equal(clinicalNotes.properties.attachments, undefined);
+  assert.equal(clinicalNotes.properties.actorId, undefined);
+  assert.ok(paths['/v1/patients/{id}/clinical-notes'].get.security?.some((entry) => entry.bearer !== undefined));
+  assert.ok(paths['/v1/patients/{id}/clinical-notes'].get.responses['200'].description.includes('catatan layanan Dokter lain'));
+
   const timeline = arrayItem('/v1/livestock/{id}/health-events', 'get', '200', 'LivestockHealthEventResponseDto');
   const timelineFields = ['id', 'kind', 'occurredAt', 'description', 'provenance', 'createdAt'];
   assert.deepEqual(Object.keys(timeline.properties).sort(), [...timelineFields].sort());

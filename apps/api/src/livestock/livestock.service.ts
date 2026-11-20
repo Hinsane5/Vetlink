@@ -41,6 +41,17 @@ interface PatientProjectionRow {
   latestServiceStatus: string;
 }
 
+interface PatientClinicalNoteProjectionRow {
+  id: string;
+  consultationId: string;
+  complaint: string;
+  findings: string;
+  assessment: string;
+  actions: string;
+  careInstructions: string;
+  finalizedAt: Date | string;
+}
+
 interface LivestockCursor {
   createdAt: string;
   id: string;
@@ -150,6 +161,21 @@ export class LivestockService {
     return result.rows.map((row) => ({
       ...row,
       lastServiceAt: row.lastServiceAt instanceof Date ? row.lastServiceAt.toISOString() : new Date(row.lastServiceAt).toISOString(),
+    }));
+  }
+
+  async patientClinicalNotes(p: AuthenticatedPrincipal,id: string) {
+    this.requireVet(p);
+    // Conceal unrelated patient IDs and recheck assignment before projecting note contents.
+    await this.get(p,id);
+    const result = await this.db.query<PatientClinicalNoteProjectionRow>(`SELECT n.id,n.consultation_id AS "consultationId",n.complaint,n.findings,n.assessment,n.actions,n.care_instructions AS "careInstructions",n.finalized_at AS "finalizedAt"
+      FROM clinical_notes n JOIN consultations c ON c.id=n.consultation_id AND c.animal_id=n.animal_id AND c.farmer_id=n.farmer_id
+      WHERE n.animal_id=$1 AND n.vet_id=$2 AND c.vet_id=$2 AND c.status IN ('in_progress','completed')
+        AND n.status='final' AND n.finalized_at IS NOT NULL
+      ORDER BY n.finalized_at DESC,n.id ASC`,[id,p.userId]);
+    return result.rows.map((row) => ({
+      ...row,
+      finalizedAt: row.finalizedAt instanceof Date ? row.finalizedAt.toISOString() : new Date(row.finalizedAt).toISOString(),
     }));
   }
 

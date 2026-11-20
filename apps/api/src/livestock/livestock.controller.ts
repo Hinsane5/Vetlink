@@ -6,7 +6,7 @@ import type { AuthenticatedPrincipal } from '../auth/auth.types.js';
 import { ApiErrorResponseDto } from '../common/http/api-error.dto.js';
 import { CareEventDto, CreateLivestockDto, PatchLivestockDto } from './livestock.dto.js';
 import { LivestockListQueryDto, LivestockPageResponseDto, LivestockResponseDto } from './livestock-read.dto.js';
-import { CareEventResponseDto, LivestockHealthEventResponseDto, PatientResponseDto } from './livestock-response.dto.js';
+import { CareEventResponseDto, LivestockHealthEventResponseDto, PatientClinicalNoteResponseDto, PatientResponseDto } from './livestock-response.dto.js';
 import { LivestockService } from './livestock.service.js';
 
 @ApiTags('Livestock') @ApiBearerAuth('bearer') @Controller() @UseGuards(AccessTokenGuard,RoleGuard)
@@ -39,4 +39,9 @@ export class LivestockController {
   @ApiOkResponse({ type:[PatientResponseDto], description:'Array pasien distinct dari konsultasi Dokter yang ditugaskan; draft dan awaiting_payment tidak membuka pasien.' })
   @ApiUnauthorizedResponse({type:ApiErrorResponseDto}) @ApiForbiddenResponse({type:ApiErrorResponseDto})
   patients(@AuthenticatedUser() p:AuthenticatedPrincipal){return this.service.patients(p);}
+
+  @Get('patients/:id/clinical-notes') @RequireRoles('vet')
+  @ApiOkResponse({ type:[PatientClinicalNoteResponseDto], description:'Catatan klinis final baca-saja dari layanan Dokter yang ditugaskan untuk pasien ini; draft dan catatan layanan Dokter lain tidak disertakan.' })
+  @ApiUnauthorizedResponse({type:ApiErrorResponseDto}) @ApiForbiddenResponse({type:ApiErrorResponseDto}) @ApiNotFoundResponse({type:ApiErrorResponseDto})
+  patientClinicalNotes(@AuthenticatedUser() p:AuthenticatedPrincipal,@Param('id',ParseUUIDPipe) id:string){return this.service.patientClinicalNotes(p,id);}
 }

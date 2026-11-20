@@ -1,11 +1,12 @@
 import type { AccountRole } from '../domain/auth';
 import { DomainError } from '../domain/errors';
-import type { ApiPatientRecord, PatientReadRepository } from './ports/PatientReadRepository';
+import type { ApiPatientClinicalNote, ApiPatientRecord, PatientClinicalReadRepository, PatientReadRepository } from './ports/PatientReadRepository';
 import type { ApiHealthEvent, LivestockHealthReadRepository } from './ports/LivestockHealthRepository';
 
 export interface ServerPatientDetail {
   patient: ApiPatientRecord;
   events: ApiHealthEvent[];
+  clinicalNotes: ApiPatientClinicalNote[];
 }
 
 /** BE-16 patient rows are already scoped by veterinarian assignment on the server. */
@@ -13,6 +14,7 @@ export class ServerPatientService {
   constructor(
     private readonly patients: PatientReadRepository,
     private readonly health: LivestockHealthReadRepository,
+    private readonly clinicalNotes: PatientClinicalReadRepository,
   ) {}
 
   async listAssigned(role: AccountRole): Promise<ApiPatientRecord[]> {
@@ -29,13 +31,25 @@ export class ServerPatientService {
   async getAssignedDetail(role: AccountRole, animalId: string): Promise<ServerPatientDetail> {
     const patient = (await this.listAssigned(role)).find((record) => record.id === animalId);
     if (!patient) throw new DomainError('NOT_FOUND', 'Pasien tidak ditemukan pada layanan Dokter ini.');
-    const events = await this.health.listHealthEvents(patient.id);
+    const [events, clinicalNotes] = await Promise.all([
+      this.health.listHealthEvents(patient.id),
+      this.clinicalNotes.listFinalNotes(patient.id),
+    ]);
     const eventIds = new Set<string>();
     for (const event of events) {
       if (eventIds.has(event.id)) throw new DomainError('API_RESPONSE_INVALID', 'Timeline pasien server memuat ID catatan ganda.');
       eventIds.add(event.id);
     }
-    return { patient, events };
+    const noteIds = new Set<string>();
+    for (const note of clinicalNotes) {
+      if (!note.id || !note.finalizedAt || !Number.isFinite(Date.parse(note.finalizedAt))
+        || !note.consultationId || noteIds.has(note.id)) {
+        throw new DomainError('API_RESPONSE_INVALID', 'Catatan klinis pasien server tidak cocok dengan konsultasi final yang ditugaskan.');
+      }
+      noteIds.add(note.id);
+    }
+    clinicalNotes.sort((left, right) => Date.parse(right.finalizedAt ?? '') - Date.parse(left.finalizedAt ?? ''));
+    return { patient, events, clinicalNotes };
   }
 }
 

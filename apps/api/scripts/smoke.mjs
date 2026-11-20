@@ -1908,6 +1908,20 @@ try {
       assert.equal(finalEvents.filter((event) => event.description === 'Penilaian fiktif akhir' && event.provenance === 'clinical_note').length, 1);
       assert.ok(finalEvents.every((event) => !('actorId' in event) && !('findings' in event) && !('careInstructions' in event)));
 
+      const patientClinicalNotes = await sendJson(healthy.baseUrl, `/v1/patients/${animalId}/clinical-notes`, vet.accessToken, 'GET');
+      assert.equal(patientClinicalNotes.status, 200);
+      const projectedNotes = await patientClinicalNotes.json();
+      const projectedNote = projectedNotes.find((note) => note.consultationId === consultationId);
+      assert.ok(projectedNote);
+      assert.deepEqual(Object.keys(projectedNote).sort(), ['id', 'consultationId', 'complaint', 'findings', 'assessment', 'actions', 'careInstructions', 'finalizedAt'].sort());
+      assert.deepEqual([
+        projectedNote.complaint, projectedNote.findings, projectedNote.assessment,
+        projectedNote.actions, projectedNote.careInstructions,
+      ], ['Keluhan fiktif', 'Temuan pemeriksaan fiktif', 'Penilaian fiktif akhir', 'Tindakan fiktif', 'Instruksi perawatan fiktif']);
+      assert.ok(Number.isFinite(Date.parse(projectedNote.finalizedAt)));
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/patients/${animalId}/clinical-notes`, farmer.accessToken, 'GET')).status, 403);
+      assert.equal((await sendJson(healthy.baseUrl, `/v1/patients/${createdAnimal.id}/clinical-notes`, unverifiedVet.accessToken, 'GET')).status, 404);
+
       const messagesPath = `/v1/consultations/${consultationId}/messages`;
       const ownerList = await sendJson(healthy.baseUrl, `${messagesPath}?limit=2`, farmer.accessToken, 'GET');
       assert.equal(ownerList.status, 200);
@@ -2062,7 +2076,7 @@ try {
       assert.equal(directoryVet.ratingAverage, 4.5);
       assert.equal(directoryVet.ratingCount, 2);
 
-      console.log('BE-03/04/05/06/07/08/09/10/11/12/13/14/15 smoke: owner/role scope; completed-consultation reviews; follow-up slot reservation, report ownership, reminder delivery/care completion, one HealthEvent; BE-14 event/outbox deduplication, notification delivery outcomes, preference suppression, inbox persistence, idempotent read and linked-resource access; catalog, commerce/shipment, earnings/withdrawals, chat/media lulus.');
+      console.log('BE-03/04/05/06/07/08/09/10/11/12/13/14/15 smoke: owner/role scope; assigned patient clinical-note projection; completed-consultation reviews; follow-up slot reservation, report ownership, reminder delivery/care completion, one HealthEvent; BE-14 event/outbox deduplication, notification delivery outcomes, preference suppression, inbox persistence, idempotent read and linked-resource access; catalog, commerce/shipment, earnings/withdrawals, chat/media lulus.');
     } finally {
       if (failedStorageServer) await stopServer(failedStorageServer.child);
       // Smoke teardown is a fixture reset; it must remove immutable final-note rows

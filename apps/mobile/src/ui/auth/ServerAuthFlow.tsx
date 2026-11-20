@@ -67,7 +67,7 @@ export function ServerAuthFlow({ baseUrl }: { baseUrl: string }) {
       farms: new ServerFarmService(adapters.farms, adapters.farmWrites),
       livestock,
       livestockHealth: new ServerLivestockHealthService(livestock, adapters.livestockHealth, adapters.livestockHealth, new ExpoPendingCareReportStore(), () => Crypto.randomUUID()),
-      patients: new ServerPatientService(adapters.patients, adapters.livestockHealth),
+      patients: new ServerPatientService(adapters.patients, adapters.livestockHealth, adapters.patientClinical),
       vets,
       vetSchedule,
       careCoordination: new ServerCareCoordinationService(adapters.careCoordination, vetSchedule, () => Crypto.randomUUID(), () => new Date(), new ExpoPendingCareCoordinationStore(baseUrl)),

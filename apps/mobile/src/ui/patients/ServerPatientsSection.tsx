@@ -79,7 +79,16 @@ export function ServerPatientsSection({ service, backHandlerRef }: {
       </View>
       <Text style={styles.heading}>Riwayat Kesehatan</Text>
       {detail.events.length === 0 ? <Text style={styles.body}>Belum ada catatan kesehatan pada layanan yang ditugaskan.</Text> : detail.events.map((event) => <HealthEventCard key={event.id} event={event} />)}
-      <Text style={styles.body}>Riwayat dibatasi ke pasien yang memiliki layanan terkait dengan Dokter ini. Catatan klinis final hanya baca; lampiran dan detail temuan lengkap belum tersedia di proyeksi API ini.</Text>
+      <Text style={styles.heading}>Catatan Klinis Final</Text>
+      {detail.clinicalNotes.length === 0 ? <Text style={styles.body}>Belum ada catatan klinis final pada layanan yang ditugaskan.</Text> : detail.clinicalNotes.map((note) => <View key={note.id} style={styles.card}>
+        <Text style={styles.cardTitle}>Final · {formatDate(note.finalizedAt ?? '')}</Text>
+        <ClinicalField label="Keluhan" value={note.complaint} />
+        <ClinicalField label="Temuan" value={note.findings} />
+        <ClinicalField label="Penilaian" value={note.assessment} />
+        <ClinicalField label="Tindakan" value={note.actions} />
+        <ClinicalField label="Instruksi perawatan" value={note.careInstructions} />
+      </View>)}
+      <Text style={styles.body}>Catatan final hanya baca dan dibatasi ke layanan Dokter ini. Lampiran media belum tersedia di proyeksi API.</Text>
       <Button label="Muat ulang riwayat" role="vet" variant="secondary" disabled={detailLoading} onPress={() => { setDetail(null); setDetailRevision((value) => value + 1); }} />
     </> : null}
   </View>;
@@ -108,6 +117,10 @@ function HealthEventCard({ event }: { event: ApiHealthEvent }) {
     <Text style={styles.body}>{sourceLabel(event.provenance)}</Text>
     <Text style={styles.body}>{event.description}</Text>
   </View>;
+}
+
+function ClinicalField({ label, value }: { label: string; value: string }) {
+  return <View style={styles.clinicalField}><Text style={styles.clinicalLabel}>{label}</Text><Text selectable style={styles.body}>{value}</Text></View>;
 }
 
 function formatDate(value: string): string {
@@ -146,5 +159,7 @@ const styles = StyleSheet.create({
   body: { color: colors.dark, fontFamily: fonts.regular, fontSize: typeScale.body, lineHeight: 21 },
   card: { backgroundColor: colors.white, borderRadius: 14, padding: spacing[4], gap: spacing[2] },
   cardTitle: { color: colors.dark, fontFamily: fonts.semiBold, fontSize: typeScale.body },
+  clinicalField: { gap: spacing[1] },
+  clinicalLabel: { color: colors.muted, fontFamily: fonts.semiBold, fontSize: typeScale.small },
   error: { color: colors.orange, fontFamily: fonts.medium, fontSize: typeScale.body },
 });

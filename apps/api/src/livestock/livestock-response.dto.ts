@@ -23,6 +23,18 @@ export class PatientResponseDto {
   @ApiProperty({ enum: ['requested', 'scheduled', 'reschedule_pending', 'in_progress', 'en_route', 'arrived', 'examining', 'completed', 'rejected', 'cancelled'], description: 'Status konsultasi atau tahap kunjungan terkait yang diprioritaskan.' }) latestServiceStatus!: string;
 }
 
+/** Final, read-only clinical notes for an animal assigned to the authenticated veterinarian. */
+export class PatientClinicalNoteResponseDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty({ format: 'uuid' }) consultationId!: string;
+  @ApiProperty({ minLength: 1, maxLength: 4000 }) complaint!: string;
+  @ApiProperty({ minLength: 1, maxLength: 8000 }) findings!: string;
+  @ApiProperty({ minLength: 1, maxLength: 8000 }) assessment!: string;
+  @ApiProperty({ minLength: 1, maxLength: 8000 }) actions!: string;
+  @ApiProperty({ minLength: 1, maxLength: 8000 }) careInstructions!: string;
+  @ApiProperty({ type: String, format: 'date-time' }) finalizedAt!: string;
+}
+
 /** Public timeline projection; drafts and private actor/note metadata are excluded. */
 export class LivestockHealthEventResponseDto {
   @ApiProperty({ format: 'uuid' }) id!: string;

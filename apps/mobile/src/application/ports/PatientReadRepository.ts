@@ -24,3 +24,19 @@ export interface ApiPatientRecord {
 export interface PatientReadRepository {
   listPatients(): Promise<ApiPatientRecord[]>;
 }
+
+export interface ApiPatientClinicalNote {
+  id: string;
+  consultationId: string;
+  complaint: string;
+  findings: string;
+  assessment: string;
+  actions: string;
+  careInstructions: string;
+  finalizedAt: string;
+}
+
+/** Final clinical records for one assigned patient; the server rechecks the active Vet assignment. */
+export interface PatientClinicalReadRepository {
+  listFinalNotes(animalId: string): Promise<ApiPatientClinicalNote[]>;
+}

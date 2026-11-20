@@ -12,6 +12,7 @@ import { HttpApiLivestockReadRepository } from './HttpApiLivestockReadRepository
 import { HttpApiLivestockWriteRepository } from './HttpApiLivestockWriteRepository';
 import { HttpApiLivestockHealthRepository } from './HttpApiLivestockHealthRepository';
 import { HttpApiPatientReadRepository } from './HttpApiPatientReadRepository';
+import { HttpApiPatientClinicalReadRepository } from './HttpApiPatientClinicalReadRepository';
 import { HttpApiVetDirectoryReadRepository } from './HttpApiVetDirectoryReadRepository';
 import { HttpApiConsultationRepository } from './HttpApiConsultationRepository';
 import { HttpApiEarningsRepository } from './HttpApiEarningsRepository';
@@ -39,6 +40,7 @@ export function createApiAdapters(baseUrl: string) {
     livestockWrites: new HttpApiLivestockWriteRepository(api),
     livestockHealth: new HttpApiLivestockHealthRepository(api),
     patients: new HttpApiPatientReadRepository(api),
+    patientClinical: new HttpApiPatientClinicalReadRepository(api),
     vets: new HttpApiVetDirectoryReadRepository(api),
     consultations: new HttpApiConsultationRepository(api),
     earnings: new HttpApiEarningsRepository(api),

@@ -13,6 +13,7 @@ import { HttpApiLivestockReadRepository } from '../.test-build/src/data/remote/H
 import { HttpApiLivestockWriteRepository } from '../.test-build/src/data/remote/HttpApiLivestockWriteRepository.js';
 import { HttpApiLivestockHealthRepository } from '../.test-build/src/data/remote/HttpApiLivestockHealthRepository.js';
 import { HttpApiPatientReadRepository } from '../.test-build/src/data/remote/HttpApiPatientReadRepository.js';
+import { HttpApiPatientClinicalReadRepository } from '../.test-build/src/data/remote/HttpApiPatientClinicalReadRepository.js';
 import { HttpApiPaymentRepository } from '../.test-build/src/data/remote/HttpApiPaymentRepository.js';
 import { HttpApiVetDirectoryReadRepository } from '../.test-build/src/data/remote/HttpApiVetDirectoryReadRepository.js';
 
@@ -926,6 +927,48 @@ test('BE-16 patients adapter parses assigned patient metrics and latest service 
   assert.equal(requests[0].url, 'http://localhost:3000/v1/patients');
   assert.equal(requests[0].init.method, 'GET');
   assert.equal(requests[0].init.headers.Authorization, `Bearer ${'access-token-1'}`);
+});
+
+test('BE-16 patient clinical adapter reads only the final-note projection and allowlists its fields', async () => {
+  const animalId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const note = {
+    id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+    consultationId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+    complaint: 'Keluhan fiktif', findings: 'Temuan fiktif', assessment: 'Penilaian fiktif',
+    actions: 'Tindakan fiktif', careInstructions: 'Instruksi perawatan fiktif',
+    finalizedAt: '2026-11-19T01:00:00.000Z', actorId: 'private-actor', attachments: ['private-media'],
+  };
+  const requests = [];
+  const api = new ApiClient('http://localhost:3000', new MemoryServerSessionStore({ ...tokenSet(), activeRole: 'vet' }), async (url, init) => {
+    requests.push({ url, init });
+    return response(200, [note]);
+  });
+  const notes = await new HttpApiPatientClinicalReadRepository(api).listFinalNotes(animalId);
+
+  assert.deepEqual(notes, [{
+    id: note.id, consultationId: note.consultationId, complaint: note.complaint, findings: note.findings,
+    assessment: note.assessment, actions: note.actions, careInstructions: note.careInstructions, finalizedAt: note.finalizedAt,
+  }]);
+  assert.equal(requests[0].url, `http://localhost:3000/v1/patients/${animalId}/clinical-notes`);
+  assert.equal(requests[0].init.method, 'GET');
+  assert.equal(requests[0].init.headers.Authorization, `Bearer ${'access-token-1'}`);
+});
+
+test('BE-16 patient clinical adapter rejects malformed final-note projections', async () => {
+  const animalId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const note = {
+    id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+    consultationId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+    complaint: 'Keluhan fiktif', findings: 'Temuan fiktif', assessment: 'Penilaian fiktif',
+    actions: 'Tindakan fiktif', careInstructions: 'Instruksi perawatan fiktif', finalizedAt: '2026-11-19T01:00:00.000Z',
+  };
+  for (const invalid of [{ ...note, id: 'not-a-uuid' }, { ...note, complaint: '' }, { ...note, finalizedAt: 'not-a-date' }, { ...note, findings: 'f'.repeat(8001) }]) {
+    const api = new ApiClient('http://localhost:3000', new MemoryServerSessionStore({ ...tokenSet(), activeRole: 'vet' }), async () => response(200, [invalid]));
+    await assert.rejects(new HttpApiPatientClinicalReadRepository(api).listFinalNotes(animalId), { code: 'API_RESPONSE_INVALID' });
+  }
+  const api = new ApiClient('http://localhost:3000', new MemoryServerSessionStore({ ...tokenSet(), activeRole: 'vet' }), async () => response(200, { items: [note] }));
+  await assert.rejects(new HttpApiPatientClinicalReadRepository(api).listFinalNotes(animalId), { code: 'API_RESPONSE_INVALID' });
+  await assert.rejects(new HttpApiPatientClinicalReadRepository(api).listFinalNotes('not-a-uuid'), { code: 'VALIDATION_FAILED' });
 });
 
 test('BE-03 health, care, and patient adapters reject malformed actual service projections', async () => {
